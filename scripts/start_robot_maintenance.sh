@@ -7,9 +7,10 @@ BACKEND_PORT="${BACKEND_PORT:-8010}"
 FRONTEND_PORT="${FRONTEND_PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
 REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
+VENV_DIR="${ROOT_DIR}/.venv"
 
-if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
-  PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+if [[ -x "${VENV_DIR}/bin/python" ]]; then
+  PYTHON_BIN="${VENV_DIR}/bin/python"
 else
   PYTHON_BIN="$(command -v python3 || true)"
 fi
@@ -20,6 +21,35 @@ if [[ -z "${PYTHON_BIN}" ]]; then
 fi
 
 mkdir -p "${RUN_DIR}"
+
+is_externally_managed_python() {
+  "${PYTHON_BIN}" - <<'PY'
+import pathlib
+import sys
+import sysconfig
+
+if sys.prefix != sys.base_prefix:
+    raise SystemExit(1)
+
+stdlib = sysconfig.get_path("stdlib")
+managed = pathlib.Path(stdlib) / "EXTERNALLY-MANAGED"
+raise SystemExit(0 if managed.exists() else 1)
+PY
+}
+
+ensure_local_venv() {
+  if [[ -x "${VENV_DIR}/bin/python" ]]; then
+    PYTHON_BIN="${VENV_DIR}/bin/python"
+    return 0
+  fi
+
+  echo "System Python is externally managed. Creating project virtualenv at ${VENV_DIR}..."
+  if ! "${PYTHON_BIN}" -m venv "${VENV_DIR}"; then
+    echo "Failed to create virtualenv. Install python3-venv and rerun." >&2
+    exit 1
+  fi
+  PYTHON_BIN="${VENV_DIR}/bin/python"
+}
 
 detect_ip() {
   if command -v hostname >/dev/null 2>&1; then
@@ -63,16 +93,30 @@ PY
 ensure_python_requirements() {
   if [[ ! -f "${REQ_FILE}" ]]; then
     echo "Requirements file not found: ${REQ_FILE}" >&2
+    echo "Make sure the project is complete and backend/requirements.txt exists, then rerun ./start.sh." >&2
     exit 1
+  fi
+
+  if is_externally_managed_python; then
+    ensure_local_venv
   fi
 
   if ! "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
     echo "pip is not available in ${PYTHON_BIN}; bootstrapping with ensurepip..."
-    "${PYTHON_BIN}" -m ensurepip --upgrade
+    if ! "${PYTHON_BIN}" -m ensurepip --upgrade; then
+      echo "Failed to bootstrap pip for ${PYTHON_BIN}." >&2
+      echo "Install pip support (for example: sudo apt install -y python3-pip) and rerun ./start.sh." >&2
+      exit 1
+    fi
   fi
 
   echo "Checking/installing backend requirements with ${PYTHON_BIN}..."
-  "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"
+  if ! "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"; then
+    echo "Dependency installation failed for ${PYTHON_BIN}." >&2
+    echo "If this is a Raspberry Pi, verify network access and install venv tooling: sudo apt install -y python3-venv." >&2
+    echo "Then rerun ./start.sh." >&2
+    exit 1
+  fi
 }
 
 reserve_frontend_port() {
