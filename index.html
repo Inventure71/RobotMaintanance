@@ -48,6 +48,7 @@
 
           <div class="status-bar dashboard-bulk-actions">
             <button class="button" id="openAddRobot" type="button" data-button-intent="create">Add robot</button>
+            <button class="button" id="openBugReport" type="button" data-button-intent="utility">Report bug</button>
           </div>
           <div class="panel fleet-parallelism-control">
             <label class="fleet-parallelism-label" for="fleetParallelism">
@@ -209,6 +210,26 @@
         </div>
         <div id="testDebugSummary" class="test-debug-summary"></div>
         <div id="testDebugBody" class="test-debug-body"></div>
+      </div>
+    </div>
+
+    <div id="bugReportModal" class="bug-report-modal hidden" aria-hidden="true">
+      <div class="bug-report-panel" role="dialog" aria-modal="true" aria-labelledby="bugReportTitle">
+        <div class="bug-report-header">
+          <h3 id="bugReportTitle">Report a bug</h3>
+        </div>
+        <label class="bug-report-label" for="bugReportMessage">Describe the issue</label>
+        <textarea
+          id="bugReportMessage"
+          class="bug-report-message"
+          rows="5"
+          placeholder="What happened? Include robot name/id and what you expected."
+        ></textarea>
+        <div id="bugReportStatus" class="bug-report-status" aria-live="polite"></div>
+        <div class="bug-report-actions">
+          <button id="cancelBugReport" class="button" type="button" data-button-intent="navigation">Cancel</button>
+          <button id="submitBugReport" class="button" type="button" data-button-intent="create">Submit</button>
+        </div>
       </div>
     </div>
   </div>

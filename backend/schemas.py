@@ -56,3 +56,13 @@ class MonitorConfigResponse(BaseModel):
     onlineIntervalSec: float
     batteryIntervalSec: float
     parallelism: int
+
+
+class BugReportRequest(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class BugReportResponse(BaseModel):
+    ok: bool
+    fileName: str
+    path: str
