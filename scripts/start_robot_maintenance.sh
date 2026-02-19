@@ -120,6 +120,12 @@ PY
 }
 
 ensure_python_requirements() {
+  local -a pip_args
+  local system_name
+  local machine_name
+  local index_url
+  local extra_index_url
+
   if [[ ! -f "${REQ_FILE}" ]]; then
     echo "Requirements file not found: ${REQ_FILE}" >&2
     echo "Make sure the project is complete and backend/requirements.txt exists, then rerun ./start.sh." >&2
@@ -141,11 +147,31 @@ ensure_python_requirements() {
 
   "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input --upgrade pip setuptools wheel >/dev/null 2>&1 || true
 
+  pip_args=(--disable-pip-version-check --no-input -r "${REQ_FILE}")
+  system_name="$(uname -s 2>/dev/null || true)"
+  machine_name="$(uname -m 2>/dev/null || true)"
+
+  index_url="${PIP_INDEX_URL:-https://pypi.org/simple}"
+  extra_index_url="${PIP_EXTRA_INDEX_URL:-}"
+  if [[ -z "${extra_index_url}" ]] && [[ "${system_name}" == "Linux" ]] && [[ "${machine_name}" == arm* || "${machine_name}" == aarch64 ]]; then
+    extra_index_url="https://www.piwheels.org/simple"
+  fi
+
+  pip_args+=(--index-url "${index_url}")
+  if [[ -n "${extra_index_url}" ]]; then
+    pip_args+=(--extra-index-url "${extra_index_url}")
+  fi
+
   echo "Checking/installing backend requirements with ${PYTHON_BIN}..."
-  if ! "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"; then
+  echo "pip index: ${index_url}"
+  if [[ -n "${extra_index_url}" ]]; then
+    echo "pip extra index: ${extra_index_url}"
+  fi
+  if ! "${PYTHON_BIN}" -m pip install "${pip_args[@]}"; then
     echo "Dependency installation failed for ${PYTHON_BIN}." >&2
+    echo "Python version: $("${PYTHON_BIN}" -V 2>/dev/null || echo unknown)" >&2
     echo "If this is a Raspberry Pi, verify network access and install venv tooling: sudo apt install -y python3-venv." >&2
-    echo "This project pins pydantic==1.10.15 for broader Raspberry Pi compatibility." >&2
+    echo "If your environment uses a private mirror, set PIP_INDEX_URL/PIP_EXTRA_INDEX_URL accordingly and rerun ./start.sh." >&2
     echo "Then rerun ./start.sh." >&2
     exit 1
   fi
