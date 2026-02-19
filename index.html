@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robot Maintenance Command Deck</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" crossorigin="anonymous" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js" type="module" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="shell">
+    <section id="dashboard" class="view active">
+      <div class="status-bar dashboard-kpis-bar">
+        <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
+        <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
+        <div class="kpi err"><span>Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
+        <button class="button button-compact" id="runFleetOnline" type="button" data-button-intent="monitor" title="Refresh online state">Refresh online</button>
+        <div id="fleetOnlineRefreshInfo" class="monitor-next-refresh-timer">Next refresh in --</div>
+      </div>
+      <div id="fleetOnlineSummary" class="panel dashboard-online-summary" style="display: none; padding: 0.65rem 0.8rem;"></div>
+
+      <div class="status-bar dashboard-quickbar">
+        <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all robots</button>
+        <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected tests</button>
+        <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix mode</button>
+        <div id="selectionSummary" class="panel" style="padding: 0.55rem 0.7rem; min-width: 180px;">0 robot(s) selected</div>
+      </div>
+      <div id="dashboardFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
+        <div class="fix-mode-header">
+          <h3>Fix mode</h3>
+          <span id="dashboardFixModeSummary" class="fix-mode-summary">Select one or more robots to see available fixes.</span>
+        </div>
+        <div id="dashboardFixModeActions" class="fix-mode-actions"></div>
+        <div id="dashboardFixModeStatus" class="fix-mode-status"></div>
+      </div>
+
+      <details class="dashboard-controls">
+        <summary>Fleet controls and filters</summary>
+        <div class="dashboard-controls-body">
+          <div class="filters">
+            <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
+            <select id="filterType" class="filter-item"></select>
+            <select id="filterError" class="filter-item"></select>
+          </div>
+
+          <div class="status-bar dashboard-bulk-actions">
+            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Add robot</button>
+          </div>
+          <div class="panel fleet-parallelism-control">
+            <label class="fleet-parallelism-label" for="fleetParallelism">
+              Fleet parallelism:
+              <span id="fleetParallelismValue" class="fleet-parallelism-value">8</span>
+            </label>
+            <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
+            <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected" and "Refresh online" increases speed at the cost of overhead.</p>
+          </div>
+
+          <div class="panel monitor-config-control">
+            <label class="fleet-parallelism-label" for="monitorMode">
+              Auto monitor mode:
+            </label>
+            <select id="monitorMode" class="filter-item">
+              <option value="online_battery">Online + Battery</option>
+              <option value="online_battery_topics">Online + Battery + Topics</option>
+            </select>
+            <div class="monitor-config-row">
+              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval (seconds)</label>
+              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5" max="300" step="1" value="30" />
+              <button class="button button-compact" id="applyMonitorConfig" type="button" data-button-intent="monitor">Apply</button>
+            </div>
+            <p class="fleet-parallelism-hint">Global backend setting. Topics mode runs a shared snapshot command once per robot interval.</p>
+            <div id="monitorConfigStatus" class="monitor-config-status"></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="fleet-sections">
+        <section class="fleet-section" id="onlineSection">
+          <div class="fleet-section-head">
+            <h2 class="fleet-section-title" id="onlineSectionTitle">Online (0)</h2>
+            <button class="button button-compact" id="selectAllOnlineRobots" type="button" data-button-intent="selection">Select all online</button>
+          </div>
+          <div id="onlineRobotGrid" class="grid"></div>
+        </section>
+        <section class="fleet-section" id="offlineSection">
+          <div class="fleet-section-head">
+            <h2 class="fleet-section-title" id="offlineSectionTitle">Offline (0)</h2>
+            <button class="button button-compact" id="selectAllOfflineRobots" type="button" data-button-intent="selection">Select all offline</button>
+          </div>
+          <div id="offlineRobotGrid" class="grid"></div>
+        </section>
+      </div>
+      <div id="emptyState" class="empty-state hidden">No robots matched your filters.</div>
+    </section>
+
+    <section id="addRobot" class="view">
+      <div class="detail-toolbar">
+        <div class="detail-toolbar-left">
+          <button class="button" id="backFromAddRobot" type="button" data-button-intent="navigation">← Back to fleet</button>
+          <div class="detail-title-bar">Add Robot</div>
+        </div>
+      </div>
+      <div class="add-robot-shell">
+        <div class="panel add-robot-panel">
+            <div class="add-robot-head">
+              <h2>Register a new robot</h2>
+              <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+            </div>
+          <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
+          <form id="addRobotForm" class="add-robot-form" novalidate>
+            <div class="form-grid">
+              <label class="form-field">
+                Robot name
+                <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input" placeholder="e.g. ROSbot Lab South" required />
+              </label>
+              <label class="form-field">
+                Robot type
+                <select id="addRobotType" name="type" class="form-input" required>
+                  <option value="" disabled selected>Loading robot types...</option>
+                </select>
+              </label>
+              <label class="form-field">
+                IP / Host
+                <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input" placeholder="e.g. 192.168.0.42 or robot-host" required />
+              </label>
+              <label class="form-field">
+                Model URL (optional)
+                <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input" placeholder="assets/models/rosbot-2-pro.glb" />
+              </label>
+              <label class="form-field">
+                SSH username
+                <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input" placeholder="robot" required />
+              </label>
+              <label class="form-field">
+                SSH password
+                <div class="form-password-field">
+                  <input id="addRobotPassword" name="password" type="password" autocomplete="off" class="form-input" placeholder="••••••••" required />
+                  <button id="toggleAddRobotPassword" class="button password-toggle" type="button" data-button-intent="utility" aria-label="Show password">Show</button>
+                </div>
+              </label>
+            </div>
+            <div class="add-robot-actions">
+              <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
+              <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+            </div>
+          </form>
+        </div>
+        <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
+          <h3 class="add-robot-side-title">Before you save</h3>
+          <ul class="add-robot-checklist">
+            <li>Use a reachable host/IP for diagnostics and terminal access.</li>
+            <li>Select a known type so tests map correctly.</li>
+            <li>SSH credentials are stored in the config file.</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section id="detail" class="view">
+      <div class="detail-toolbar">
+        <div class="detail-toolbar-left">
+          <button class="button" id="backToFleet" type="button" data-button-intent="navigation">← Back to fleet</button>
+          <div id="detailTitleBar" class="detail-title-bar"></div>
+        </div>
+        <button class="button" id="runRobotTests" type="button" data-button-intent="run">Run tests</button>
+        <button class="button" id="toggleDetailFixMode" type="button" data-button-intent="fix">Enter fix mode</button>
+        <div id="detailStatusBar" class="detail-status-bar"></div>
+      </div>
+      <div id="detailFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
+        <div class="fix-mode-header">
+          <h3>Robot fix mode</h3>
+          <span id="detailFixModeSummary" class="fix-mode-summary">Open a robot to view available fixes.</span>
+        </div>
+        <div id="detailFixModeActions" class="fix-mode-actions"></div>
+        <div id="detailFixModeStatus" class="fix-mode-status"></div>
+      </div>
+      <div class="layout-cols detail-top-row">
+        <div class="detail-model-wrap">
+          <div id="detailModel" class="detail-model-host"></div>
+        </div>
+        <div class="panel matrix-panel">
+          <h2>Live test matrix</h2>
+          <div id="testList" class="test-list"></div>
+        </div>
+      </div>
+      <div class="panel terminal-panel">
+        <h2>Robot terminal</h2>
+        <div class="terminal-shell">
+          <div id="terminalActivationOverlay" class="terminal-activation-overlay">
+            <button class="button terminal-activate-btn" id="activateTerminal" type="button" data-button-intent="terminal">Activate terminal</button>
+          </div>
+          <div id="terminalToolbar" class="terminal-toolbar">
+            <span class="terminal-status warn" id="terminalModeBadge">Terminal pending...</span>
+            <span class="terminal-status" id="terminalHint">Type commands directly or use preset buttons.</span>
+          </div>
+          <div id="terminal" class="fallback" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <div id="testDebugModal" class="test-debug-modal hidden" aria-hidden="true">
+      <div class="test-debug-panel" role="dialog" aria-modal="true" aria-labelledby="testDebugTitle">
+        <div class="test-debug-header">
+          <h3 id="testDebugTitle">Test Output</h3>
+          <button id="testDebugClose" class="button" type="button" data-button-intent="danger" data-action="close-modal">Close</button>
+        </div>
+        <div id="testDebugSummary" class="test-debug-summary"></div>
+        <div id="testDebugBody" class="test-debug-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+{
+  "version": "1.0",
+  "robotTypes": [
+    {
+      "id": "rosbot-2-pro",
+      "name": "Rosbot 2 Pro",
+      "autoMonitor": {
+        "batteryCommand": "source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery"
+      },
+      "autoFixes": [
+        {
+          "id": "flash_fix",
+          "label": "Flash fix",
+          "description": "Reflash firmware and restart docker stack, then rerun diagnostics.",
+          "commands": [
+            "docker compose down",
+            "./flash_firmware.sh",
+            "docker compose up -d"
+          ]
+        }
+      ],
+      "topics": [
+        "/battery",
+        "/buttons",
+        "/camera/color/camera_info",
+        "/camera/color/image_raw",
+        "/camera/depth/camera_info",
+        "/camera/depth/image_raw",
+        "/camera/depth/points",
+        "/camera/depth_registered/points",
+        "/camera/extrinsic/depth_to_color",
+        "/camera/ir/camera_info",
+        "/camera/ir/image_raw",
+        "/camera/reset_device",
+        "/cmd_ser",
+        "/cmd_vel",
+        "/diagnostics",
+        "/imu",
+        "/joint_states",
+        "/odom",
+        "/odom/wheel",
+        "/pose",
+        "/range/fl",
+        "/range/fr",
+        "/range/rl",
+        "/range/rr",
+        "/rosout",
+        "/rosout_agg",
+        "/scan",
+        "/set_pose",
+        "/tf",
+        "/tf_static",
+        "/velocity"
+      ],
+      "tests": [
+        {
+          "id": "online",
+          "label": "Online",
+          "icon": "\ud83d\udefc",
+          "okText": "SSH reachable and authenticated",
+          "failText": "SSH unavailable or authentication failed",
+          "definitionRef": "tests/ros_tests/online.json",
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "reachable",
+              "details": "SSH connected and authenticated."
+            },
+            {
+              "status": "error",
+              "value": "unreachable",
+              "details": "SSH unavailable or authentication failed."
+            }
+          ]
+        },
+        {
+          "id": "general",
+          "label": "General Topics",
+          "icon": "\ud83d\udce1",
+          "okText": "All required topics present",
+          "failText": "Missing general topics",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/buttons",
+            "/diagnostics",
+            "/imu",
+            "/joint_states",
+            "/pose",
+            "/rosout",
+            "/rosout_agg",
+            "/tf",
+            "/tf_static"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "All required topics present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Missing general topics"
+            }
+          ]
+        },
+        {
+          "id": "movement",
+          "label": "Movement",
+          "icon": "\ud83d\ude97",
+          "okText": "All movement topics present",
+          "failText": "Missing movement topics",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/cmd_ser",
+            "/cmd_vel",
+            "/odom",
+            "/odom/wheel",
+            "/set_pose",
+            "/velocity"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "All movement topics present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Missing movement topics"
+            }
+          ]
+        },
+        {
+          "id": "battery",
+          "label": "Battery",
+          "icon": "\ud83d\udd0b",
+          "okText": "Battery topic present",
+          "failText": "Battery topic missing",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/battery"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "Battery topic present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Battery topic missing"
+            }
+          ]
+        },
+        {
+          "id": "lidar",
+          "label": "Lidar",
+          "icon": "\ud83c\udf10",
+          "okText": "Lidar topic present",
+          "failText": "Lidar topic missing",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/scan"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "Lidar topic present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Lidar topic missing"
+            }
+          ]
+        },
+        {
+          "id": "proximity",
+          "label": "Proximity Sensors",
+          "icon": "\ud83d\udc41\ufe0f",
+          "okText": "All proximity topics present",
+          "failText": "Missing proximity topics",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/range/fl",
+            "/range/fr",
+            "/range/rl",
+            "/range/rr"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "All proximity topics present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Missing proximity topics"
+            }
+          ]
+        },
+        {
+          "id": "camera",
+          "label": "Camera",
+          "icon": "\ud83d\udcf7",
+          "okText": "All camera topics present",
+          "failText": "Missing camera topics",
+          "definitionRef": "tests/ros_tests/topics.json",
+          "requiredTopics": [
+            "/camera/color/camera_info",
+            "/camera/color/image_raw",
+            "/camera/depth/camera_info",
+            "/camera/depth/image_raw",
+            "/camera/depth/points",
+            "/camera/depth_registered/points",
+            "/camera/extrinsic/depth_to_color",
+            "/camera/ir/camera_info",
+            "/camera/ir/image_raw",
+            "/camera/reset_device"
+          ],
+          "manualOnly": true,
+          "enabled": true,
+          "possibleResults": [
+            {
+              "status": "ok",
+              "value": "all_present",
+              "details": "All camera topics present"
+            },
+            {
+              "status": "error",
+              "value": "missing",
+              "details": "Missing camera topics"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

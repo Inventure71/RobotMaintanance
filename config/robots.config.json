@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "robots": [
+    {
+      "id": "rosbot-a1",
+      "name": "agamemnon",
+      "type": "rosbot-2-pro",
+      "ip": "agamemnon",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
+    },
+    {
+      "id": "rosbot-b2",
+      "name": "alexander",
+      "type": "rosbot-2-pro",
+      "ip": "alexander",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
+    },
+    {
+      "id": "rosbot-c3",
+      "name": "leonidas",
+      "type": "rosbot-2-pro",
+      "ip": "leonidas",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
+    },
+    {
+      "id": "rosbot-d4",
+      "name": "ROSbot-2P-D4",
+      "type": "rosbot-2-pro",
+      "ip": "192.168.0.34",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "robot",
+        "password": "changeme"
+      }
+    },
+    {
+      "id": "rosbot-e5",
+      "name": "ROSbot-2P-E5",
+      "type": "rosbot-2-pro",
+      "ip": "192.168.0.35",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "robot",
+        "password": "changeme"
+      }
+    },
+    {
+      "id": "rosbot-f6",
+      "name": "ROSbot-2P-F6",
+      "type": "rosbot-2-pro",
+      "ip": "192.168.0.36",
+      "modelUrl": "assets/models/rosbot-2-pro.glb",
+      "ssh": {
+        "username": "robot",
+        "password": "changeme"
+      }
+    },
+    {
+      "id": "philip",
+      "name": "philip",
+      "type": "rosbot-2-pro",
+      "ip": "philip",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
+    }
+  ]
+}
