@@ -8,6 +8,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
 REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
 VENV_DIR="${ROOT_DIR}/.venv"
+MIN_PYTHON="3.10"
 
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
   PYTHON_BIN="${VENV_DIR}/bin/python"
@@ -15,12 +16,40 @@ else
   PYTHON_BIN="$(command -v python3 || true)"
 fi
 
-if [[ -z "${PYTHON_BIN}" ]]; then
-  echo "python3 was not found. Install Python 3 or create ${ROOT_DIR}/.venv first." >&2
-  exit 1
-fi
-
 mkdir -p "${RUN_DIR}"
+
+python_meets_min_version() {
+  "${PYTHON_BIN}" - "${MIN_PYTHON}" <<'PY'
+import sys
+
+required = tuple(int(x) for x in sys.argv[1].split("."))
+current = sys.version_info[:2]
+raise SystemExit(0 if current >= required else 1)
+PY
+}
+
+select_compatible_python() {
+  local candidate
+
+  if [[ -n "${PYTHON_BIN:-}" ]] && command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+    if python_meets_min_version; then
+      return 0
+    fi
+  fi
+
+  for candidate in python3.12 python3.11 python3.10; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      PYTHON_BIN="$(command -v "${candidate}")"
+      if python_meets_min_version; then
+        return 0
+      fi
+    fi
+  done
+
+  echo "No compatible Python found. Required >= ${MIN_PYTHON}." >&2
+  echo "Install Python ${MIN_PYTHON}+ (on Raspberry Pi: sudo apt install -y python3 python3-venv) and rerun ./start.sh." >&2
+  exit 1
+}
 
 is_externally_managed_python() {
   "${PYTHON_BIN}" - <<'PY'
@@ -110,6 +139,8 @@ ensure_python_requirements() {
     fi
   fi
 
+  "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+
   echo "Checking/installing backend requirements with ${PYTHON_BIN}..."
   if ! "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"; then
     echo "Dependency installation failed for ${PYTHON_BIN}." >&2
@@ -145,6 +176,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+select_compatible_python
 PI_IP="$(detect_ip)"
 ensure_python_requirements
 if ! is_port_available "${BACKEND_PORT}"; then
