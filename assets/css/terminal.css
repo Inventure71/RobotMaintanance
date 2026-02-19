@@ -323,9 +323,3 @@
     .terminal-status.warn {
       color: var(--warn);
     }
-
-    .test-debug-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 30;
-      background: rgba(3, 7, 16, 0.7);

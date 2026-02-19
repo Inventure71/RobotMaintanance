@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="${ROOT_DIR}/.run"
 BACKEND_PORT="${BACKEND_PORT:-8010}"
 FRONTEND_PORT="${FRONTEND_PORT:-8080}"
+REQUESTED_BACKEND_PORT="${BACKEND_PORT}"
 HOST="${HOST:-0.0.0.0}"
 REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
 VENV_DIR="${ROOT_DIR}/.venv"
@@ -195,24 +196,80 @@ reserve_frontend_port() {
   exit 1
 }
 
-cleanup() {
-  set +e
-  [[ -n "${BACKEND_PID:-}" ]] && kill "${BACKEND_PID}" >/dev/null 2>&1
-  [[ -n "${FRONTEND_PID:-}" ]] && kill "${FRONTEND_PID}" >/dev/null 2>&1
-  wait >/dev/null 2>&1
+reserve_backend_port() {
+  local candidate="${BACKEND_PORT}"
+  local max_tries=20
+  local try=0
+
+  while (( try < max_tries )); do
+    if is_port_available "${candidate}"; then
+      BACKEND_PORT="${candidate}"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+    try=$((try + 1))
+  done
+
+  echo "Unable to find an available backend port after ${max_tries} attempts." >&2
+  exit 1
 }
-trap cleanup EXIT INT TERM
+
+terminate_pid_tree() {
+  local pid="$1"
+  local signal="${2:-TERM}"
+  local child
+
+  if [[ -z "${pid}" ]]; then
+    return 0
+  fi
+  if ! kill -0 "${pid}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    while IFS= read -r child; do
+      [[ -n "${child}" ]] || continue
+      terminate_pid_tree "${child}" "${signal}"
+    done < <(pgrep -P "${pid}" 2>/dev/null || true)
+  fi
+
+  kill "-${signal}" "${pid}" >/dev/null 2>&1 || true
+}
+
+cleanup() {
+  local pass
+  set +e
+  terminate_pid_tree "${BACKEND_PID:-}" TERM
+  terminate_pid_tree "${FRONTEND_PID:-}" TERM
+
+  for pass in 1 2 3 4 5; do
+    local backend_alive=0
+    local frontend_alive=0
+    [[ -n "${BACKEND_PID:-}" ]] && kill -0 "${BACKEND_PID}" >/dev/null 2>&1 && backend_alive=1
+    [[ -n "${FRONTEND_PID:-}" ]] && kill -0 "${FRONTEND_PID}" >/dev/null 2>&1 && frontend_alive=1
+    if (( backend_alive == 0 && frontend_alive == 0 )); then
+      break
+    fi
+    sleep 0.2
+  done
+
+  terminate_pid_tree "${BACKEND_PID:-}" KILL
+  terminate_pid_tree "${FRONTEND_PID:-}" KILL
+  wait "${BACKEND_PID:-}" "${FRONTEND_PID:-}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM HUP QUIT
 
 select_compatible_python
 PI_IP="$(detect_ip)"
 ensure_python_requirements
-if ! is_port_available "${BACKEND_PORT}"; then
-  echo "Backend port ${BACKEND_PORT} is already in use. Stop the existing process or set BACKEND_PORT." >&2
-  exit 1
-fi
 
+reserve_backend_port
 reserve_frontend_port
 FRONTEND_URL="http://${PI_IP}:${FRONTEND_PORT}/?apiBase=http://${PI_IP}:${BACKEND_PORT}"
+
+if [[ "${BACKEND_PORT}" != "${REQUESTED_BACKEND_PORT}" ]]; then
+  echo "Backend requested port ${REQUESTED_BACKEND_PORT} is in use. Using ${BACKEND_PORT}."
+fi
 
 echo "Starting backend on ${HOST}:${BACKEND_PORT}..."
 "${PYTHON_BIN}" -m uvicorn backend.main:app --host "${HOST}" --port "${BACKEND_PORT}" >"${RUN_DIR}/backend.log" 2>&1 &

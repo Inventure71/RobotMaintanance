@@ -1,14 +1,22 @@
+    .test-debug-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(3, 7, 16, 0.72);
       backdrop-filter: blur(2px);
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.1rem;
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
 
     .test-debug-panel {
       width: min(920px, 100%);
       max-height: 88vh;
-      overflow: auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       border: 1px solid rgba(138, 198, 255, 0.38);
       border-radius: 14px;
       background: #0a132c;

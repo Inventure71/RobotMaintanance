@@ -997,7 +997,7 @@
 
     .layout-cols {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 1rem;
       align-items: stretch;
     }
@@ -1034,12 +1034,14 @@
       justify-content: space-between;
       align-items: flex-start;
       gap: 0.35rem;
+      min-width: 0;
     }
 
     .test-info {
       display: flex;
       flex-direction: column;
       gap: 0.12rem;
+      flex: 1 1 auto;
       min-width: 0;
     }
 
@@ -1050,11 +1052,48 @@
       align-items: center;
       font-weight: 600;
       line-height: 1.15;
+      min-width: 0;
+    }
+
+    .test-title-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .test-icon {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1rem;
+      line-height: 1;
+      font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', 'Rajdhani', sans-serif;
+    }
+
+    .test-icon-fallback {
+      min-width: 2.2rem;
+      padding: 0.1rem 0.34rem;
+      border-radius: 999px;
+      border: 1px solid rgba(138, 198, 255, 0.34);
+      background: rgba(13, 23, 46, 0.95);
+      color: #d8e8ff;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .test-title .pill {
+      flex: 0 0 auto;
     }
 
     .test-value {
       font-size: 0.72rem;
       color: var(--muted);
+      display: block;
+      max-width: 100%;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
@@ -1098,6 +1137,7 @@
       display: flex;
       flex-direction: column;
       overflow: visible;
+      min-width: 0;
     }
 
     @media (max-width: 980px) {

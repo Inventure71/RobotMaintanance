@@ -29,6 +29,10 @@
       overflow-x: hidden;
     }
 
+    body.modal-scroll-lock {
+      overflow: hidden;
+    }
+
     body::before {
       content: '';
       position: fixed;

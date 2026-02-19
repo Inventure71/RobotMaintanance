@@ -76,6 +76,30 @@ let ROBOT_TYPE_BY_ID = new Map();
     const FLASH_FIX_SCRIPT_COMMAND = './flash_firmware.sh';
     const FLASH_FIX_POST_UP_DELAY_MS = 15_000;
     const FLASH_FIX_COMMAND_TIMEOUT_SEC = 900;
+    const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
+    const FORCE_TEXT_TEST_ICONS = (() => {
+      try {
+        const platformHints = [
+          normalizeText(window?.navigator?.platform, ''),
+          normalizeText(window?.navigator?.userAgent, ''),
+          normalizeText(window?.navigator?.userAgentData?.platform, ''),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return platformHints.includes('linux');
+      } catch (_error) {
+        return false;
+      }
+    })();
+    const TEST_ICON_TEXT_FALLBACKS = Object.freeze({
+      online: 'NET',
+      general: 'GEN',
+      movement: 'MOV',
+      battery: 'BAT',
+      lidar: 'LID',
+      proximity: 'PRX',
+      camera: 'CAM',
+    });
 
     function clampOnlineCountdownMs(valueMs) {
       const numeric = Number.isFinite(valueMs) ? valueMs : ONLINE_CHECK_TIMEOUT_MS;
@@ -538,6 +562,39 @@ let ROBOT_TYPE_BY_ID = new Map();
       return definitions.find((def) => def.id === id)?.label || id;
     }
 
+    function getFallbackTestIconText(testId) {
+      const normalizedId = normalizeText(testId, '').toLowerCase();
+      const mapped = TEST_ICON_TEXT_FALLBACKS[normalizedId];
+      if (mapped) return mapped;
+      if (!normalizedId) return 'TST';
+      return normalizedId.replace(/[^a-z0-9]+/g, '').slice(0, 3).toUpperCase() || 'TST';
+    }
+
+    function getTestIconPresentation(testId, rawIcon) {
+      const icon = normalizeText(rawIcon, '');
+      const shouldUseTextFallback = FORCE_TEXT_TEST_ICONS || !icon || icon === '[]';
+      if (shouldUseTextFallback) {
+        return {
+          value: getFallbackTestIconText(testId),
+          className: 'test-icon test-icon-fallback',
+        };
+      }
+      return {
+        value: icon,
+        className: 'test-icon',
+      };
+    }
+
+    function buildTestPreviewText(value, details) {
+      return `${normalizeText(value, 'n/a')} • ${normalizeText(details, 'No detail available')}`;
+    }
+
+    function syncModalScrollLock() {
+      if (!document?.body) return;
+      const shouldLock = state.testDebugModalOpen || state.isBugReportModalOpen;
+      document.body.classList.toggle(MODAL_SCROLL_LOCK_CLASS, shouldLock);
+    }
+
     function readRobotField(robot, key) {
       if (robot && robot.ssh && typeof robot.ssh === 'object') {
         return robot.ssh[key];
@@ -885,7 +942,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function buildScanOverlayMarkup({ isSearching, isTesting, isFixing = false, compactAutoSearch = false } = {}) {
       if (isFixing) {
-        return '<div class="scanning-overlay fixing-overlay" data-role="activity-overlay"><video autoplay muted loop playsinline><source src="assets/animations/scanning.webm" type="video/webm" /></video></div>';
+        return '<div class="scanning-overlay fixing-overlay" data-role="activity-overlay"><video autoplay muted loop playsinline><source src="assets/animations/repairing.webm" type="video/webm" /></video></div>';
       }
       if (isSearching && !compactAutoSearch) {
         return '<div class="scanning-overlay finding-overlay" data-role="activity-overlay"><video autoplay muted loop playsinline><source src="assets/animations/finding.webm" type="video/webm" /></video></div>';
@@ -1806,7 +1863,9 @@ let ROBOT_TYPE_BY_ID = new Map();
           }
           const valueNode = row.querySelector('[data-role="detail-test-value"]');
           if (valueNode) {
-            valueNode.textContent = `${value} • ${details}`;
+            const previewText = buildTestPreviewText(value, details);
+            valueNode.textContent = previewText;
+            valueNode.title = previewText;
           }
           const statusChipNode = row.querySelector('[data-role="detail-test-status-chip"]');
           if (statusChipNode) {
@@ -2787,20 +2846,28 @@ let ROBOT_TYPE_BY_ID = new Map();
       const definitions = robot?.testDefinitions || TEST_DEFINITIONS;
       definitions.forEach((def) => {
         const result = robot.tests[def.id];
+        const icon = getTestIconPresentation(def.id, def.icon);
+        const previewText = buildTestPreviewText(result.value, result.details);
         const row = document.createElement('div');
         row.className = 'test-row';
         row.setAttribute('data-test-id', def.id);
         row.innerHTML = `
           <div class="test-info">
-            <span class="test-title">${def.icon} ${def.label}
+            <span class="test-title">
+              <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
+              <span class="test-title-label">${def.label}</span>
               <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
             </span>
-            <span class="test-value" data-role="detail-test-value">${result.value} • ${result.details}</span>
+            <span class="test-value" data-role="detail-test-value">${previewText}</span>
           </div>
             <div class="test-actions">
             <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${def.id}" title="Show detailed output">Info</button>
             <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
           </div>`;
+        const valueNode = row.querySelector('[data-role="detail-test-value"]');
+        if (valueNode) {
+          valueNode.title = previewText;
+        }
         const infoButton = row.querySelector(`[data-test-id="${def.id}"]`);
         if (infoButton) {
           infoButton.addEventListener('click', (event) => {
@@ -2816,20 +2883,28 @@ let ROBOT_TYPE_BY_ID = new Map();
       Object.entries(robot.tests)
         .filter(([id]) => !definitions.find((test) => test.id === id))
         .forEach(([id, result]) => {
+          const icon = getTestIconPresentation(id, '⚙️');
+          const previewText = buildTestPreviewText(result.value, result.details);
           const row = document.createElement('div');
           row.className = 'test-row';
           row.setAttribute('data-test-id', id);
           row.innerHTML = `
             <div class="test-info">
-              <span class="test-title">⚙️ ${id}
+              <span class="test-title">
+                <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
+                <span class="test-title-label">${id}</span>
                 <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
               </span>
-              <span class="test-value" data-role="detail-test-value">${result.value} • ${result.details}</span>
+              <span class="test-value" data-role="detail-test-value">${previewText}</span>
             </div>
             <div class="test-actions">
               <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
               <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
             </div>`;
+          const valueNode = row.querySelector('[data-role="detail-test-value"]');
+          if (valueNode) {
+            valueNode.title = previewText;
+          }
           const infoButton = row.querySelector(`[data-test-id="${id}"]`);
           if (infoButton) {
             infoButton.addEventListener('click', (event) => {
@@ -3324,6 +3399,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       testDebugModal.classList.add('hidden');
       testDebugModal.setAttribute('aria-hidden', 'true');
       state.testDebugModalOpen = false;
+      syncModalScrollLock();
     }
 
     function setBugReportStatus(message = '', tone = '') {
@@ -3341,6 +3417,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       bugReportModal.classList.add('hidden');
       bugReportModal.setAttribute('aria-hidden', 'true');
       state.isBugReportModalOpen = false;
+      syncModalScrollLock();
       setBugReportStatus('', '');
       if (bugReportMessageInput) {
         bugReportMessageInput.value = '';
@@ -3356,6 +3433,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     function openBugReportModal() {
       if (!bugReportModal) return;
       state.isBugReportModalOpen = true;
+      syncModalScrollLock();
       state.isBugReportSubmitInProgress = false;
       setBugReportStatus('', '');
       if (bugReportMessageInput) {
@@ -3497,6 +3575,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       testDebugModal.classList.remove('hidden');
       testDebugModal.setAttribute('aria-hidden', 'false');
       state.testDebugModalOpen = true;
+      syncModalScrollLock();
     }
 
     function populateFilters() {
@@ -3912,6 +3991,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     export function initDashboardApp() {
       hydrateActionButtons(document);
+      syncModalScrollLock();
       try {
         state.terminalComponent = new RobotTerminalComponent({
           terminalElement: terminal,
