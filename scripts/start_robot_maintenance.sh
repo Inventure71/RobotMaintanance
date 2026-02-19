@@ -6,6 +6,18 @@ RUN_DIR="${ROOT_DIR}/.run"
 BACKEND_PORT="${BACKEND_PORT:-8010}"
 FRONTEND_PORT="${FRONTEND_PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
+REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
+
+if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
+  PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+else
+  PYTHON_BIN="$(command -v python3 || true)"
+fi
+
+if [[ -z "${PYTHON_BIN}" ]]; then
+  echo "python3 was not found. Install Python 3 or create ${ROOT_DIR}/.venv first." >&2
+  exit 1
+fi
 
 mkdir -p "${RUN_DIR}"
 
@@ -33,7 +45,7 @@ detect_ip() {
 
 is_port_available() {
   local port="$1"
-  python3 - "$port" <<'PY'
+  "${PYTHON_BIN}" - "$port" <<'PY'
 import socket
 import sys
 
@@ -46,6 +58,21 @@ except OSError:
 finally:
     s.close()
 PY
+}
+
+ensure_python_requirements() {
+  if [[ ! -f "${REQ_FILE}" ]]; then
+    echo "Requirements file not found: ${REQ_FILE}" >&2
+    exit 1
+  fi
+
+  if ! "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
+    echo "pip is not available in ${PYTHON_BIN}; bootstrapping with ensurepip..."
+    "${PYTHON_BIN}" -m ensurepip --upgrade
+  fi
+
+  echo "Checking/installing backend requirements with ${PYTHON_BIN}..."
+  "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"
 }
 
 reserve_frontend_port() {
@@ -75,6 +102,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 PI_IP="$(detect_ip)"
+ensure_python_requirements
 if ! is_port_available "${BACKEND_PORT}"; then
   echo "Backend port ${BACKEND_PORT} is already in use. Stop the existing process or set BACKEND_PORT." >&2
   exit 1
@@ -84,15 +112,11 @@ reserve_frontend_port
 FRONTEND_URL="http://${PI_IP}:${FRONTEND_PORT}/?apiBase=http://${PI_IP}:${BACKEND_PORT}"
 
 echo "Starting backend on ${HOST}:${BACKEND_PORT}..."
-if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
-  "${ROOT_DIR}/.venv/bin/python" -m uvicorn backend.main:app --host "${HOST}" --port "${BACKEND_PORT}" >"${RUN_DIR}/backend.log" 2>&1 &
-else
-  python3 -m uvicorn backend.main:app --host "${HOST}" --port "${BACKEND_PORT}" >"${RUN_DIR}/backend.log" 2>&1 &
-fi
+"${PYTHON_BIN}" -m uvicorn backend.main:app --host "${HOST}" --port "${BACKEND_PORT}" >"${RUN_DIR}/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 echo "Starting static UI server on ${HOST}:${FRONTEND_PORT}..."
-python3 -m http.server "${FRONTEND_PORT}" --bind "${HOST}" --directory "${ROOT_DIR}" >"${RUN_DIR}/frontend.log" 2>&1 &
+"${PYTHON_BIN}" -m http.server "${FRONTEND_PORT}" --bind "${HOST}" --directory "${ROOT_DIR}" >"${RUN_DIR}/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 
 sleep 1
