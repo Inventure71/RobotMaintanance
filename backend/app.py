@@ -9,9 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config_loader import (
     DEFAULT_ROBOT_TYPES_CONFIG_PATH,
     DEFAULT_ROBOTS_CONFIG_PATH,
+    PROJECT_ROOT,
     RobotCatalog,
 )
 from .routers import (
+    create_bug_reports_router,
     create_health_router,
     create_monitor_router,
     create_robots_router,
@@ -26,6 +28,7 @@ def create_app() -> FastAPI:
     robot_types_path = Path(
         os.getenv("ROBOT_TYPES_CONFIG_PATH", str(DEFAULT_ROBOT_TYPES_CONFIG_PATH))
     ).resolve()
+    logs_path = Path(os.getenv("BUG_REPORTS_DIR", str(PROJECT_ROOT / "logs"))).resolve()
 
     catalog = RobotCatalog.load_from_paths(
         robots_path=config_path,
@@ -58,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(create_monitor_router(terminal_manager))
     app.include_router(create_terminal_router(terminal_manager))
     app.include_router(create_tests_router(terminal_manager))
+    app.include_router(create_bug_reports_router(logs_path))
 
     @app.on_event("shutdown")
     def _on_shutdown() -> None:

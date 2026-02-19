@@ -29,6 +29,24 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
             parsed = DEFAULT_ONLINE_BATCH_SAFE_PARALLELISM
         return max(1, min(parsed, MAX_ONLINE_BATCH_PARALLELISM))
 
+    def _record_online_probe_result(robot_id: str, payload: dict[str, Any]) -> None:
+        if not hasattr(terminal_manager, "apply_online_probe_to_runtime"):
+            return
+        transition = terminal_manager.apply_online_probe_to_runtime(
+            robot_id=robot_id,
+            probe=payload,
+            source=normalize_text(payload.get("source"), "live"),
+        )
+        if (
+            normalize_status(transition.get("previousOnlineStatus")) != "ok"
+            and bool(transition.get("isOnline"))
+            and hasattr(terminal_manager, "trigger_recovery_tests")
+        ):
+            terminal_manager.trigger_recovery_tests(
+                robot_id=robot_id,
+                source=normalize_text(payload.get("source"), "live"),
+            )
+
     @router.post("/api/robots/{robot_id}/tests/run")
     def run_robot_tests(robot_id: str, body: TestRunRequest) -> dict[str, Any]:
         page_session_id = (body.pageSessionId or f"test-{robot_id}-{uuid.uuid4().hex[:8]}").strip()
@@ -94,7 +112,7 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                     timeout_sec=body.timeoutSec,
                     force_refresh=body.forceRefresh,
                 )
-                return {
+                payload = {
                     "robotId": robot_id,
                     "status": normalize_status(result.get("status")),
                     "value": normalize_text(result.get("value"), "unreachable"),
@@ -103,8 +121,10 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                     "checkedAt": float(result.get("checkedAt") or time.time()),
                     "source": normalize_text(result.get("source"), "live"),
                 }
+                _record_online_probe_result(robot_id, payload)
+                return payload
             except HTTPException as exc:
-                return {
+                payload = {
                     "robotId": robot_id,
                     "status": "error",
                     "value": "unreachable",
@@ -113,8 +133,10 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                     "checkedAt": time.time(),
                     "source": "live",
                 }
+                _record_online_probe_result(robot_id, payload)
+                return payload
             except Exception as exc:
-                return {
+                payload = {
                     "robotId": robot_id,
                     "status": "error",
                     "value": "unreachable",
@@ -123,6 +145,8 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                     "checkedAt": time.time(),
                     "source": "live",
                 }
+                _record_online_probe_result(robot_id, payload)
+                return payload
             finally:
                 if started_search and hasattr(terminal_manager, "finish_search_run"):
                     terminal_manager.finish_search_run(robot_id=robot_id)
