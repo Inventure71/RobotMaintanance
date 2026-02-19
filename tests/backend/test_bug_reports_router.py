@@ -24,8 +24,9 @@ def test_create_bug_report_writes_file_with_expected_name(tmp_path: Path) -> Non
     payload = response.json()
     assert payload["ok"] is True
     assert payload["fileName"].startswith("bug_0_")
+    assert Path(payload["path"]).is_absolute() is False
 
-    report_path = Path(payload["path"])
+    report_path = logs_dir / payload["path"]
     assert report_path.exists()
     content = report_path.read_text(encoding="utf-8")
     assert "Robot A1 lost connection" in content

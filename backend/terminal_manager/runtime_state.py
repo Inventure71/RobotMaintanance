@@ -92,12 +92,42 @@ class RuntimeStateMixin:
             current["updatedAt"] = now
             self._runtime_activity[robot_id] = current
 
+    def _record_last_full_test_activity(
+        self,
+        robot_id: str,
+        *,
+        checked_at: float | None = None,
+        source: str | None = None,
+    ) -> None:
+        now = time.time()
+        try:
+            resolved_checked_at = float(checked_at or now)
+        except Exception:
+            resolved_checked_at = now
+        resolved_checked_at = resolved_checked_at if resolved_checked_at > 0 else now
+
+        with self._lock:
+            current = dict(self._runtime_activity.get(robot_id, {}))
+            current["searching"] = bool(current.get("searching", False))
+            current["testing"] = bool(current.get("testing", False))
+            current["phase"] = normalize_text(current.get("phase"), "") or None
+            current["lastFullTestAt"] = resolved_checked_at
+            current["lastFullTestSource"] = normalize_text(source, "") or None
+            current["updatedAt"] = now
+            self._runtime_activity[robot_id] = current
+
     def get_runtime_activity(self, robot_id: str) -> dict[str, Any]:
         with self._lock:
             existing = dict(self._runtime_activity.get(robot_id, {}))
+        try:
+            last_full_test_at = float(existing.get("lastFullTestAt") or 0.0)
+        except Exception:
+            last_full_test_at = 0.0
         return {
             "searching": bool(existing.get("searching", False)),
             "testing": bool(existing.get("testing", False)),
             "phase": normalize_text(existing.get("phase"), "") or None,
+            "lastFullTestAt": last_full_test_at if last_full_test_at > 0 else 0.0,
+            "lastFullTestSource": normalize_text(existing.get("lastFullTestSource"), "") or None,
             "updatedAt": float(existing.get("updatedAt") or 0.0),
         }

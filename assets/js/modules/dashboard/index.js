@@ -42,7 +42,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const FLEET_PARALLELISM_DEFAULT = 8;
     const FLEET_PARALLELISM_STORAGE_KEY = 'fleetParallelism';
     const RUNTIME_SYNC_INTERVAL_MS = 1000;
-    const RUNTIME_MONITOR_TEST_IDS = new Set(['online', 'battery']);
+    const RUNTIME_ALLOWED_SOURCES = new Set(['manual', 'live', 'auto-monitor', 'auto-monitor-topics']);
     const MONITOR_TOPICS_SOURCE = 'auto-monitor-topics';
     const MONITOR_SOURCE = 'auto-monitor';
     const MONITOR_MODE_ONLINE_BATTERY = 'online_battery';
@@ -408,15 +408,21 @@ let ROBOT_TYPE_BY_ID = new Map();
           searching: false,
           testing: false,
           phase: null,
+          lastFullTestAt: 0,
+          lastFullTestSource: null,
           updatedAt: 0,
         };
       }
       const phase = normalizeText(raw.phase, '');
       const updatedAt = Number(raw.updatedAt);
+      const lastFullTestAt = Number(raw.lastFullTestAt);
+      const lastFullTestSource = normalizeText(raw.lastFullTestSource, '');
       return {
         searching: Boolean(raw.searching),
         testing: Boolean(raw.testing),
         phase: phase || null,
+        lastFullTestAt: Number.isFinite(lastFullTestAt) && lastFullTestAt > 0 ? lastFullTestAt : 0,
+        lastFullTestSource: lastFullTestSource || null,
         updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
       };
     }
@@ -697,7 +703,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           topics: typeConfig?.topics || [],
           autoFixes: typeConfig?.autoFixes || [],
           activity,
-          testDebug: {},
+          testDebug: normalizeTestDebugCollection(bot?.testDebug),
         };
       });
     }
@@ -872,8 +878,9 @@ let ROBOT_TYPE_BY_ID = new Map();
       return `${getCountdownLabel(countdown.mode)} ${Math.max(0, Math.ceil((countdown.expiresAt - Date.now()) / 1000))}s`;
     }
 
-    function shouldUseCompactAutoSearchIndicator(robotIdValue, isOffline) {
-      return isRobotAutoSearching(robotIdValue) && !isOffline;
+    function shouldUseCompactAutoSearchIndicator(robotIdValue, isOffline, isSearching = false) {
+      const searching = Boolean(isSearching || isRobotSearching(robotIdValue));
+      return searching && !isOffline;
     }
 
     function buildScanOverlayMarkup({ isSearching, isTesting, isFixing = false, compactAutoSearch = false } = {}) {
@@ -889,9 +896,13 @@ let ROBOT_TYPE_BY_ID = new Map();
       return '';
     }
 
-    function buildCompactAutoSearchIndicatorMarkup(showIndicator) {
-      if (!showIndicator) return '';
-      return '<div class="auto-search-corner-indicator" data-role="auto-search-indicator">Auto search</div>';
+    function buildConnectionCornerIconMarkup(isOffline, isCheckingOnline = false) {
+      if (isOffline) {
+        return '<img class="offline-corner-icon" data-role="connection-corner-icon" src="assets/Icons/no-connection.png" alt="No connection" />';
+      }
+      const blinkingClass = isCheckingOnline ? ' blinking' : '';
+      const alt = isCheckingOnline ? 'Checking online' : 'Connected';
+      return `<img class="connected-corner-icon${blinkingClass}" data-role="connection-corner-icon" src="assets/Icons/connected.png" alt="${alt}" />`;
     }
 
     function syncModelViewerRotationForContainer(container, isOffline) {
@@ -945,6 +956,31 @@ let ROBOT_TYPE_BY_ID = new Map();
       if (!Number.isFinite(numeric) || numeric <= 0) return 0;
       if (numeric > 1e12) return Math.floor(numeric);
       return Math.floor(numeric * 1000);
+    }
+
+    function formatLastFullTestTimestamp(timestampMs) {
+      const date = new Date(timestampMs);
+      if (!Number.isFinite(date.getTime())) return '--';
+      const now = new Date();
+      const sameDay = date.toDateString() === now.toDateString();
+      const timeLabel = date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      if (sameDay) return timeLabel;
+      const dateLabel = date.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+      });
+      return `${dateLabel} ${timeLabel}`;
+    }
+
+    function buildLastFullTestPillLabel(robot, compact = false) {
+      const timestampMs = normalizeCheckedAtMs(robot?.activity?.lastFullTestAt);
+      const prefix = compact ? 'Full test' : 'Last full test';
+      if (!timestampMs) return `${prefix}: --`;
+      return `${prefix}: ${formatLastFullTestTimestamp(timestampMs)}`;
     }
 
     function syncAutoMonitorRefreshState() {
@@ -1384,7 +1420,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const isTesting = isRobotTesting(normalizedRobotId);
       const isSearching = isRobotSearching(normalizedRobotId);
       const isFixing = isRobotFixing(normalizedRobotId);
-      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline);
+      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
       const isCountingDown = isTesting || isSearching || isFixing;
       const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
       const stateClass = isOffline ? 'state-offline' : `state-${stateKey}`;
@@ -1410,6 +1446,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const title = robot.name;
       const tests = issueSummary(robot).join(', ') || 'No active errors';
       const batteryState = robot?.tests?.battery || {};
+      const lastFullTestLabel = buildLastFullTestPillLabel(robot);
 
       card.innerHTML = `
         <div class="glow-bar"></div>
@@ -1432,8 +1469,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         </div>
         <div class="model-wrap">
           <div class="badge-strip" data-role="badge-strip">${list}</div>
-          ${isOffline ? '<img class="offline-corner-icon" src="assets/Icons/no-connection.png" alt="No connection" />' : ''}
-          ${buildCompactAutoSearchIndicatorMarkup(compactAutoSearch)}
+          ${buildConnectionCornerIconMarkup(isOffline, compactAutoSearch)}
           ${isCountingDown ? `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>` : ''}
           ${buildRobotModelContainer(robot, failureClasses, isOffline)}
           ${overlayMarkup}
@@ -1441,6 +1477,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         <div class="summary">
           <span class="pill" data-role="issues-pill">Issue cluster: ${tests}</span>
           <span class="pill" data-role="movement-pill">Movement: ${robot.tests.movement?.value || 'n/a'}</span>
+          <span class="pill" data-role="last-full-test-pill">${lastFullTestLabel}</span>
           <span data-role="summary-battery-pill">${renderBatteryPill({
             value: batteryState.value,
             status: batteryState.status,
@@ -1585,7 +1622,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const isTesting = isRobotTesting(normalizedRobotId);
       const isSearching = isRobotSearching(normalizedRobotId);
       const isFixing = isRobotFixing(normalizedRobotId);
-      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline);
+      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
       const isCountingDown = isTesting || isSearching || isFixing;
       const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
       const batteryState = robot?.tests?.battery || {};
@@ -1619,6 +1656,10 @@ let ROBOT_TYPE_BY_ID = new Map();
       if (movementPill) {
         movementPill.textContent = `Movement: ${robot?.tests?.movement?.value || 'n/a'}`;
       }
+      const lastFullTestPill = card.querySelector('[data-role="last-full-test-pill"]');
+      if (lastFullTestPill) {
+        lastFullTestPill.textContent = buildLastFullTestPillLabel(robot);
+      }
 
       const summaryBatteryHost = card.querySelector('[data-role="summary-battery-pill"]');
       if (summaryBatteryHost) {
@@ -1634,26 +1675,15 @@ let ROBOT_TYPE_BY_ID = new Map();
 
       const modelWrap = card.querySelector('.model-wrap');
       syncModelViewerRotationForContainer(modelWrap, isOffline);
-      const existingOfflineIcon = modelWrap?.querySelector('.offline-corner-icon') || null;
-      if (modelWrap && isOffline && !existingOfflineIcon) {
-        const icon = document.createElement('img');
-        icon.className = 'offline-corner-icon';
-        icon.src = 'assets/Icons/no-connection.png';
-        icon.alt = 'No connection';
-        modelWrap.insertBefore(icon, modelWrap.firstChild);
-      }
-      if (existingOfflineIcon && !isOffline) {
-        existingOfflineIcon.remove();
+      if (modelWrap) {
+        const existingConnectionIcon = modelWrap.querySelector('[data-role="connection-corner-icon"]');
+        if (existingConnectionIcon) {
+          existingConnectionIcon.remove();
+        }
+        modelWrap.insertAdjacentHTML('afterbegin', buildConnectionCornerIconMarkup(isOffline, compactAutoSearch));
       }
 
       if (modelWrap) {
-        const existingAutoSearchIndicator = modelWrap.querySelector('[data-role="auto-search-indicator"]');
-        if (compactAutoSearch && !existingAutoSearchIndicator) {
-          modelWrap.insertAdjacentHTML('beforeend', buildCompactAutoSearchIndicatorMarkup(true));
-        } else if (!compactAutoSearch && existingAutoSearchIndicator) {
-          existingAutoSearchIndicator.remove();
-        }
-
         const existingCountdown = modelWrap.querySelector('.scan-countdown');
         if (isCountingDown) {
           if (existingCountdown) {
@@ -1702,7 +1732,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const isTesting = isRobotTesting(normalizedRobotId);
       const isSearching = isRobotSearching(normalizedRobotId);
       const isFixing = isRobotFixing(normalizedRobotId);
-      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline);
+      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
       const isCountingDown = isTesting || isSearching || isFixing;
       const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
 
@@ -1714,6 +1744,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             status: batteryState.status,
             size: 'small',
           })}
+          <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
           <span class="detail-issue-count">${errorCount} issue(s)</span>`;
       }
 
@@ -1751,12 +1782,11 @@ let ROBOT_TYPE_BY_ID = new Map();
           existingCountdown.remove();
         }
 
-        const existingAutoSearchIndicator = modelHost.querySelector('[data-role="auto-search-indicator"]');
-        if (compactAutoSearch && !existingAutoSearchIndicator) {
-          modelHost.insertAdjacentHTML('beforeend', buildCompactAutoSearchIndicatorMarkup(true));
-        } else if (!compactAutoSearch && existingAutoSearchIndicator) {
-          existingAutoSearchIndicator.remove();
+        const existingConnectionIcon = modelHost.querySelector('[data-role="connection-corner-icon"]');
+        if (existingConnectionIcon) {
+          existingConnectionIcon.remove();
         }
+        modelHost.insertAdjacentHTML('afterbegin', buildConnectionCornerIconMarkup(isOffline, compactAutoSearch));
       }
 
       if (testList) {
@@ -2561,6 +2591,28 @@ let ROBOT_TYPE_BY_ID = new Map();
       };
     }
 
+    function normalizeTestDebugCollection(rawCollection) {
+      if (!rawCollection || typeof rawCollection !== 'object') return {};
+      const entries = Array.isArray(rawCollection)
+        ? rawCollection.map((entry) => [normalizeText(entry?.id, ''), entry])
+        : Object.entries(rawCollection);
+      const normalized = {};
+      entries.forEach(([rawId, rawValue]) => {
+        const base = rawValue && typeof rawValue === 'object' ? rawValue : {};
+        const id = normalizeText(rawId, normalizeText(base.id, ''));
+        if (!id) return;
+        const debugResult = normalizeTestDebugResult({ ...base, id });
+        if (!debugResult) return;
+        normalized[id] = {
+          ...debugResult,
+          runId: normalizeText(base.runId, ''),
+          startedAt: Number.isFinite(Number(base.startedAt)) ? Number(base.startedAt) : 0,
+          finishedAt: Number.isFinite(Number(base.finishedAt)) ? Number(base.finishedAt) : 0,
+        };
+      });
+      return normalized;
+    }
+
     function updateRobotTestState(robotIdValue, results, runMeta = {}) {
       const id = robotId(robotIdValue);
       if (!id) return;
@@ -2689,7 +2741,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const isSearching = isRobotSearching(normalizedRobotId);
       const isFixing = isRobotFixing(normalizedRobotId);
       const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
-      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline);
+      const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
       const isCountingDown = isTesting || isSearching || isFixing;
       const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
 
@@ -2706,6 +2758,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             status: batteryState.status,
             size: 'small',
           })}
+          <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
           <span class="detail-issue-count">${errorCount} issue(s)</span>`;
       }
 
@@ -2726,8 +2779,8 @@ let ROBOT_TYPE_BY_ID = new Map();
       const countdownMarkup = isCountingDown
         ? `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>`
         : '';
-      const compactIndicatorMarkup = buildCompactAutoSearchIndicatorMarkup(compactAutoSearch);
-      model.innerHTML = `${modelMarkup}${scanningMarkup}${countdownMarkup}${compactIndicatorMarkup}`;
+      const connectionIconMarkup = buildConnectionCornerIconMarkup(isOffline, compactAutoSearch);
+      model.innerHTML = `${modelMarkup}${scanningMarkup}${countdownMarkup}${connectionIconMarkup}`;
       syncModelViewerRotationForContainer(model, isOffline);
 
       testList.replaceChildren();
@@ -2848,11 +2901,11 @@ let ROBOT_TYPE_BY_ID = new Map();
           }
 
           const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
-          const shouldAutoRunOnlineCheck = currentOnlineStatus === 'warning';
+          const shouldAutoRunOnlineCheck = currentOnlineStatus !== 'ok';
           if (shouldAutoRunOnlineCheck) {
             if (terminal) {
               appendTerminalLine(
-                `Robot ${robot.name || robotId(robot)} is not confirmed online. Running online check first...`,
+                `Robot ${robot.name || robotId(robot)} is not online. Running online check first...`,
                 'warn',
               );
             }
@@ -2893,16 +2946,6 @@ let ROBOT_TYPE_BY_ID = new Map();
               setRobotTesting(normalizedRobotId, false);
               return;
             }
-          } else if (currentOnlineStatus !== 'ok') {
-            failureCount += 1;
-            if (terminal) {
-              appendTerminalLine(
-                `Skipping tests for ${robotId(robot)}: robot is currently marked offline. Use "Refresh online" to retry connectivity.`,
-                'err',
-              );
-            }
-            setRobotTesting(normalizedRobotId, false);
-            return;
           }
 
           const body = { ...options.body };
@@ -3292,12 +3335,12 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
-    function closeBugReportModal() {
+    function closeBugReportModal({ force = false } = {}) {
       if (!bugReportModal) return;
+      if (state.isBugReportSubmitInProgress && !force) return;
       bugReportModal.classList.add('hidden');
       bugReportModal.setAttribute('aria-hidden', 'true');
       state.isBugReportModalOpen = false;
-      state.isBugReportSubmitInProgress = false;
       setBugReportStatus('', '');
       if (bugReportMessageInput) {
         bugReportMessageInput.value = '';
@@ -3372,7 +3415,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           setBugReportStatus(details, 'error');
           return;
         }
-        closeBugReportModal();
+        closeBugReportModal({ force: true });
       } catch (_error) {
         setBugReportStatus('Unable to submit bug report right now.', 'error');
       } finally {
@@ -3700,10 +3743,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     function normalizeRuntimeTestUpdate(testId, raw) {
       if (!raw || typeof raw !== 'object') return null;
       const source = normalizeText(raw.source, '');
-      const isMonitorOwned = RUNTIME_MONITOR_TEST_IDS.has(testId);
-      if (isMonitorOwned) {
-        if (source !== MONITOR_SOURCE) return null;
-      } else if (source !== MONITOR_TOPICS_SOURCE) {
+      if (!RUNTIME_ALLOWED_SOURCES.has(source)) {
         return null;
       }
 
@@ -3769,13 +3809,20 @@ let ROBOT_TYPE_BY_ID = new Map();
           previousActivity.searching !== nextActivity.searching ||
           previousActivity.testing !== nextActivity.testing ||
           normalizeText(previousActivity.phase, '') !== normalizeText(nextActivity.phase, '') ||
+          Number(previousActivity.lastFullTestAt) !== Number(nextActivity.lastFullTestAt) ||
+          normalizeText(previousActivity.lastFullTestSource, '') !== normalizeText(nextActivity.lastFullTestSource, '') ||
           Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt);
 
+        const mergedTestDebug = {
+          ...normalizeTestDebugCollection(currentRobot?.testDebug),
+          ...normalizeTestDebugCollection(rawLiveRobot?.testDebug || liveRobot?.testDebug),
+        };
         const nextRobot = {
           ...currentRobot,
           ...liveRobot,
           tests: nextTests,
           activity: nextActivity,
+          testDebug: mergedTestDebug,
           testDefinitions:
             Array.isArray(currentRobot.testDefinitions) && currentRobot.testDefinitions.length
               ? currentRobot.testDefinitions
@@ -3933,6 +3980,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       $('#backToFleet').addEventListener('click', showDashboard);
       $('#openAddRobot')?.addEventListener('click', showAddRobotPage);
       $('#openBugReport')?.addEventListener('click', openBugReportModal);
+      $('#openBugReportFloating')?.addEventListener('click', openBugReportModal);
       $('#backFromAddRobot')?.addEventListener('click', showDashboard);
       if (addRobotForm) {
         addRobotForm.addEventListener('submit', (event) => {

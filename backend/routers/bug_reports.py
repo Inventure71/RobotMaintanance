@@ -48,7 +48,7 @@ def create_bug_reports_router(logs_dir: Path) -> APIRouter:
         return BugReportResponse(
             ok=True,
             fileName=file_path.name,
-            path=str(file_path),
+            path=file_path.name,
         )
 
     return router

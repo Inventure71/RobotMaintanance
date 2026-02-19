@@ -100,9 +100,8 @@ def test_auto_monitor_tick_recovers_offline_and_reads_battery(monkeypatch):
 
     assert runtime["online"]["status"] == "ok"
     assert runtime["battery"]["value"] == "75%"
-    assert len(observed["commands"]) == 1
-    assert "/battery" in observed["commands"][0]
-    assert observed["connect_calls"] == 2
+    assert any("/battery" in command for command in observed["commands"])
+    assert observed["connect_calls"] >= 2
 
 
 def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
@@ -145,9 +144,10 @@ def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
         },
         auto_monitor=False,
     )
+    manager._run_auto_recovery_tests = lambda _robot_id: None
 
     manager._run_auto_monitor_tick()
-    assert observed["commands"] == ["custom battery probe"]
+    assert "custom battery probe" in observed["commands"]
 
 
 def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch):
@@ -167,7 +167,27 @@ def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
-    manager = _manager()
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {"id": "battery", "enabled": True},
+                    {"id": "general", "enabled": True},
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
     manager._record_runtime_tests(
         "r1",
         {
@@ -184,8 +204,211 @@ def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch
 
     assert runtime["online"]["status"] == "error"
     assert runtime["online"]["value"] == "unreachable"
-    assert runtime["battery"]["status"] == "error"
-    assert runtime["battery"]["value"] == "unavailable"
+    assert runtime["battery"]["status"] == "warning"
+    assert runtime["battery"]["value"] == "unknown"
+    assert runtime["general"]["status"] == "warning"
+    assert runtime["general"]["value"] == "unknown"
+
+
+def test_manual_run_persists_runtime_results(monkeypatch):
+    class FakeShell:
+        def __init__(self, **_kwargs):
+            pass
+
+        def connect(self):
+            return None
+
+        def close(self):
+            return None
+
+        def run_command(self, command, timeout):
+            _ = timeout
+            if command == "echo ok":
+                return "ok"
+            return ""
+
+    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {
+                        "id": "general",
+                        "enabled": True,
+                        "manualOnly": True,
+                        "steps": [{"id": "s1", "command": "echo ok"}],
+                    },
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    results = manager.run_tests(
+        robot_id="r1",
+        page_session_id="manual-session",
+        test_ids=["general"],
+        dry_run=False,
+    )
+    assert any(result.get("id") == "general" and result.get("status") == "ok" for result in results)
+
+    runtime = manager.get_runtime_tests("r1")
+    assert runtime["general"]["status"] == "ok"
+    assert runtime["general"]["source"] == "manual"
+    assert runtime["online"]["status"] == "ok"
+    assert runtime["online"]["source"] == "manual"
+    activity = manager.get_runtime_activity("r1")
+    assert float(activity["lastFullTestAt"]) > 0
+    assert activity["lastFullTestSource"] == "manual"
+
+
+def test_partial_manual_run_does_not_update_last_full_test_activity(monkeypatch):
+    class FakeShell:
+        def __init__(self, **_kwargs):
+            pass
+
+        def connect(self):
+            return None
+
+        def close(self):
+            return None
+
+        def run_command(self, command, timeout):
+            _ = timeout
+            if command == "echo general":
+                return "ok"
+            if command == "echo battery":
+                return "ok"
+            return ""
+
+    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {
+                        "id": "general",
+                        "enabled": True,
+                        "manualOnly": True,
+                        "steps": [{"id": "s1", "command": "echo general"}],
+                    },
+                    {
+                        "id": "battery",
+                        "enabled": True,
+                        "manualOnly": True,
+                        "steps": [{"id": "s2", "command": "echo battery"}],
+                    },
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    manager.run_tests(
+        robot_id="r1",
+        page_session_id="manual-session",
+        test_ids=["general"],
+        dry_run=False,
+    )
+
+    activity = manager.get_runtime_activity("r1")
+    assert activity["lastFullTestAt"] == 0.0
+    assert activity["lastFullTestSource"] is None
+
+
+def test_apply_online_probe_sets_non_online_results_to_warning():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {"id": "battery", "enabled": True},
+                    {"id": "general", "enabled": True},
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "ok",
+                "value": "reachable",
+                "details": "connected",
+                "checkedAt": 10.0,
+                "source": "manual",
+            },
+            "battery": {
+                "status": "ok",
+                "value": "88%",
+                "details": "stable",
+                "checkedAt": 10.0,
+                "source": "manual",
+            },
+            "general": {
+                "status": "ok",
+                "value": "healthy",
+                "details": "stable",
+                "checkedAt": 10.0,
+                "source": "manual",
+            },
+        },
+    )
+
+    transition = manager.apply_online_probe_to_runtime(
+        robot_id="r1",
+        probe={
+            "status": "error",
+            "value": "unreachable",
+            "details": "network down",
+            "checkedAt": 20.0,
+            "source": "live",
+        },
+        source="live",
+    )
+    assert transition["previousOnlineStatus"] == "ok"
+    assert transition["wasOnline"] is True
+    assert transition["isOnline"] is False
+
+    runtime = manager.get_runtime_tests("r1")
+    assert runtime["online"]["status"] == "error"
+    assert runtime["online"]["source"] == "live"
+    assert runtime["battery"]["status"] == "warning"
+    assert runtime["battery"]["value"] == "unknown"
+    assert runtime["general"]["status"] == "warning"
+    assert runtime["general"]["value"] == "unknown"
 
 
 def test_monitor_config_defaults_and_update():
@@ -409,6 +632,88 @@ def test_auto_monitor_triggers_recovery_tests_only_on_offline_to_online_transiti
     manager._run_auto_monitor_tick()  # Already online, no additional trigger
 
     assert calls == ["r1"]
+
+
+def test_auto_monitor_triggers_recovery_tests_on_unknown_to_online_transition():
+    manager = _manager()
+    manager._refresh_battery_state = lambda _robot_id: None
+
+    manager.check_online = lambda *_args, **_kwargs: {
+        "status": "ok",
+        "value": "reachable",
+        "details": "online",
+        "ms": 1,
+        "checkedAt": time.time(),
+        "source": "live",
+    }
+    calls = []
+    manager._run_auto_recovery_tests = lambda robot_id: calls.append(robot_id)
+
+    manager._run_auto_monitor_tick()
+
+    assert calls == ["r1"]
+
+
+def test_auto_recovery_tests_hold_testing_state_for_min_visibility(monkeypatch):
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {"id": "general", "enabled": True},
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr("backend.terminal_manager.test_runner.time.time", lambda: 1000.0)
+    monkeypatch.setattr(
+        "backend.terminal_manager.test_runner.time.sleep",
+        lambda seconds: sleep_calls.append(float(seconds)),
+    )
+
+    manager._executor.run_tests = lambda **_kwargs: [
+        {
+            "id": "general",
+            "status": "ok",
+            "value": "all_present",
+            "details": "All required topics present",
+            "ms": 5,
+        }
+    ]
+
+    manager._run_auto_recovery_tests("r1")
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with manager._lock:
+            inflight = "r1" in manager._auto_recovery_test_inflight
+        if not inflight:
+            break
+        time.sleep(0.01)
+
+    with manager._lock:
+        inflight_after = "r1" in manager._auto_recovery_test_inflight
+    assert inflight_after is False
+    assert sleep_calls
+    assert sleep_calls[0] >= manager.AUTO_ACTIVITY_MIN_VISIBLE_SEC
+
+    runtime = manager.get_runtime_tests("r1")
+    assert runtime["general"]["status"] == "ok"
+
+    activity = manager.get_runtime_activity("r1")
+    assert activity["testing"] is False
 
 
 def test_auto_monitor_tick_uses_parallel_workers_from_monitor_parallelism():

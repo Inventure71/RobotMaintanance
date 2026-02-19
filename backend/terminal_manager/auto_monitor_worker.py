@@ -44,7 +44,6 @@ class AutoMonitorWorkerMixin:
             return
 
         with self._lock:
-            previous_online_state = self._last_auto_monitor_online_state.get(robot_id)
             next_online = float(self._online_next_check_at.get(robot_id, 0.0))
             next_battery = float(self._battery_next_check_at.get(robot_id, 0.0))
             next_topics = float(self._topics_next_check_at.get(robot_id, 0.0))
@@ -61,37 +60,45 @@ class AutoMonitorWorkerMixin:
                 self._last_auto_monitor_online_state[robot_id] = is_online
             return
 
-        if not is_online:
-            if now >= next_online:
-                self._set_runtime_activity(
-                    robot_id,
-                    searching=True,
-                    phase=self.ACTIVITY_PHASE_ONLINE_PROBE,
+        if now >= next_online:
+            probe_started = time.time()
+            self._set_runtime_activity(
+                robot_id,
+                searching=True,
+                phase=self.ACTIVITY_PHASE_ONLINE_PROBE,
+            )
+            try:
+                online_probe = self.check_online(
+                    robot_id=robot_id,
+                    timeout_sec=self.AUTO_MONITOR_ONLINE_TIMEOUT_SEC,
+                    force_refresh=True,
                 )
-                try:
-                    online_probe = self.check_online(
-                        robot_id=robot_id,
-                        timeout_sec=self.AUTO_MONITOR_ONLINE_TIMEOUT_SEC,
-                        force_refresh=True,
-                    )
-                finally:
-                    self._set_runtime_activity(robot_id, searching=False)
-                online_test = self._online_test_from_probe(online_probe)
-                self._record_runtime_tests(robot_id, {"online": online_test})
+            finally:
+                # Keep searching state visible long enough for the 1s UI poll loop.
+                elapsed = time.time() - probe_started
+                min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))
+                if elapsed < min_visible_sec:
+                    time.sleep(min_visible_sec - elapsed)
+                self._set_runtime_activity(robot_id, searching=False)
+            online_update = self.apply_online_probe_to_runtime(
+                robot_id=robot_id,
+                probe=online_probe,
+                source="auto-monitor",
+            )
+            with self._lock:
+                self._online_next_check_at[robot_id] = now + online_interval_sec
+            is_online = bool(online_update.get("isOnline"))
+            if is_online and normalize_status(online_update.get("previousOnlineStatus")) != "ok":
                 with self._lock:
-                    self._online_next_check_at[robot_id] = now + online_interval_sec
-                if online_test["status"] == "ok":
-                    is_online = True
-                    with self._lock:
-                        self._battery_next_check_at[robot_id] = 0.0
-                        self._topics_next_check_at[robot_id] = 0.0
+                    self._battery_next_check_at[robot_id] = 0.0
+                    self._topics_next_check_at[robot_id] = 0.0
+                self._run_auto_recovery_tests(robot_id)
 
-            if not is_online:
-                self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
-                self._record_runtime_tests(robot_id, {"battery": self._offline_battery_state()})
-                with self._lock:
-                    self._last_auto_monitor_online_state[robot_id] = False
-                return
+        if not is_online:
+            self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
+            with self._lock:
+                self._last_auto_monitor_online_state[robot_id] = False
+            return
 
         if now >= next_battery:
             self._refresh_battery_state(robot_id)
@@ -105,8 +112,6 @@ class AutoMonitorWorkerMixin:
 
         latest_runtime = self.get_runtime_tests(robot_id)
         latest_online = normalize_status((latest_runtime.get("online") or {}).get("status")) == "ok"
-        if previous_online_state is not None and (not previous_online_state) and latest_online:
-            self._run_auto_recovery_tests(robot_id)
         with self._lock:
             self._last_auto_monitor_online_state[robot_id] = latest_online
 
