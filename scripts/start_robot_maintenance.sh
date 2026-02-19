@@ -8,7 +8,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
 REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
 VENV_DIR="${ROOT_DIR}/.venv"
-MIN_PYTHON="3.10"
+MIN_PYTHON="3.9"
 
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
   PYTHON_BIN="${VENV_DIR}/bin/python"
@@ -145,6 +145,7 @@ ensure_python_requirements() {
   if ! "${PYTHON_BIN}" -m pip install --disable-pip-version-check --no-input -r "${REQ_FILE}"; then
     echo "Dependency installation failed for ${PYTHON_BIN}." >&2
     echo "If this is a Raspberry Pi, verify network access and install venv tooling: sudo apt install -y python3-venv." >&2
+    echo "This project pins pydantic==1.10.15 for broader Raspberry Pi compatibility." >&2
     echo "Then rerun ./start.sh." >&2
     exit 1
   fi
