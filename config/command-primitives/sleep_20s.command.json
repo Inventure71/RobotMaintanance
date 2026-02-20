@@ -1,0 +1,5 @@
+{
+  "id": "sleep_20s",
+  "command": "sleep 20",
+  "description": "Wait for 20 seconds"
+}

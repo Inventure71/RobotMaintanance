@@ -229,6 +229,27 @@ def test_manual_run_persists_runtime_results(monkeypatch):
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
+    definitions = {
+        "online_probe": {
+            "id": "online_probe",
+            "mode": "online_probe",
+            "checks": [{"id": "online"}],
+        },
+        "general_def": {
+            "id": "general_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "s1", "command": "echo ok", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "general",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "ok"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    }
+
     manager = TerminalManager(
         robots_by_id={
             "r1": {
@@ -242,15 +263,20 @@ def test_manual_run_persists_runtime_results(monkeypatch):
             "rosbot-2-pro": {
                 "typeId": "rosbot-2-pro",
                 "tests": [
-                    {"id": "online", "enabled": True},
+                    {"id": "online", "definitionId": "online_probe", "enabled": True},
                     {
                         "id": "general",
+                        "definitionId": "general_def",
                         "enabled": True,
                         "manualOnly": True,
-                        "steps": [{"id": "s1", "command": "echo ok"}],
                     },
                 ],
             }
+        },
+        test_definitions_by_id=definitions,
+        check_definitions_by_id={
+            "online": {"id": "online", "definitionId": "online_probe"},
+            "general": {"id": "general", "definitionId": "general_def"},
         },
         auto_monitor=False,
     )
@@ -294,6 +320,40 @@ def test_partial_manual_run_does_not_update_last_full_test_activity(monkeypatch)
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
+    definitions = {
+        "online_probe": {
+            "id": "online_probe",
+            "mode": "online_probe",
+            "checks": [{"id": "online"}],
+        },
+        "general_def": {
+            "id": "general_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "s1", "command": "echo general", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "general",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "ok"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+        "battery_def": {
+            "id": "battery_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "s2", "command": "echo battery", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "battery",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "ok"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    }
+
     manager = TerminalManager(
         robots_by_id={
             "r1": {
@@ -307,21 +367,27 @@ def test_partial_manual_run_does_not_update_last_full_test_activity(monkeypatch)
             "rosbot-2-pro": {
                 "typeId": "rosbot-2-pro",
                 "tests": [
-                    {"id": "online", "enabled": True},
+                    {"id": "online", "definitionId": "online_probe", "enabled": True},
                     {
                         "id": "general",
+                        "definitionId": "general_def",
                         "enabled": True,
                         "manualOnly": True,
-                        "steps": [{"id": "s1", "command": "echo general"}],
                     },
                     {
                         "id": "battery",
+                        "definitionId": "battery_def",
                         "enabled": True,
                         "manualOnly": True,
-                        "steps": [{"id": "s2", "command": "echo battery"}],
                     },
                 ],
             }
+        },
+        test_definitions_by_id=definitions,
+        check_definitions_by_id={
+            "online": {"id": "online", "definitionId": "online_probe"},
+            "general": {"id": "general", "definitionId": "general_def"},
+            "battery": {"id": "battery", "definitionId": "battery_def"},
         },
         auto_monitor=False,
     )

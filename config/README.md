@@ -1,60 +1,97 @@
-# Robot config contract
+# Robot Config Contract
 
-This folder contains the shared fleet config consumed by both backend and frontend.
+This folder contains fleet and behavior configuration for the connector-first execution model.
 
-## File: `robots.config.json`
+## File: `/Users/inventure71/VSProjects/RobotMaintanance/config/robots.config.json`
 
-Fleet inventory config:
-- contains robot instances deployed in the system
-- includes robot identity, SSH credentials, and type reference
+Fleet inventory config.
 
-- shape: `{ "version": "1.0", "robots": [...] }` (recommended)
-- also accepts `{ "fleet": [...] }` or a direct array for backwards compatibility
+Accepted shapes:
+- `{ "version": "1.0", "robots": [...] }` (recommended)
+- `{ "fleet": [...] }`
+- direct array
 
 Each robot entry:
-- `id` (required, unique): string
-- `name` (required): string
-- `type` (required): string
-- `ip` (required): robot host/IP address
-- `ssh` (optional):
-  - `username` (optional): SSH username
-  - `password` (optional): SSH password
-  - This file keeps runtime credentials in plaintext for development only. In production, replace with a secure secret mechanism.
-- `modelUrl` (optional): URL/path to model file
+- `id` (required, unique)
+- `name` (required)
+- `type` (required): references `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json` `robotTypes[].id`
+- `ip` (required)
+- `ssh` (optional): `username`, `password`, `port`
+- `modelUrl` (optional)
 
-## File: `robot-types.config.json`
+## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/command-primitives/`
 
-Robot type contract:
-- defines each robot family
-- defines test names and expected results
-- stores the required topic set per type
+Reusable command primitives (`*.command.json`).
+
+Example:
+```json
+{
+  "id": "rostopic_list",
+  "command": "timeout 12s rostopic list",
+  "timeoutSec": 12,
+  "description": "ROS topic snapshot"
+}
+```
+
+Runtime rule:
+- command string of the form `$name$` in test/fix steps resolves through this directory.
+- unknown `$name$` tokens fail startup.
+
+## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/tests/`
+
+Self-contained test definitions (`*.test.json`).
+
+Contract:
+- `id`
+- `mode`: `orchestrate` (default) or `online_probe`
+- `execute[]`: command steps (`id`, `command`, optional `timeoutSec`, `retries`, `saveAs`, `reuseKey`)
+- `checks[]`: each check has:
+  - `id` (global check id used by dashboard/API)
+  - `read` (`contains_string`, `contains_lines_unordered`, `contains_any_string`)
+  - `pass` and `fail` result payloads
+  - optional `metadata` (`label`, `icon`, defaults, `possibleResults`, `params`)
+
+Behavior:
+- one test definition can emit many independent check results.
+- orchestrator executes `execute[]` once and fans out flat results per check id.
+
+## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/fixes/`
+
+Self-contained fix definitions (`*.fix.json`).
+
+Contract:
+- `id`, `label`, `description`, `enabled`
+- `execute[]` (same step shape as tests)
+- optional `params`
+- optional `postTestIds[]` (check ids)
+
+Behavior:
+- fixes run via async fix-job endpoints.
+- post-tests run once after execute steps complete.
+
+## File: `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json`
+
+Robot types reference check/fix IDs only.
 
 Shape:
-- `{ "version": "1.0", "robotTypes": [...] }`
-- each robot type contains:
-  - `id`: canonical type id used by `robots.config.json`
-  - `name`: display name
-  - `topics`: full topic list the robot is expected to expose
-  - `tests`: list of test definitions:
-    - `id`: canonical test id
-    - `label`: human label
-    - `icon`: optional emoji
-    - `requiredTopics`: topic subset checked for this specific test
-    - `definitionRef`: optional shared test definition file (for example, topic presence parser)
-    - `possibleResults`: possible status/value/detail outcomes
-  - `autoFixes` (optional): list of predefined fix actions shown in UI fix mode:
-    - `id`: canonical action id
-    - `label`: button label
-    - `description`: short description shown as tooltip/help
-    - `commands`: terminal commands to execute (in order)
-    - `testIds`: tests to run after commands (optional)
+- `{ "version": "3.0", "robotTypes": [...] }`
 
-Example type:
-`rosbot-2-pro` is included and configured with test definitions for online, general topics, movement, battery, lidar, camera, and proximity sensors.
+Each robot type entry:
+- `id`, `name`
+- `topics`
+- `testRefs`: ordered list of check ids (from test definition `checks[].id`)
+- `fixRefs`: ordered list of fix ids
+- `testOverrides` (optional): map check id -> override object
+- `fixOverrides` (optional): map fix id -> override object
+- `autoMonitor` (optional)
 
-If runtime payload is unavailable from `/api/robots`, static config is still used so new robots appear immediately in the UI.
+Validation:
+- unknown `testRefs`, `fixRefs`, or fix `postTestIds` fail startup.
+- overrides are merged on top of definition metadata/params.
 
-## Adding a new robot (fast path)
-1. Add one entry to `robots.config.json`.
-2. Ensure `type` matches an existing `robot-types.config.json` `robotTypes[].id` entry.
-3. Add model file under `assets/models/` and set `modelUrl` if needed.
+## Runtime behavior
+
+- Backend loads directories at startup and validates IDs/tokens.
+- `POST /api/robots/{robotId}/tests/run` returns flat `results[]` by check id.
+- `POST /api/robots/{robotId}/fixes/{fixId}/runs` starts async fix jobs.
+- `GET /api/robots/{robotId}/fixes/runs/{runId}` polls job state/events/results.

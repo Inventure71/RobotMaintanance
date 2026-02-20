@@ -1,0 +1,6 @@
+{
+  "id": "flash_firmware",
+  "command": "./flash_firmware.sh",
+  "timeoutSec": 900,
+  "description": "Flash firmware script"
+}

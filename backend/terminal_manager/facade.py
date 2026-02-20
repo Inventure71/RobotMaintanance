@@ -6,12 +6,14 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from ..connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from ..normalization import normalize_type_key
 from ..test_executor import TestExecutor
 from .activity_guard import ActivityGuardMixin
 from .auto_monitor_worker import AutoMonitorWorkerMixin
 from .battery_parser import BatteryParserMixin
 from .command_runner import CommandRunnerMixin
+from .fix_runner import FixRunnerMixin
 from .monitor_config import MonitorConfigMixin
 from .online_checker import OnlineCheckerMixin
 from .runtime_state import RuntimeStateMixin
@@ -30,6 +32,7 @@ class TerminalManager(
     BatteryParserMixin,
     TopicsParserMixin,
     TestRunnerMixin,
+    FixRunnerMixin,
     AutoMonitorWorkerMixin,
 ):
     MONITOR_MODE_ONLINE_BATTERY = "online_battery"
@@ -97,6 +100,10 @@ class TerminalManager(
         self,
         robots_by_id: dict[str, dict[str, Any]],
         robot_types_by_id: dict[str, dict[str, Any]],
+        command_primitives_by_id: dict[str, dict[str, Any]] | None = None,
+        test_definitions_by_id: dict[str, dict[str, Any]] | None = None,
+        check_definitions_by_id: dict[str, dict[str, Any]] | None = None,
+        fix_definitions_by_id: dict[str, dict[str, Any]] | None = None,
         idle_timeout_sec: int = 15 * 60,
         auto_monitor: bool = False,
         auto_monitor_interval_sec: float = AUTO_MONITOR_INTERVAL_SEC,
@@ -123,6 +130,17 @@ class TerminalManager(
         self._active_fix_runs = set()
         self._last_auto_monitor_online_state = {}
         self._auto_recovery_test_inflight = set()
+        self._fix_runs: dict[tuple[str, str], dict[str, Any]] = {}
+        self._command_primitives_by_id = command_primitives_by_id or {}
+        self._test_definitions_by_id = test_definitions_by_id or {}
+        self._check_definitions_by_id = check_definitions_by_id or {}
+        self._fix_definitions_by_id = fix_definitions_by_id or {}
+        self._read_connector = ReadConnector()
+        self._write_connector = WriteConnector(self._command_primitives_by_id)
+        self._orchestrate_connector = OrchestrateConnector(
+            read=self._read_connector,
+            write=self._write_connector,
+        )
         self._lock = threading.Lock()
         self._auto_monitor_enabled = bool(auto_monitor)
         self._auto_monitor_interval_sec = max(0.2, float(auto_monitor_interval_sec))
@@ -135,6 +153,9 @@ class TerminalManager(
             get_or_connect=self.get_or_connect,
             close_session=self.close_session,
             check_online=self.check_online,
+            test_definitions_by_id=self._test_definitions_by_id,
+            check_definitions_by_id=self._check_definitions_by_id,
+            orchestrate_connector=self._orchestrate_connector,
         )
         if self._auto_monitor_enabled:
             self._start_auto_monitor()

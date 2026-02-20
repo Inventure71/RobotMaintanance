@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +32,11 @@ class TestRunRequest(BaseModel):
     pageSessionId: str | None = None
     testIds: list[str] | None = None
     dryRun: bool = False
+
+
+class FixRunRequest(BaseModel):
+    pageSessionId: str | None = None
+    params: dict[str, Any] | None = None
 
 
 class OnlineBatchRequest(BaseModel):

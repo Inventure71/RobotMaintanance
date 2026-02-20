@@ -72,10 +72,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     };
     const FIX_MODE_CONTEXT_DASHBOARD = 'dashboard';
     const FIX_MODE_CONTEXT_DETAIL = 'detail';
-    const FLASH_FIX_ID = 'flash_fix';
-    const FLASH_FIX_SCRIPT_COMMAND = './flash_firmware.sh';
-    const FLASH_FIX_POST_UP_DELAY_MS = 15_000;
-    const FLASH_FIX_COMMAND_TIMEOUT_SEC = 900;
+    const FIX_JOB_POLL_INTERVAL_MS = 1000;
     const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
     const FORCE_TEXT_TEST_ICONS = (() => {
       try {
@@ -409,20 +406,15 @@ let ROBOT_TYPE_BY_ID = new Map();
       const id = normalizeText(raw.id, '');
       if (!id) return null;
 
-      const commands = Array.isArray(raw.commands)
-        ? raw.commands.map((item) => normalizeText(item, '')).filter(Boolean)
+      const postTestIds = Array.isArray(raw.postTestIds)
+        ? raw.postTestIds.map((item) => normalizeText(item, '')).filter(Boolean)
         : [];
-      const testIds = Array.isArray(raw.testIds)
-        ? raw.testIds.map((item) => normalizeText(item, '')).filter(Boolean)
-        : [];
-      if (!commands.length && !testIds.length) return null;
 
       return {
         id,
         label: normalizeText(raw.label, id),
         description: normalizeText(raw.description, ''),
-        commands,
-        testIds,
+        postTestIds,
       };
     }
 
@@ -2055,11 +2047,10 @@ let ROBOT_TYPE_BY_ID = new Map();
           if (!byKey.has(key)) {
             byKey.set(key, {
               key,
-              id: fix.id,
-              label: fix.label,
-              description: fix.description,
-              commands: fix.commands || [],
-              testIds: fix.testIds || [],
+                id: fix.id,
+                label: fix.label,
+                description: fix.description,
+              postTestIds: fix.postTestIds || [],
               typeLabel,
               robotIds: [],
             });
@@ -2087,8 +2078,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         id: fix.id,
         label: fix.label,
         description: fix.description,
-        commands: fix.commands || [],
-        testIds: fix.testIds || [],
+        postTestIds: fix.postTestIds || [],
         typeLabel: robot.type,
         robotIds: [robotId(robot)],
       }));
@@ -2120,84 +2110,94 @@ let ROBOT_TYPE_BY_ID = new Map();
     async function runAutoFixForRobot(robot, candidate) {
       if (!robot || !candidate) return;
       const normalizedRobotId = robotId(robot);
-      const commandList = Array.isArray(candidate.commands) ? candidate.commands : [];
-      const isFlashFix = normalizeText(candidate.id, '') === FLASH_FIX_ID;
-      const configuredTestIds = Array.isArray(candidate.testIds) ? candidate.testIds : [];
-      const testIds = isFlashFix ? getConfiguredDefaultTestIds(robot, false) : configuredTestIds;
-      const shouldMarkFixing = commandList.length > 0;
-      const shouldMarkTesting = testIds.length > 0;
-      const fixCountdownMs = normalizeCountdownMs(
-        commandList.length * TEST_STEP_TIMEOUT_MS +
-          (isFlashFix ? FLASH_FIX_COMMAND_TIMEOUT_SEC * 1000 + FLASH_FIX_POST_UP_DELAY_MS : 0),
-        TEST_STEP_TIMEOUT_MS * 2,
-      );
+      const configuredPostTestIds = Array.isArray(candidate.postTestIds) ? candidate.postTestIds : [];
+      let sawPostTests = false;
+      setRobotFixing(normalizedRobotId, true, TEST_STEP_TIMEOUT_MS * 2);
+      setRobotTesting(normalizedRobotId, false);
 
-      if (shouldMarkFixing) {
-        setRobotFixing(normalizedRobotId, true, fixCountdownMs);
+      let runId = '';
+      let cursor = 0;
+      let finalPayload = null;
+
+      const startResponse = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/${encodeURIComponent(candidate.id)}/runs`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageSessionId: state.pageSessionId,
+        }),
+      });
+      if (!startResponse.ok) {
+        const message = await startResponse.text();
+        throw new Error(message || `HTTP ${startResponse.status}`);
+      }
+      const startPayload = await startResponse.json();
+      runId = normalizeText(startPayload?.runId, '');
+      if (!runId) {
+        throw new Error('Fix run did not return a runId');
       }
 
-      try {
-        for (const command of commandList) {
-          appendTerminalLine(`Auto-fix (${candidate.label}) on ${robot.name}: ${command}`, 'warn');
-          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/terminal`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              robotId: normalizedRobotId,
-              pageSessionId: state.pageSessionId,
-              command,
-              commandId: candidate.key,
-              source: 'auto-fix',
-              timeoutSec:
-                isFlashFix && command.includes(FLASH_FIX_SCRIPT_COMMAND)
-                  ? FLASH_FIX_COMMAND_TIMEOUT_SEC
-                  : undefined,
-            }),
-          });
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `HTTP ${response.status}`);
+      appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name} (run ${runId}).`, 'warn');
+
+      while (true) {
+        const response = await fetch(
+          buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/runs/${encodeURIComponent(runId)}`),
+          { method: 'GET' },
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        finalPayload = payload;
+
+        const events = Array.isArray(payload?.events) ? payload.events : [];
+        const unseen = events.slice(cursor);
+        cursor = events.length;
+        unseen.forEach((event) => {
+          const message = normalizeText(event?.message, '');
+          if (message) {
+            const tone = normalizeText(event?.type, '').includes('failed') ? 'err' : 'warn';
+            appendTerminalLine(message, tone);
           }
-          try {
-            const payload = await response.json();
-            if (payload?.output !== undefined) {
-              appendTerminalPayload(payload.output);
-            } else if (payload) {
-              appendTerminalPayload(payload);
-            }
-          } catch (_error) {
-            // Ignore payload parse errors for auto-fix command output.
+          const eventData = event?.data;
+          if (eventData && typeof eventData === 'object' && eventData.output !== undefined) {
+            appendTerminalPayload(eventData.output);
           }
-        }
+          if (normalizeText(event?.type, '') === 'post_tests_started') {
+            sawPostTests = true;
+            setRobotFixing(normalizedRobotId, false);
+            setRobotTesting(
+              normalizedRobotId,
+              true,
+              estimateTestCountdownMsFromBody({ testIds: configuredPostTestIds }),
+            );
+          }
+          if (normalizeText(event?.type, '') === 'post_tests_finished') {
+            setRobotTesting(normalizedRobotId, false);
+          }
+        });
 
-        if (isFlashFix) {
-          appendTerminalLine(
-            `Flash fix complete on ${robot.name}. Waiting ${Math.floor(FLASH_FIX_POST_UP_DELAY_MS / 1000)}s before retesting...`,
-            'warn',
-          );
-          await new Promise((resolve) => window.setTimeout(resolve, FLASH_FIX_POST_UP_DELAY_MS));
+        const status = normalizeText(payload?.status, '').toLowerCase();
+        if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
+          break;
         }
-      } finally {
-        if (shouldMarkFixing) {
-          setRobotFixing(normalizedRobotId, false);
-        }
+        await new Promise((resolve) => window.setTimeout(resolve, FIX_JOB_POLL_INTERVAL_MS));
       }
 
-      if (shouldMarkTesting) {
-        setRobotTesting(normalizedRobotId, true, estimateTestCountdownMsFromBody({ testIds }));
+      if (sawPostTests) {
+        setRobotTesting(normalizedRobotId, false);
       }
-      try {
-        if (testIds.length) {
-          const result = await runRobotTestsForRobot(normalizedRobotId, {
-            pageSessionId: state.pageSessionId,
-            testIds,
-          });
-          updateRobotTestState(normalizedRobotId, result.results || [], result);
-        }
-      } finally {
-        if (shouldMarkTesting) {
-          setRobotTesting(normalizedRobotId, false);
-        }
+      setRobotFixing(normalizedRobotId, false);
+
+      const status = normalizeText(finalPayload?.status, '').toLowerCase();
+      if (status !== 'succeeded') {
+        const errorMessage = normalizeText(finalPayload?.error, `Auto-fix failed with status: ${status || 'unknown'}`);
+        throw new Error(errorMessage);
+      }
+
+      const testResults = Array.isArray(finalPayload?.testRun?.results) ? finalPayload.testRun.results : [];
+      if (testResults.length) {
+        updateRobotTestState(normalizedRobotId, testResults, finalPayload?.testRun || {});
       }
     }
 

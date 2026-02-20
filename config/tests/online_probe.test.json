@@ -1,0 +1,23 @@
+{
+  "id": "online_probe",
+  "label": "Online Probe",
+  "mode": "online_probe",
+  "enabled": true,
+  "checks": [
+    {
+      "id": "online",
+      "metadata": {
+        "label": "Online",
+        "icon": "🛰️",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "reachable", "details": "SSH connected and authenticated." },
+          { "status": "error", "value": "unreachable", "details": "SSH unavailable or authentication failed." }
+        ]
+      }
+    }
+  ]
+}

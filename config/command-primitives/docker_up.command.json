@@ -1,0 +1,5 @@
+{
+  "id": "docker_up",
+  "command": "docker compose up -d",
+  "description": "Start docker stack"
+}
