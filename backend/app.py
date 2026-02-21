@@ -15,8 +15,10 @@ from .config_loader import (
     PROJECT_ROOT,
     RobotCatalog,
 )
+from .definition_service import DefinitionService
 from .routers import (
     create_bug_reports_router,
+    create_definitions_router,
     create_fixes_router,
     create_health_router,
     create_monitor_router,
@@ -56,7 +58,16 @@ def create_app() -> FastAPI:
         command_primitives_by_id=catalog.command_primitives_by_id,
         test_definitions_by_id=catalog.test_definitions_by_id,
         check_definitions_by_id=catalog.check_definitions_by_id,
+        fix_definitions_by_id=catalog.fix_definitions_by_id,
         auto_monitor=True,
+    )
+    definition_service = DefinitionService(
+        terminal_manager=terminal_manager,
+        robots_config_path=config_path,
+        robot_types_config_path=robot_types_path,
+        command_primitives_dir=command_primitives_dir,
+        tests_dir=tests_dir,
+        fixes_dir=fixes_dir,
     )
 
     app = FastAPI(title="Robot Maintenance SSH API v2", version="2.2")
@@ -81,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(create_terminal_router(terminal_manager))
     app.include_router(create_tests_router(terminal_manager))
     app.include_router(create_fixes_router(terminal_manager))
+    app.include_router(create_definitions_router(definition_service))
     app.include_router(create_bug_reports_router(logs_path))
 
     @app.on_event("shutdown")

@@ -47,7 +47,7 @@
           </div>
 
           <div class="status-bar dashboard-bulk-actions">
-            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Add robot</button>
+            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
           </div>
           <div class="panel fleet-parallelism-control">
             <label class="fleet-parallelism-label" for="fleetParallelism">
@@ -100,62 +100,256 @@
       <div class="detail-toolbar">
         <div class="detail-toolbar-left">
           <button class="button" id="backFromAddRobot" type="button" data-button-intent="navigation">← Back to fleet</button>
-          <div class="detail-title-bar">Add Robot</div>
+          <div class="detail-title-bar">Manage Robots</div>
         </div>
       </div>
-      <div class="add-robot-shell">
-        <div class="panel add-robot-panel">
-            <div class="add-robot-head">
-              <h2>Register a new robot</h2>
-              <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+      <div class="manage-robots-shell">
+        <div class="panel manage-tabs-panel">
+          <div class="manage-tabs" role="tablist" aria-label="Manage robots tabs">
+            <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots" data-button-intent="navigation">Robots</button>
+            <button id="manageTabButtonTests" class="button button-compact" type="button" data-tab="tests" data-button-intent="navigation">Tests</button>
+            <button id="manageTabButtonFixes" class="button button-compact" type="button" data-tab="fixes" data-button-intent="navigation">Fixes</button>
+            <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder" data-button-intent="navigation">Recorder</button>
+          </div>
+          <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
+
+          <div id="manageTabPanelRobots" class="manage-tab-panel active" data-tab-panel="robots">
+            <div class="add-robot-shell">
+              <div class="panel add-robot-panel">
+                <div class="add-robot-head">
+                  <h2>Register a new robot</h2>
+                  <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+                </div>
+                <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
+                <form id="addRobotForm" class="add-robot-form" novalidate>
+                  <div class="form-grid">
+                    <label class="form-field">
+                      Robot name
+                      <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input" placeholder="e.g. ROSbot Lab South" required />
+                    </label>
+                    <label class="form-field">
+                      Robot type
+                      <select id="addRobotType" name="type" class="form-input" required>
+                        <option value="" disabled selected>Loading robot types...</option>
+                      </select>
+                    </label>
+                    <label class="form-field">
+                      IP / Host
+                      <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input" placeholder="e.g. 192.168.0.42 or robot-host" required />
+                    </label>
+                    <label class="form-field">
+                      Model URL (optional)
+                      <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input" placeholder="assets/models/rosbot-2-pro.glb" />
+                    </label>
+                    <label class="form-field">
+                      SSH username
+                      <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input" placeholder="robot" required />
+                    </label>
+                    <label class="form-field">
+                      SSH password
+                      <div class="form-password-field">
+                        <input id="addRobotPassword" name="password" type="password" autocomplete="off" class="form-input" placeholder="••••••••" required />
+                        <button id="toggleAddRobotPassword" class="button password-toggle" type="button" data-button-intent="utility" aria-label="Show password">Show</button>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="add-robot-actions">
+                    <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
+                    <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+                  </div>
+                </form>
+              </div>
+              <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
+                <h3 class="add-robot-side-title">Before you save</h3>
+                <ul class="add-robot-checklist">
+                  <li>Use a reachable host/IP for diagnostics and terminal access.</li>
+                  <li>Select a known type so tests map correctly.</li>
+                  <li>SSH credentials are stored in the config file.</li>
+                </ul>
+              </aside>
             </div>
-          <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
-          <form id="addRobotForm" class="add-robot-form" novalidate>
-            <div class="form-grid">
+          </div>
+
+          <div id="manageTabPanelTests" class="manage-tab-panel" data-tab-panel="tests">
+            <div class="manage-grid two-cols">
+              <div class="panel manage-list-panel">
+                <h2>Test Definitions</h2>
+                <div id="manageTestsList" class="manage-entity-list"></div>
+              </div>
+              <div class="panel manage-editor-panel">
+                <h2>Create or update test</h2>
+                <form id="manageTestEditorForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Test definition ID
+                    <input id="manageTestId" class="form-input" type="text" placeholder="e.g. topics_snapshot_v2" required />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="manageTestLabel" class="form-input" type="text" placeholder="Topics Snapshot V2" />
+                  </label>
+                  <label class="form-field">
+                    Execute steps JSON
+                    <textarea id="manageTestExecuteJson" class="form-input manage-json-input" rows="8" placeholder='[{"id":"topics","command":"$rostopic_list$","saveAs":"topics_raw"}]'></textarea>
+                  </label>
+                  <label class="form-field">
+                    Checks JSON
+                    <textarea id="manageTestChecksJson" class="form-input manage-json-input" rows="10" placeholder='[{"id":"battery","label":"Battery","read":{"kind":"contains_lines_unordered","inputRef":"topics_raw","lines":["/battery"],"requireAll":true},"pass":{"status":"ok","value":"present","details":"Battery present"},"fail":{"status":"error","value":"missing","details":"Battery missing"}}]'></textarea>
+                  </label>
+                  <div class="manage-editor-actions">
+                    <button id="manageSaveTestButton" class="button" type="submit" data-button-intent="create">Save test definition</button>
+                  </div>
+                  <div id="manageTestEditorStatus" class="manage-editor-status" aria-live="polite"></div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="manageTabPanelFixes" class="manage-tab-panel" data-tab-panel="fixes">
+            <div class="manage-grid two-cols">
+              <div class="panel manage-list-panel">
+                <h2>Fix Definitions</h2>
+                <div id="manageFixesList" class="manage-entity-list"></div>
+              </div>
+              <div class="panel manage-editor-panel">
+                <h2>Create or update fix</h2>
+                <form id="manageFixEditorForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Fix ID
+                    <input id="manageFixId" class="form-input" type="text" placeholder="e.g. flash_fix" required />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="manageFixLabel" class="form-input" type="text" placeholder="Flash fix" />
+                  </label>
+                  <label class="form-field">
+                    Description
+                    <input id="manageFixDescription" class="form-input" type="text" placeholder="Reflash and restart services" />
+                  </label>
+                  <label class="form-field">
+                    Execute steps JSON
+                    <textarea id="manageFixExecuteJson" class="form-input manage-json-input" rows="8" placeholder='[{"id":"docker_down","command":"$docker_down$"},{"id":"flash","command":"$flash_firmware$"}]'></textarea>
+                  </label>
+                  <label class="form-field">
+                    Post test IDs (comma separated)
+                    <input id="manageFixPostTests" class="form-input" type="text" placeholder="general,movement,battery" />
+                  </label>
+                  <div class="manage-editor-actions">
+                    <button id="manageSaveFixButton" class="button" type="submit" data-button-intent="create">Save fix definition</button>
+                  </div>
+                  <div id="manageFixEditorStatus" class="manage-editor-status" aria-live="polite"></div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
+            <div class="panel recorder-top-controls">
               <label class="form-field">
-                Robot name
-                <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input" placeholder="e.g. ROSbot Lab South" required />
-              </label>
-              <label class="form-field">
-                Robot type
-                <select id="addRobotType" name="type" class="form-input" required>
-                  <option value="" disabled selected>Loading robot types...</option>
+                Robot
+                <select id="recorderRobotSelect" class="form-input">
+                  <option value="">Select robot</option>
                 </select>
               </label>
-              <label class="form-field">
-                IP / Host
-                <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input" placeholder="e.g. 192.168.0.42 or robot-host" required />
-              </label>
-              <label class="form-field">
-                Model URL (optional)
-                <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input" placeholder="assets/models/rosbot-2-pro.glb" />
-              </label>
-              <label class="form-field">
-                SSH username
-                <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input" placeholder="robot" required />
-              </label>
-              <label class="form-field">
-                SSH password
-                <div class="form-password-field">
-                  <input id="addRobotPassword" name="password" type="password" autocomplete="off" class="form-input" placeholder="••••••••" required />
-                  <button id="toggleAddRobotPassword" class="button password-toggle" type="button" data-button-intent="utility" aria-label="Show password">Show</button>
+              <div class="recorder-control-buttons">
+                <button id="recorderStartRecording" class="button" type="button" data-button-intent="run">Start recording</button>
+                <button id="recorderResetRecording" class="button" type="button" data-button-intent="navigation">Reset</button>
+              </div>
+              <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
+            </div>
+            <div class="recorder-summary-bar">
+              <span id="recorderStateBadge" class="recorder-summary-pill">Idle</span>
+              <span id="recorderStepCount" class="recorder-summary-pill">0 steps</span>
+              <span id="recorderCheckCount" class="recorder-summary-pill">0 checks</span>
+              <span id="recorderActiveStepBadge" class="recorder-summary-pill">No active step</span>
+            </div>
+            <p class="recorder-flow-hint">
+              Workflow: pick robot, start recording, run and capture commands, create checks from output, then publish and map to robot types.
+            </p>
+
+            <div class="manage-grid two-cols recorder-grid">
+              <div class="panel recorder-terminal-panel">
+                <h2>1. Capture commands</h2>
+                <div id="recorderTerminalOutput" class="recorder-terminal-output" aria-live="polite"></div>
+                <div class="recorder-command-row">
+                  <input id="recorderCommandInput" class="form-input" type="text" placeholder="Type command to run and capture..." />
+                  <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + capture</button>
                 </div>
-              </label>
+                <div class="recorder-primitive-row">
+                  <label class="recorder-primitive-toggle">
+                    <input id="recorderPromotePrimitive" type="checkbox" />
+                    Promote command to primitive
+                  </label>
+                  <input id="recorderPrimitiveId" class="form-input" type="text" placeholder="primitive_id (optional)" />
+                </div>
+                <h3>Recorded steps</h3>
+                <p class="recorder-section-hint">Click a step to use it as source for checks.</p>
+                <div id="recorderSteps" class="manage-entity-list"></div>
+              </div>
+
+              <div class="panel recorder-checks-panel">
+                <h2>2. Define checks and publish</h2>
+                <div class="recorder-builder-grid">
+                  <label class="form-field">
+                    Check source step
+                    <select id="recorderCheckSourceStep" class="form-input">
+                      <option value="">Select step</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    Check ID
+                    <input id="recorderCheckId" class="form-input" type="text" placeholder="e.g. battery" />
+                  </label>
+                  <label class="form-field">
+                    Check label
+                    <input id="recorderCheckLabel" class="form-input" type="text" placeholder="Battery" />
+                  </label>
+                  <label class="form-field">
+                    Check icon
+                    <input id="recorderCheckIcon" class="form-input" type="text" placeholder="🔋" />
+                  </label>
+                </div>
+                <label class="form-field">
+                  Contains string
+                  <input id="recorderContainsString" class="form-input" type="text" placeholder="e.g. /battery" />
+                </label>
+                <h3>Select lines for unordered check</h3>
+                <p class="recorder-section-hint">Select one or more lines, then click "Add line check".</p>
+                <div id="recorderOutputLines" class="recorder-output-lines"></div>
+                <div class="recorder-check-actions">
+                  <button id="recorderAddLineCheck" class="button button-compact" type="button" data-button-intent="create">Add line check</button>
+                  <button id="recorderAddStringCheck" class="button button-compact" type="button" data-button-intent="create">Add string check</button>
+                </div>
+
+                <h3>Checks</h3>
+                <div id="recorderChecks" class="manage-entity-list"></div>
+
+                <h3>3. Definition info</h3>
+                <div class="recorder-publish-grid">
+                  <label class="form-field">
+                    Definition ID
+                    <input id="recorderDefinitionId" class="form-input" type="text" placeholder="e.g. topics_snapshot_custom" />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="recorderDefinitionLabel" class="form-input" type="text" placeholder="Topics Snapshot Custom" />
+                  </label>
+                  <label class="form-field">
+                    Fix post tests (comma separated, for fixes only)
+                    <input id="recorderFixPostTests" class="form-input" type="text" placeholder="battery,camera" />
+                  </label>
+                </div>
+
+                <h3>Map to robot types</h3>
+                <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                <div class="recorder-check-actions">
+                  <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish as test</button>
+                  <button id="recorderPublishFix" class="button" type="button" data-button-intent="fix">Publish as fix</button>
+                </div>
+                <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
+              </div>
             </div>
-            <div class="add-robot-actions">
-              <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
-              <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
-            </div>
-          </form>
+          </div>
         </div>
-        <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
-          <h3 class="add-robot-side-title">Before you save</h3>
-          <ul class="add-robot-checklist">
-            <li>Use a reachable host/IP for diagnostics and terminal access.</li>
-            <li>Select a known type so tests map correctly.</li>
-            <li>SSH credentials are stored in the config file.</li>
-          </ul>
-        </aside>
       </div>
     </section>
 

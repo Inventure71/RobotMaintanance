@@ -1,4 +1,5 @@
 import { RobotTerminalComponent } from '../../components/robot-terminal-component.js';
+import { WorkflowRecorderComponent } from '../../components/workflow-recorder-component.js';
 import { renderBatteryPill } from '../../components/battery-pill-component.js';
 import {
   applyActionButton,
@@ -74,6 +75,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const FIX_MODE_CONTEXT_DETAIL = 'detail';
     const FIX_JOB_POLL_INTERVAL_MS = 1000;
     const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
+    const MANAGE_VIEW_HASH = 'manage-robots';
+    const MANAGE_TABS = ['robots', 'tests', 'fixes', 'recorder'];
     const FORCE_TEXT_TEST_ICONS = (() => {
       try {
         const platformHints = [
@@ -453,7 +456,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       return list
         .map((entry) => {
           if (!entry || typeof entry !== 'object') return null;
-          const typeId = normalizeText(entry.id, entry.name);
+          const typeId = normalizeText(entry.typeId, normalizeText(entry.id, normalizeText(entry.name, '')));
           if (!typeId) return null;
 
           const tests = Array.isArray(entry.tests)
@@ -470,7 +473,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           return {
             typeId,
             typeKey: normalizeTypeId(typeId),
-            label: normalizeText(entry.name, typeId),
+            label: normalizeText(entry.label, normalizeText(entry.name, typeId)),
             topics,
             tests,
             autoFixes,
@@ -617,6 +620,15 @@ let ROBOT_TYPE_BY_ID = new Map();
       isBugReportModalOpen: false,
       isBugReportSubmitInProgress: false,
       isCreateRobotInProgress: false,
+      activeManageTab: 'robots',
+      definitionsSummary: {
+        commandPrimitives: [],
+        tests: [],
+        checks: [],
+        fixes: [],
+        robotTypes: [],
+      },
+      isManageSummaryLoading: false,
       isOnlineRefreshInFlight: false,
       onlineCheckEstimateMs: ONLINE_CHECK_TIMEOUT_MS,
       fleetParallelism: FLEET_PARALLELISM_DEFAULT,
@@ -654,6 +666,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       },
       pageSessionId: createPageSessionId(),
       onlineRefreshStatusTimer: null,
+      workflowRecorder: null,
     };
 
     const dashboard = $('#dashboard');
@@ -678,6 +691,50 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotSavingHint = $('#addRobotSavingHint');
     const addRobotPasswordInput = $('#addRobotPassword');
     const addRobotPasswordToggle = $('#toggleAddRobotPassword');
+    const manageTabStatus = $('#manageTabStatus');
+    const manageTabButtons = $$('[data-tab]');
+    const manageTabPanels = $$('[data-tab-panel]');
+    const manageTestsList = $('#manageTestsList');
+    const manageFixesList = $('#manageFixesList');
+    const manageTestEditorForm = $('#manageTestEditorForm');
+    const manageTestIdInput = $('#manageTestId');
+    const manageTestLabelInput = $('#manageTestLabel');
+    const manageTestExecuteJsonInput = $('#manageTestExecuteJson');
+    const manageTestChecksJsonInput = $('#manageTestChecksJson');
+    const manageTestEditorStatus = $('#manageTestEditorStatus');
+    const manageFixEditorForm = $('#manageFixEditorForm');
+    const manageFixIdInput = $('#manageFixId');
+    const manageFixLabelInput = $('#manageFixLabel');
+    const manageFixDescriptionInput = $('#manageFixDescription');
+    const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
+    const manageFixPostTestsInput = $('#manageFixPostTests');
+    const manageFixEditorStatus = $('#manageFixEditorStatus');
+    const recorderRobotSelect = $('#recorderRobotSelect');
+    const recorderStartButton = $('#recorderStartRecording');
+    const recorderResetButton = $('#recorderResetRecording');
+    const recorderCommandInput = $('#recorderCommandInput');
+    const recorderRunCaptureButton = $('#recorderRunCapture');
+    const recorderPromotePrimitiveInput = $('#recorderPromotePrimitive');
+    const recorderPrimitiveIdInput = $('#recorderPrimitiveId');
+    const recorderCheckSourceStep = $('#recorderCheckSourceStep');
+    const recorderCheckIdInput = $('#recorderCheckId');
+    const recorderCheckLabelInput = $('#recorderCheckLabel');
+    const recorderCheckIconInput = $('#recorderCheckIcon');
+    const recorderContainsStringInput = $('#recorderContainsString');
+    const recorderAddLineCheckButton = $('#recorderAddLineCheck');
+    const recorderAddStringCheckButton = $('#recorderAddStringCheck');
+    const recorderDefinitionIdInput = $('#recorderDefinitionId');
+    const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
+    const recorderFixPostTestsInput = $('#recorderFixPostTests');
+    const recorderPublishTestButton = $('#recorderPublishTest');
+    const recorderPublishFixButton = $('#recorderPublishFix');
+    const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
+    const recorderStatus = $('#recorderStatus');
+    const recorderPublishStatus = $('#recorderPublishStatus');
+    const recorderStateBadge = $('#recorderStateBadge');
+    const recorderStepCountBadge = $('#recorderStepCount');
+    const recorderCheckCountBadge = $('#recorderCheckCount');
+    const recorderActiveStepBadge = $('#recorderActiveStepBadge');
     const toggleDashboardFixModeButton = $('#toggleDashboardFixMode');
     const toggleDetailFixModeButton = $('#toggleDetailFixMode');
     const dashboardFixModePanel = $('#dashboardFixModePanel');
@@ -3145,9 +3202,12 @@ let ROBOT_TYPE_BY_ID = new Map();
       detail.classList.remove('active');
       dashboard.classList.remove('active');
       populateAddRobotTypeOptions();
+      renderRecorderRobotOptions();
+      setActiveManageTab(state.activeManageTab || 'robots');
       addRobotSection.classList.add('active');
       syncFixModePanels();
-      window.location.hash = 'add-robot';
+      window.location.hash = MANAGE_VIEW_HASH;
+      loadDefinitionsSummary();
     }
 
     function showDashboard() {
@@ -3730,6 +3790,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         state.robots = refreshed;
         populateFilters();
         populateAddRobotTypeOptions();
+        renderRecorderRobotOptions();
         renderDashboard();
         showDashboard();
       } finally {
@@ -3750,6 +3811,750 @@ let ROBOT_TYPE_BY_ID = new Map();
       addRobotPasswordToggle.addEventListener('click', () => {
         setAddRobotPasswordVisibility(addRobotPasswordInput.type === 'password');
       });
+    }
+
+    function setManageTabStatus(message = '', tone = '') {
+      if (!manageTabStatus) return;
+      manageTabStatus.textContent = message;
+      manageTabStatus.classList.remove('ok', 'warn', 'error');
+      if (tone) {
+        manageTabStatus.classList.add(tone);
+      }
+    }
+
+    function setManageEditorStatus(element, message = '', tone = '') {
+      if (!element) return;
+      element.textContent = message;
+      element.classList.remove('ok', 'warn', 'error');
+      if (tone) {
+        element.classList.add(tone);
+      }
+    }
+
+    function normalizeDefinitionsSummary(payload) {
+      const safe = payload && typeof payload === 'object' ? payload : {};
+      return {
+        commandPrimitives: Array.isArray(safe.commandPrimitives) ? safe.commandPrimitives : [],
+        tests: Array.isArray(safe.tests) ? safe.tests : [],
+        checks: Array.isArray(safe.checks) ? safe.checks : [],
+        fixes: Array.isArray(safe.fixes) ? safe.fixes : [],
+        robotTypes: Array.isArray(safe.robotTypes) ? safe.robotTypes : [],
+      };
+    }
+
+    function normalizeIdList(values) {
+      const list = Array.isArray(values) ? values : [];
+      const seen = new Set();
+      const out = [];
+      list.forEach((item) => {
+        const normalized = normalizeText(item, '');
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        out.push(normalized);
+      });
+      return out;
+    }
+
+    function slugifyRecorderValue(value, fallback = '') {
+      const slug = normalizeText(value, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_.-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      return slug || fallback;
+    }
+
+    function renderRecorderRobotTypeTargets() {
+      if (!recorderRobotTypeTargets) return;
+      recorderRobotTypeTargets.replaceChildren();
+      const robotTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      if (!robotTypes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No robot types available.';
+        recorderRobotTypeTargets.appendChild(empty);
+        return;
+      }
+      robotTypes.forEach((typePayload) => {
+        const typeId = normalizeText(typePayload?.id, '');
+        if (!typeId) return;
+        const label = normalizeText(typePayload?.name, typeId);
+        const row = document.createElement('label');
+        row.className = 'recorder-type-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = typeId;
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.append(input, text);
+        recorderRobotTypeTargets.appendChild(row);
+      });
+    }
+
+    function getSelectedRecorderTypeIds() {
+      if (!recorderRobotTypeTargets) return [];
+      const selected = Array.from(recorderRobotTypeTargets.querySelectorAll('input[type="checkbox"]:checked'));
+      return selected
+        .map((input) => normalizeText(input?.value, ''))
+        .filter(Boolean);
+    }
+
+    function renderManageTestsList() {
+      if (!manageTestsList) return;
+      manageTestsList.replaceChildren();
+      const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
+      if (!tests.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No test definitions found.';
+        manageTestsList.appendChild(empty);
+        return;
+      }
+      tests
+        .slice()
+        .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
+        .forEach((testDefinition) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'manage-list-item';
+          const id = normalizeText(testDefinition?.id, '');
+          const label = normalizeText(testDefinition?.label, id);
+          const checkCount = Array.isArray(testDefinition?.checks) ? testDefinition.checks.length : 0;
+          row.textContent = `${label} (${id}) • ${checkCount} check(s)`;
+          row.addEventListener('click', () => {
+            if (manageTestIdInput) manageTestIdInput.value = id;
+            if (manageTestLabelInput) manageTestLabelInput.value = label;
+            if (manageTestExecuteJsonInput) {
+              const execute = Array.isArray(testDefinition?.execute) ? testDefinition.execute : [];
+              manageTestExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageTestChecksJsonInput) {
+              const checks = Array.isArray(testDefinition?.checks) ? testDefinition.checks : [];
+              const editableChecks = checks.map((check) => ({
+                id: normalizeText(check?.id, ''),
+                label: normalizeText(check?.label, ''),
+                icon: normalizeText(check?.icon, ''),
+                read: check?.read || {},
+                pass: check?.pass || { status: 'ok', value: 'present', details: 'Check passed.' },
+                fail: check?.fail || { status: 'error', value: 'missing', details: 'Check failed.' },
+              }));
+              manageTestChecksJsonInput.value = JSON.stringify(editableChecks, null, 2);
+            }
+            setManageEditorStatus(manageTestEditorStatus, `Loaded ${id} into editor.`, 'ok');
+          });
+          manageTestsList.appendChild(row);
+        });
+    }
+
+    function renderManageFixesList() {
+      if (!manageFixesList) return;
+      manageFixesList.replaceChildren();
+      const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
+      if (!fixes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No fix definitions found.';
+        manageFixesList.appendChild(empty);
+        return;
+      }
+      fixes
+        .slice()
+        .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
+        .forEach((fixDefinition) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'manage-list-item';
+          const id = normalizeText(fixDefinition?.id, '');
+          const label = normalizeText(fixDefinition?.label, id);
+          row.textContent = `${label} (${id})`;
+          row.addEventListener('click', () => {
+            if (manageFixIdInput) manageFixIdInput.value = id;
+            if (manageFixLabelInput) manageFixLabelInput.value = label;
+            if (manageFixDescriptionInput) {
+              manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
+            }
+            if (manageFixExecuteJsonInput) {
+              const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
+              manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageFixPostTestsInput) {
+              const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
+              manageFixPostTestsInput.value = postTests.join(', ');
+            }
+            setManageEditorStatus(manageFixEditorStatus, `Loaded ${id} into editor.`, 'ok');
+          });
+          manageFixesList.appendChild(row);
+        });
+    }
+
+    function renderRecorderRobotOptions() {
+      if (!recorderRobotSelect) return;
+      const previousValue = normalizeText(recorderRobotSelect.value, '');
+      recorderRobotSelect.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select robot';
+      recorderRobotSelect.appendChild(placeholder);
+      state.robots.forEach((robot) => {
+        const id = normalizeText(robot?.id, '');
+        if (!id) return;
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `${normalizeText(robot?.name, id)} (${id})`;
+        recorderRobotSelect.appendChild(option);
+      });
+      if (previousValue) {
+        recorderRobotSelect.value = previousValue;
+      }
+      syncRecorderUiState();
+    }
+
+    function renderManageDefinitions() {
+      renderManageTestsList();
+      renderManageFixesList();
+      renderRecorderRobotTypeTargets();
+      renderRecorderRobotOptions();
+    }
+
+    async function loadDefinitionsSummary() {
+      if (state.isManageSummaryLoading) return;
+      state.isManageSummaryLoading = true;
+      setManageTabStatus('Loading definitions...', 'warn');
+      try {
+        const response = await fetch(buildApiUrl('/api/definitions/summary'));
+        const raw = await response.text();
+        const payload = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(payload?.detail, raw || 'Unable to load definitions summary.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(payload);
+        renderManageDefinitions();
+        setManageTabStatus('Definitions loaded.', 'ok');
+      } catch (error) {
+        setManageTabStatus(
+          `Definitions load failed: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        );
+      } finally {
+        state.isManageSummaryLoading = false;
+      }
+    }
+
+    function setActiveManageTab(tabId) {
+      const normalizedTab = MANAGE_TABS.includes(tabId) ? tabId : 'robots';
+      state.activeManageTab = normalizedTab;
+      manageTabButtons.forEach((button) => {
+        const tab = normalizeText(button?.dataset?.tab, '');
+        button.classList.toggle('active', tab === normalizedTab);
+      });
+      manageTabPanels.forEach((panel) => {
+        const tab = normalizeText(panel?.dataset?.tabPanel, '');
+        panel.classList.toggle('active', tab === normalizedTab);
+      });
+      if (normalizedTab === 'recorder') {
+        syncRecorderUiState();
+      }
+    }
+
+    function parseJsonInput(input, label) {
+      const raw = normalizeText(input?.value, '');
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          throw new Error(`${label} must be a JSON array.`);
+        }
+        return parsed;
+      } catch (error) {
+        throw new Error(
+          `${label} is invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    async function saveManageTestDefinition() {
+      if (!manageTestIdInput || !manageTestExecuteJsonInput || !manageTestChecksJsonInput) return;
+      setManageEditorStatus(manageTestEditorStatus, 'Saving test definition...', 'warn');
+      try {
+        const testId = normalizeText(manageTestIdInput.value, '');
+        if (!testId) {
+          throw new Error('Test definition ID is required.');
+        }
+        const execute = parseJsonInput(manageTestExecuteJsonInput, 'Execute steps');
+        const checks = parseJsonInput(manageTestChecksJsonInput, 'Checks');
+        const payload = {
+          id: testId,
+          label: normalizeText(manageTestLabelInput?.value, testId),
+          mode: 'orchestrate',
+          enabled: true,
+          execute,
+          checks,
+        };
+        const response = await fetch(buildApiUrl('/api/definitions/tests'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to save test definition.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        renderManageDefinitions();
+        setManageEditorStatus(manageTestEditorStatus, `Saved test definition '${testId}'.`, 'ok');
+        setManageTabStatus(`Saved test definition '${testId}'.`, 'ok');
+      } catch (error) {
+        setManageEditorStatus(
+          manageTestEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function saveManageFixDefinition() {
+      if (!manageFixIdInput || !manageFixExecuteJsonInput) return;
+      setManageEditorStatus(manageFixEditorStatus, 'Saving fix definition...', 'warn');
+      try {
+        const fixId = normalizeText(manageFixIdInput.value, '');
+        if (!fixId) {
+          throw new Error('Fix ID is required.');
+        }
+        const execute = parseJsonInput(manageFixExecuteJsonInput, 'Execute steps');
+        const postTests = normalizeIdList(
+          normalizeText(manageFixPostTestsInput?.value, '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        );
+        const payload = {
+          id: fixId,
+          label: normalizeText(manageFixLabelInput?.value, fixId),
+          description: normalizeText(manageFixDescriptionInput?.value, ''),
+          enabled: true,
+          execute,
+          postTestIds: postTests,
+        };
+        const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to save fix definition.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        renderManageDefinitions();
+        setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}'.`, 'ok');
+        setManageTabStatus(`Saved fix definition '${fixId}'.`, 'ok');
+      } catch (error) {
+        setManageEditorStatus(
+          manageFixEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function patchRobotTypeMapping(typeId, testRefs, fixRefs) {
+      const payload = {};
+      if (Array.isArray(testRefs)) payload.testRefs = normalizeIdList(testRefs);
+      if (Array.isArray(fixRefs)) payload.fixRefs = normalizeIdList(fixRefs);
+      const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(typeId)}/mappings`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const raw = await response.text();
+      const body = raw ? JSON.parse(raw) : {};
+      if (!response.ok) {
+        throw new Error(normalizeText(body?.detail, raw || `Unable to patch robot type ${typeId}.`));
+      }
+      return body;
+    }
+
+    async function applyRecorderMappings({ checkIds = [], fixId = '' }) {
+      const selectedTypeIds = getSelectedRecorderTypeIds();
+      if (!selectedTypeIds.length) return;
+      const summaryTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      for (const typeId of selectedTypeIds) {
+        const existing = summaryTypes.find((item) => normalizeText(item?.id, '') === typeId) || {};
+        const nextTestRefs = normalizeIdList([...(existing.testRefs || []), ...checkIds]);
+        const nextFixRefs = fixId
+          ? normalizeIdList([...(existing.fixRefs || []), fixId])
+          : normalizeIdList(existing.fixRefs || []);
+        const patchResult = await patchRobotTypeMapping(typeId, nextTestRefs, nextFixRefs);
+        state.definitionsSummary = normalizeDefinitionsSummary(patchResult?.summary || state.definitionsSummary);
+      }
+    }
+
+    function syncRecorderUiState() {
+      const recorder = state.workflowRecorder;
+      const recorderState = recorder && typeof recorder.getState === 'function'
+        ? recorder.getState()
+        : { recording: false, stepCount: 0, checkCount: 0, activeStepId: '' };
+
+      const robotSelected = normalizeText(recorderRobotSelect?.value, '') !== '';
+      const commandReady = normalizeText(recorderCommandInput?.value, '') !== '';
+      const definitionReady = normalizeText(recorderDefinitionIdInput?.value, '') !== '';
+      const activeStepSelected = normalizeText(recorderCheckSourceStep?.value, '') !== ''
+        || normalizeText(recorderState.activeStepId, '') !== '';
+
+      if (recorderStateBadge) {
+        recorderStateBadge.textContent = recorderState.recording ? 'Recording' : 'Idle';
+        recorderStateBadge.classList.toggle('active', !!recorderState.recording);
+      }
+      if (recorderStepCountBadge) {
+        recorderStepCountBadge.textContent = `${Number(recorderState.stepCount || 0)} step${Number(recorderState.stepCount || 0) === 1 ? '' : 's'}`;
+      }
+      if (recorderCheckCountBadge) {
+        recorderCheckCountBadge.textContent = `${Number(recorderState.checkCount || 0)} check${Number(recorderState.checkCount || 0) === 1 ? '' : 's'}`;
+      }
+      if (recorderActiveStepBadge) {
+        recorderActiveStepBadge.textContent = recorderState.activeStepId
+          ? `Active: ${recorderState.activeStepId}`
+          : 'No active step';
+      }
+
+      if (recorderStartButton) {
+        applyActionButton(recorderStartButton, {
+          intent: recorderState.recording ? 'danger' : 'run',
+          label: recorderState.recording ? 'Stop recording' : 'Start recording',
+        });
+        recorderStartButton.disabled = !recorderState.recording && !robotSelected;
+      }
+      if (recorderRunCaptureButton) {
+        recorderRunCaptureButton.disabled = !(recorderState.recording && robotSelected && commandReady);
+      }
+      if (recorderPrimitiveIdInput) {
+        recorderPrimitiveIdInput.disabled = !Boolean(recorderPromotePrimitiveInput?.checked);
+      }
+      if (recorderCheckSourceStep) {
+        recorderCheckSourceStep.disabled = Number(recorderState.stepCount || 0) === 0;
+      }
+      if (recorderContainsStringInput) {
+        recorderContainsStringInput.disabled = !activeStepSelected;
+      }
+      if (recorderAddLineCheckButton) {
+        recorderAddLineCheckButton.disabled = !activeStepSelected;
+      }
+      if (recorderAddStringCheckButton) {
+        recorderAddStringCheckButton.disabled = !activeStepSelected;
+      }
+      if (recorderPublishTestButton) {
+        recorderPublishTestButton.disabled = !(
+          definitionReady &&
+          Number(recorderState.stepCount || 0) > 0 &&
+          Number(recorderState.checkCount || 0) > 0
+        );
+      }
+      if (recorderPublishFixButton) {
+        recorderPublishFixButton.disabled = !(
+          definitionReady &&
+          Number(recorderState.stepCount || 0) > 0
+        );
+      }
+    }
+
+    async function runRecorderCommandAndCapture() {
+      if (!state.workflowRecorder) return;
+      const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+      const command = normalizeText(recorderCommandInput?.value, '');
+      if (!robotIdValue) {
+        state.workflowRecorder.setStatus('Select a robot first.', 'error');
+        return;
+      }
+      if (!state.workflowRecorder.recording) {
+        state.workflowRecorder.setStatus('Click "Start recording" first.', 'warn');
+        return;
+      }
+      if (!command) {
+        state.workflowRecorder.setStatus('Command is required.', 'error');
+        return;
+      }
+
+      if (recorderRunCaptureButton) {
+        recorderRunCaptureButton.disabled = true;
+      }
+      state.workflowRecorder.setStatus('Running command...', 'warn');
+      try {
+        const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(robotIdValue)}/terminal`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command,
+            robotId: robotIdValue,
+            pageSessionId: state.pageSessionId,
+            source: 'recorder',
+          }),
+        });
+        const raw = await response.text();
+        const payload = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(payload?.detail, raw || 'Command failed.'));
+        }
+
+        const capturedStep = state.workflowRecorder.addCapturedStep({
+          command,
+          outputPayload: payload,
+          promotePrimitive: Boolean(recorderPromotePrimitiveInput?.checked),
+          primitiveId: normalizeText(recorderPrimitiveIdInput?.value, ''),
+        });
+        if (recorderCheckSourceStep && capturedStep?.id) {
+          recorderCheckSourceStep.value = capturedStep.id;
+          state.workflowRecorder.setActiveStep(capturedStep.id);
+        }
+        if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
+          const suggested = slugifyRecorderValue(
+            `${robotIdValue}_${normalizeText(capturedStep?.id, 'workflow')}`,
+            'recorded_workflow',
+          );
+          recorderDefinitionIdInput.value = suggested;
+        }
+        if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
+          recorderDefinitionLabelInput.value = `Recorded workflow (${robotIdValue})`;
+        }
+        if (recorderCommandInput) recorderCommandInput.value = '';
+        if (recorderPrimitiveIdInput) recorderPrimitiveIdInput.value = '';
+        if (recorderPromotePrimitiveInput) recorderPromotePrimitiveInput.checked = false;
+        state.workflowRecorder.setStatus('Step captured.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setStatus(
+          `Capture failed: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        );
+      } finally {
+        if (recorderRunCaptureButton) {
+          recorderRunCaptureButton.disabled = false;
+        }
+        syncRecorderUiState();
+      }
+    }
+
+    async function publishRecorderAsTest() {
+      if (!state.workflowRecorder) return;
+      state.workflowRecorder.setPublishStatus('Publishing test...', 'warn');
+      try {
+        const definition = state.workflowRecorder.buildTestDefinition({
+          definitionId: normalizeText(recorderDefinitionIdInput?.value, ''),
+          label: normalizeText(recorderDefinitionLabelInput?.value, ''),
+        });
+
+        const primitives = state.workflowRecorder.getPromotedPrimitives();
+        for (const primitive of primitives) {
+          const primitiveResponse = await fetch(buildApiUrl('/api/definitions/primitives'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(primitive),
+          });
+          const raw = await primitiveResponse.text();
+          const body = raw ? JSON.parse(raw) : {};
+          if (!primitiveResponse.ok) {
+            throw new Error(normalizeText(body?.detail, raw || `Unable to save primitive ${primitive.id}.`));
+          }
+          state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || state.definitionsSummary);
+        }
+
+        const response = await fetch(buildApiUrl('/api/definitions/tests'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(definition),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to publish test definition.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        await applyRecorderMappings({ checkIds: state.workflowRecorder.getCheckIds(), fixId: '' });
+        renderManageDefinitions();
+        state.workflowRecorder.setPublishStatus('Test definition published and mapped.', 'ok');
+        setManageTabStatus('Recorder test published.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setPublishStatus(
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function publishRecorderAsFix() {
+      if (!state.workflowRecorder) return;
+      state.workflowRecorder.setPublishStatus('Publishing fix...', 'warn');
+      try {
+        const definition = state.workflowRecorder.buildFixDefinition({
+          definitionId: normalizeText(recorderDefinitionIdInput?.value, ''),
+          label: normalizeText(recorderDefinitionLabelInput?.value, ''),
+          postTestIds: normalizeIdList(
+            normalizeText(recorderFixPostTestsInput?.value, '')
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          ),
+        });
+
+        const primitives = state.workflowRecorder.getPromotedPrimitives();
+        for (const primitive of primitives) {
+          const primitiveResponse = await fetch(buildApiUrl('/api/definitions/primitives'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(primitive),
+          });
+          const raw = await primitiveResponse.text();
+          const body = raw ? JSON.parse(raw) : {};
+          if (!primitiveResponse.ok) {
+            throw new Error(normalizeText(body?.detail, raw || `Unable to save primitive ${primitive.id}.`));
+          }
+          state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || state.definitionsSummary);
+        }
+
+        const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(definition),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to publish fix definition.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        await applyRecorderMappings({ checkIds: [], fixId: normalizeText(definition.id, '') });
+        renderManageDefinitions();
+        state.workflowRecorder.setPublishStatus('Fix definition published and mapped.', 'ok');
+        setManageTabStatus('Recorder fix published.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setPublishStatus(
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    function initManageTabs() {
+      manageTabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          setActiveManageTab(normalizeText(button?.dataset?.tab, 'robots'));
+        });
+      });
+    }
+
+    function initWorkflowRecorder() {
+      state.workflowRecorder = new WorkflowRecorderComponent({
+        terminalOutputEl: $('#recorderTerminalOutput'),
+        stepsEl: $('#recorderSteps'),
+        sourceStepSelectEl: recorderCheckSourceStep,
+        outputLinesEl: $('#recorderOutputLines'),
+        checksEl: $('#recorderChecks'),
+        statusEl: recorderStatus,
+        publishStatusEl: recorderPublishStatus,
+        onStateChange: () => {
+          syncRecorderUiState();
+        },
+      });
+      state.workflowRecorder.render();
+
+      recorderCheckSourceStep?.addEventListener('change', () => {
+        state.workflowRecorder.setActiveStep(normalizeText(recorderCheckSourceStep.value, ''));
+      });
+      recorderStartButton?.addEventListener('click', () => {
+        const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+        const isRecording = Boolean(state.workflowRecorder?.getState?.().recording);
+        if (!isRecording && !robotIdValue) {
+          state.workflowRecorder.setStatus('Select a robot first.', 'error');
+          return;
+        }
+        state.workflowRecorder.setRecording(!isRecording);
+      });
+      recorderResetButton?.addEventListener('click', () => {
+        state.workflowRecorder.reset();
+        state.workflowRecorder.setRecording(false);
+        if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = '';
+        if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = '';
+        if (recorderFixPostTestsInput) recorderFixPostTestsInput.value = '';
+        if (recorderCheckIdInput) recorderCheckIdInput.value = '';
+        if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
+        if (recorderCheckIconInput) recorderCheckIconInput.value = '';
+        if (recorderContainsStringInput) recorderContainsStringInput.value = '';
+      });
+      recorderRunCaptureButton?.addEventListener('click', () => {
+        runRecorderCommandAndCapture();
+      });
+      recorderCommandInput?.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        runRecorderCommandAndCapture();
+      });
+      recorderAddLineCheckButton?.addEventListener('click', () => {
+        try {
+          const checkId = normalizeText(recorderCheckIdInput?.value, '');
+          const created = state.workflowRecorder.addLineCheck({
+            stepId: normalizeText(recorderCheckSourceStep?.value, ''),
+            checkId,
+            label: normalizeText(recorderCheckLabelInput?.value, ''),
+            icon: normalizeText(recorderCheckIconInput?.value, ''),
+          });
+          if (recorderCheckIdInput) recorderCheckIdInput.value = '';
+          if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
+          if (recorderCheckIconInput) recorderCheckIconInput.value = '';
+          if (recorderContainsStringInput) recorderContainsStringInput.value = '';
+          state.workflowRecorder.setPublishStatus(`Added check '${created.id}'.`, 'ok');
+          state.workflowRecorder.setStatus('Line check added.', 'ok');
+        } catch (error) {
+          state.workflowRecorder.setStatus(
+            error instanceof Error ? error.message : String(error),
+            'error',
+          );
+        }
+      });
+      recorderAddStringCheckButton?.addEventListener('click', () => {
+        try {
+          const checkId = normalizeText(recorderCheckIdInput?.value, '');
+          const created = state.workflowRecorder.addStringCheck({
+            stepId: normalizeText(recorderCheckSourceStep?.value, ''),
+            checkId,
+            label: normalizeText(recorderCheckLabelInput?.value, ''),
+            icon: normalizeText(recorderCheckIconInput?.value, ''),
+            needle: normalizeText(recorderContainsStringInput?.value, ''),
+          });
+          if (recorderCheckIdInput) recorderCheckIdInput.value = '';
+          if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
+          if (recorderCheckIconInput) recorderCheckIconInput.value = '';
+          if (recorderContainsStringInput) recorderContainsStringInput.value = '';
+          state.workflowRecorder.setPublishStatus(`Added check '${created.id}'.`, 'ok');
+          state.workflowRecorder.setStatus('String check added.', 'ok');
+        } catch (error) {
+          state.workflowRecorder.setStatus(
+            error instanceof Error ? error.message : String(error),
+            'error',
+          );
+        }
+      });
+      recorderPublishTestButton?.addEventListener('click', () => {
+        publishRecorderAsTest();
+      });
+      recorderPublishFixButton?.addEventListener('click', () => {
+        publishRecorderAsFix();
+      });
+      recorderRobotSelect?.addEventListener('change', () => {
+        syncRecorderUiState();
+      });
+      recorderCommandInput?.addEventListener('input', () => {
+        syncRecorderUiState();
+      });
+      recorderDefinitionIdInput?.addEventListener('input', () => {
+        syncRecorderUiState();
+      });
+      recorderPromotePrimitiveInput?.addEventListener('change', () => {
+        syncRecorderUiState();
+      });
+      syncRecorderUiState();
     }
 
     function onFilterChange() {
@@ -3775,13 +4580,20 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     async function loadRobotTypeConfig() {
       try {
-        const response = await fetch(ROBOT_TYPES_CONFIG_URL);
-        if (!response.ok) throw new Error('config unavailable');
+        const response = await fetch(buildApiUrl('/api/robot-types'));
+        if (!response.ok) throw new Error('api unavailable');
         const payload = await response.json();
         return setRobotTypeDefinitions(payload);
       } catch (_error) {
-        setRobotTypeDefinitions([]);
-        return [];
+        try {
+          const response = await fetch(ROBOT_TYPES_CONFIG_URL);
+          if (!response.ok) throw new Error('config unavailable');
+          const payload = await response.json();
+          return setRobotTypeDefinitions(payload);
+        } catch (_fallbackError) {
+          setRobotTypeDefinitions([]);
+          return [];
+        }
       }
     }
 
@@ -3980,7 +4792,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         showDashboard();
         return;
       }
-      if (hash === 'add-robot') {
+      if (hash === MANAGE_VIEW_HASH || hash === 'add-robot') {
         showAddRobotPage();
         return;
       }
@@ -4039,6 +4851,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           syncAutoMonitorRefreshState();
           populateFilters();
           populateAddRobotTypeOptions();
+          renderRecorderRobotOptions();
           renderDashboard();
           routeFromHash();
           syncFixModePanels();
@@ -4049,6 +4862,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           syncAutoMonitorRefreshState();
           populateFilters();
           populateAddRobotTypeOptions();
+          renderRecorderRobotOptions();
           renderDashboard();
           routeFromHash();
           syncFixModePanels();
@@ -4062,10 +4876,24 @@ let ROBOT_TYPE_BY_ID = new Map();
       $('#openBugReport')?.addEventListener('click', openBugReportModal);
       $('#openBugReportFloating')?.addEventListener('click', openBugReportModal);
       $('#backFromAddRobot')?.addEventListener('click', showDashboard);
+      initManageTabs();
+      initWorkflowRecorder();
       if (addRobotForm) {
         addRobotForm.addEventListener('submit', (event) => {
           event.preventDefault();
           createRobotFromForm();
+        });
+      }
+      if (manageTestEditorForm) {
+        manageTestEditorForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          saveManageTestDefinition();
+        });
+      }
+      if (manageFixEditorForm) {
+        manageFixEditorForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          saveManageFixDefinition();
         });
       }
       initFleetParallelism();

@@ -174,3 +174,52 @@ class TerminalManager(
             raise HTTPException(status_code=404, detail=f"No robot type config found: {type_key}")
 
         return robot_type
+
+    def reload_definitions(
+        self,
+        *,
+        robots_by_id: dict[str, dict[str, Any]] | None = None,
+        robot_types_by_id: dict[str, dict[str, Any]],
+        command_primitives_by_id: dict[str, dict[str, Any]],
+        test_definitions_by_id: dict[str, dict[str, Any]],
+        check_definitions_by_id: dict[str, dict[str, Any]],
+        fix_definitions_by_id: dict[str, dict[str, Any]],
+    ) -> dict[str, int]:
+        with self._lock:
+            if isinstance(robots_by_id, dict):
+                self.robots_by_id.clear()
+                self.robots_by_id.update(robots_by_id)
+
+            self.robot_types_by_id.clear()
+            self.robot_types_by_id.update(robot_types_by_id or {})
+
+            self._command_primitives_by_id = dict(command_primitives_by_id or {})
+            self._test_definitions_by_id = dict(test_definitions_by_id or {})
+            self._check_definitions_by_id = dict(check_definitions_by_id or {})
+            self._fix_definitions_by_id = dict(fix_definitions_by_id or {})
+
+            self._write_connector = WriteConnector(self._command_primitives_by_id)
+            self._orchestrate_connector = OrchestrateConnector(
+                read=self._read_connector,
+                write=self._write_connector,
+            )
+            self._executor = TestExecutor(
+                robot_types_by_id=self.robot_types_by_id,
+                resolve_robot_type=self._resolve_robot_type,
+                resolve_credentials=self._resolve_credentials,
+                get_or_connect=self.get_or_connect,
+                close_session=self.close_session,
+                check_online=self.check_online,
+                test_definitions_by_id=self._test_definitions_by_id,
+                check_definitions_by_id=self._check_definitions_by_id,
+                orchestrate_connector=self._orchestrate_connector,
+            )
+
+        return {
+            "robotCount": len(self.robots_by_id),
+            "robotTypeCount": len(self.robot_types_by_id),
+            "primitiveCount": len(self._command_primitives_by_id),
+            "testDefinitionCount": len(self._test_definitions_by_id),
+            "checkCount": len(self._check_definitions_by_id),
+            "fixCount": len(self._fix_definitions_by_id),
+        }

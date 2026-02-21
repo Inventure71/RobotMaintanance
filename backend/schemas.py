@@ -71,3 +71,81 @@ class BugReportResponse(BaseModel):
     ok: bool
     fileName: str
     path: str
+
+
+class DefinitionCheckReadSpec(BaseModel):
+    kind: str = Field(min_length=1)
+    inputRef: str | None = None
+    needle: str | None = None
+    needles: list[str] | None = None
+    lines: list[str] | None = None
+    requireAll: bool | None = None
+    caseSensitive: bool | None = None
+
+
+class DefinitionCheckResultSpec(BaseModel):
+    status: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+    details: str = Field(min_length=1)
+
+
+class DefinitionCheckSpec(BaseModel):
+    id: str = Field(min_length=1)
+    label: str | None = None
+    icon: str | None = None
+    manualOnly: bool | None = None
+    enabled: bool | None = None
+    defaultStatus: str | None = None
+    defaultValue: str | None = None
+    defaultDetails: str | None = None
+    possibleResults: list[dict[str, str]] | None = None
+    params: dict[str, Any] | None = None
+    read: DefinitionCheckReadSpec | None = None
+    pass_result: DefinitionCheckResultSpec = Field(alias="pass")
+    fail_result: DefinitionCheckResultSpec = Field(alias="fail")
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class DefinitionExecuteStep(BaseModel):
+    id: str | None = None
+    command: str = Field(min_length=1)
+    timeoutSec: Any | None = None
+    retries: Any | None = None
+    saveAs: str | None = None
+    reuseKey: str | None = None
+
+
+class TestDefinitionUpsertRequest(BaseModel):
+    id: str = Field(min_length=1)
+    label: str | None = None
+    mode: Literal["orchestrate", "online_probe"] = "orchestrate"
+    enabled: bool = True
+    execute: list[DefinitionExecuteStep] | None = None
+    checks: list[DefinitionCheckSpec] = Field(min_length=1)
+    params: dict[str, Any] | None = None
+
+
+class FixDefinitionUpsertRequest(BaseModel):
+    id: str = Field(min_length=1)
+    label: str | None = None
+    description: str | None = None
+    enabled: bool = True
+    execute: list[DefinitionExecuteStep] = Field(min_length=1)
+    postTestIds: list[str] | None = None
+    params: dict[str, Any] | None = None
+
+
+class PrimitiveUpsertRequest(BaseModel):
+    id: str = Field(min_length=1)
+    command: str = Field(min_length=1)
+    timeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
+    retries: int | None = Field(default=None, ge=0, le=10)
+    description: str | None = None
+
+
+class RobotTypeMappingPatchRequest(BaseModel):
+    testRefs: list[str] | None = None
+    fixRefs: list[str] | None = None
