@@ -1,22 +1,13 @@
 from __future__ import annotations
 
-import json
 import time
-from pathlib import Path
+import uuid
 from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from .config_loader import PROJECT_ROOT, TEST_DEFINITIONS_DIR, load_json_file
-from .models import StepResult
-from .normalization import (
-    normalize_status,
-    normalize_text,
-    safe_float,
-    safe_int,
-    strip_ansi,
-    to_bool,
-)
+from .connectors import OrchestrateConnector, ReadConnector, WriteConnector
+from .normalization import normalize_status, normalize_text
 from .ssh_client import InteractiveShell
 
 
@@ -31,6 +22,9 @@ class TestExecutor:
         get_or_connect: Callable[[str, str], InteractiveShell],
         close_session: Callable[[str, str], None],
         check_online: Callable[[str], dict[str, Any]],
+        test_definitions_by_id: dict[str, dict[str, Any]] | None = None,
+        check_definitions_by_id: dict[str, dict[str, Any]] | None = None,
+        orchestrate_connector: OrchestrateConnector | None = None,
     ):
         self.robot_types_by_id = robot_types_by_id
         self._resolve_robot_type = resolve_robot_type
@@ -38,7 +32,12 @@ class TestExecutor:
         self._get_or_connect = get_or_connect
         self._close_session = close_session
         self._check_online = check_online
-        self._test_definition_cache: dict[str, dict[str, Any]] = {}
+        self._test_definitions_by_id = test_definitions_by_id or {}
+        self._check_definitions_by_id = check_definitions_by_id or {}
+        self._orchestrate = orchestrate_connector or OrchestrateConnector(
+            read=ReadConnector(),
+            write=WriteConnector({}),
+        )
 
     def _build_error_result(
         self,
@@ -59,43 +58,6 @@ class TestExecutor:
             "ms": 0,
             "steps": [],
         }
-
-    def _scoped_cache_key(self, run_scope: str, test_id: str, step_id: str, reuse_output_key: str) -> str:
-        return f"{run_scope}:{test_id}:{step_id}:{reuse_output_key}"
-
-    def _load_test_definition(self, definition_ref: str) -> dict[str, Any]:
-        if not normalize_text(definition_ref):
-            return {}
-
-        ref_path = Path(definition_ref)
-        candidates = [
-            (TEST_DEFINITIONS_DIR / definition_ref),
-            (PROJECT_ROOT / definition_ref),
-            (ref_path if ref_path.is_absolute() else None),
-        ]
-
-        definition = None
-        for candidate in candidates:
-            if candidate is None:
-                continue
-            if candidate.exists():
-                candidate = candidate.resolve()
-                cached = self._test_definition_cache.get(str(candidate))
-                if cached is not None:
-                    definition = cached
-                    break
-                definition = load_json_file(candidate)
-                if isinstance(definition, dict):
-                    self._test_definition_cache[str(candidate)] = definition
-                break
-
-        if not isinstance(definition, dict):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unable to load test definition from '{definition_ref}'",
-            )
-
-        return definition
 
     def _resolve_tests(
         self,
@@ -119,12 +81,14 @@ class TestExecutor:
         resolved: list[dict[str, Any]] = []
         resolution_errors: list[dict[str, Any]] = []
         matched_requested: set[str] = set()
+
         for entry in test_entries:
             if not isinstance(entry, dict):
                 continue
             test_id = normalize_text(entry.get("id"), "")
             if not test_id:
                 continue
+
             if requested:
                 if test_id not in requested:
                     continue
@@ -136,28 +100,33 @@ class TestExecutor:
             if entry.get("enabled", True) is False:
                 continue
 
-            definition_ref = normalize_text(entry.get("definitionRef"), "")
-            file_definition: dict[str, Any] = {}
-            if definition_ref:
-                try:
-                    file_definition = self._load_test_definition(definition_ref)
-                except HTTPException as exc:
-                    resolution_errors.append(
-                        self._build_error_result(
-                            test_id=test_id,
-                            value="invalid_definition",
-                            details=normalize_text(exc.detail, "Unable to load referenced test definition."),
-                            error_code="definition_load_error",
-                        )
+            definition_id = normalize_text(entry.get("definitionId"), "")
+            if not definition_id:
+                resolution_errors.append(
+                    self._build_error_result(
+                        test_id=test_id,
+                        value="invalid_definition",
+                        details="Test has no definitionId configured.",
+                        error_code="definition_not_set",
                     )
-                    continue
+                )
+                continue
 
-            merged = {**file_definition, **entry}
+            if definition_id not in self._test_definitions_by_id:
+                resolution_errors.append(
+                    self._build_error_result(
+                        test_id=test_id,
+                        value="invalid_definition",
+                        details=f"No test definition found for id '{definition_id}'.",
+                        error_code="definition_not_found",
+                    )
+                )
+                continue
+
+            merged = dict(entry)
             merged["id"] = test_id
-
-            if test_id == "topics" and not merged.get("requiredTopics"):
-                merged["requiredTopics"] = list(robot_type.get("topics") or [])
-
+            merged["definitionId"] = definition_id
+            merged["params"] = dict(merged.get("params") if isinstance(merged.get("params"), dict) else {})
             resolved.append(merged)
 
         unknown_requested = [test_id for test_id in requested_ids if test_id not in matched_requested]
@@ -167,7 +136,7 @@ class TestExecutor:
         result = self._check_online(robot_id)
         status = normalize_status(result.get("status"))
         details = normalize_text(result.get("details"), "No detail available")
-        ms = safe_int(result.get("ms"), 0)
+        ms = int(result.get("ms") or 0)
         value = normalize_text(result.get("value"), "reachable" if status == "ok" else "unreachable")
 
         return {
@@ -190,397 +159,141 @@ class TestExecutor:
             ],
         }
 
-    def _parse_topics_presence(
+    def _normalize_check_output_result(
         self,
-        raw_output: str,
-        expected_topics: list[str],
-        namespace: str = "",
-    ) -> StepResult:
-        output_lines = []
-        for line in strip_ansi(raw_output).replace("\r", "").split("\n"):
-            candidate = line.strip()
-            if not candidate:
-                continue
-            if candidate.startswith("/"):
-                output_lines.append(candidate)
-
-        present = sorted({line for line in output_lines})
-        expected = sorted({normalize_text(topic, "") for topic in (expected_topics or []) if normalize_text(topic, "")})
-        expected_namespace = normalize_text(namespace, "")
-        if expected_namespace and not expected_namespace.startswith("/"):
-            expected_namespace = f"/{expected_namespace}"
-
-        matched_by_namespace: dict[str, str] = {}
-        detected_namespaces: set[str] = set()
-        for topic in expected:
-            if topic in present:
-                continue
-            for listed_topic in present:
-                if not listed_topic.endswith(topic) or listed_topic == topic:
-                    continue
-                namespace_prefix = listed_topic[: -len(topic)]
-                if namespace_prefix.endswith("/"):
-                    namespace_prefix = namespace_prefix[:-1]
-                if not namespace_prefix.startswith("/") or namespace_prefix == "/":
-                    continue
-                matched_by_namespace[topic] = listed_topic
-                detected_namespaces.add(namespace_prefix)
-                break
-
-        namespace_present = False
-        if expected_namespace:
-            namespace_present = any(
-                listed_topic == expected_namespace or listed_topic.startswith(f"{expected_namespace}/")
-                for listed_topic in present
-            )
-            if namespace_present:
-                detected_namespaces.add(expected_namespace)
-        if matched_by_namespace:
-            namespace_present = True
-
-        if not expected:
-            return StepResult(
-                id="topics_presence",
-                status="warning",
-                value="no_expected_topics",
-                details="Robot type does not define required topics.",
-                ms=0,
-                output=json.dumps(
-                    {
-                        "expectedTopics": expected,
-                        "presentTopics": present,
-                        "namespace": expected_namespace,
-                        "namespacePresent": namespace_present,
-                        "detectedNamespaces": sorted(detected_namespaces),
-                    },
-                    sort_keys=True,
-                ),
-            )
-
-        missing = sorted(set(expected) - set(present) - set(matched_by_namespace))
-        if missing:
-            details = f"Missing topics: {', '.join(missing)}"
-            if detected_namespaces:
-                details = f"{details}. Namespace(s) detected: {', '.join(sorted(detected_namespaces))}"
-            return StepResult(
-                id="topics_presence",
-                status="error",
-                value="missing",
-                details=details,
-                ms=0,
-                output=json.dumps(
-                    {
-                        "expectedTopics": expected,
-                        "presentTopics": present,
-                        "missingTopics": missing,
-                        "namespace": expected_namespace,
-                        "namespacePresent": namespace_present,
-                        "detectedNamespaces": sorted(detected_namespaces),
-                        "matchedByNamespace": matched_by_namespace,
-                    },
-                    sort_keys=True,
-                ),
-            )
-
-        details = "All required topics present"
-        if detected_namespaces:
-            details = f"{details}. Namespace(s) detected: {', '.join(sorted(detected_namespaces))}"
-        elif expected_namespace:
-            details = f"{details}. Namespace '{expected_namespace}' not found."
-
-        return StepResult(
-            id="topics_presence",
-            status="ok",
-            value="all_present",
-            details=details,
-            ms=0,
-            output=json.dumps(
-                {
-                    "expectedTopics": expected,
-                    "presentTopics": present,
-                    "namespace": expected_namespace,
-                    "namespacePresent": namespace_present,
-                    "detectedNamespaces": sorted(detected_namespaces),
-                    "matchedByNamespace": matched_by_namespace,
-                },
-                sort_keys=True,
-            ),
-        )
-
-    def _parse_step_output(
-        self,
-        raw_output: str,
-        parser_spec: dict[str, Any],
+        *,
         test_spec: dict[str, Any],
-    ) -> StepResult:
-        parser_type = normalize_text(parser_spec.get("type"), "").lower()
-        parser_type = parser_type if parser_type else normalize_text(test_spec.get("parser", {}).get("type"), "")
-        parser_spec = parser_spec or test_spec.get("parser") or {}
+        output_payload: dict[str, Any],
+        steps: list[dict[str, Any]],
+        definition_id: str,
+        shared_execution_id: str,
+        total_ms: int,
+    ) -> dict[str, Any]:
+        test_id = normalize_text(test_spec.get("id"), "test")
+        status = normalize_status(output_payload.get("status"))
+        value = normalize_text(output_payload.get("value"), normalize_text(test_spec.get("defaultValue"), "n/a"))
+        details = normalize_text(
+            output_payload.get("details"), normalize_text(test_spec.get("defaultDetails"), "No detail available")
+        )
+        ms = int(output_payload.get("ms") or total_ms)
 
-        if parser_type == "topics_presence":
-            return self._parse_topics_presence(
-                raw_output=raw_output,
-                expected_topics=list(test_spec.get("requiredTopics") or []),
-                namespace=normalize_text(parser_spec.get("namespace") or test_spec.get("namespace"), ""),
+        normalized_steps = []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            normalized_steps.append(
+                {
+                    "id": normalize_text(step.get("id"), "step"),
+                    "status": normalize_status(step.get("status")),
+                    "value": normalize_text(step.get("value"), "n/a"),
+                    "details": normalize_text(step.get("details"), "No detail available"),
+                    "ms": int(step.get("ms") or 0),
+                    "output": step.get("output", ""),
+                }
             )
 
-        cleaned = strip_ansi(raw_output).strip()
-        empty_output_policy = normalize_text(
-            parser_spec.get("emptyOutputPolicy") or test_spec.get("emptyOutputPolicy"),
-            "warning",
-        ).lower()
-        if empty_output_policy not in {"warning", "error"}:
-            empty_output_policy = "warning"
+        return {
+            "id": test_id,
+            "status": status,
+            "value": value,
+            "details": details,
+            "ms": ms,
+            "raw": {
+                "definitionId": definition_id,
+                "sharedExecutionId": shared_execution_id,
+                "orchestrationRunId": shared_execution_id,
+                "stepCount": len(normalized_steps),
+            },
+            "steps": normalized_steps,
+        }
 
-        if parser_type == "json":
-            status_field = normalize_text(parser_spec.get("statusField"), "status")
-            value_field = normalize_text(parser_spec.get("valueField"), "value")
-            details_field = normalize_text(parser_spec.get("detailsField"), "details")
-            try:
-                payload = json.loads(cleaned)
-                if isinstance(payload, str):
-                    raise ValueError("String payload")
-                status = normalize_status(payload.get(status_field) if isinstance(payload, dict) else "")
-                value = normalize_text(payload.get(value_field) if isinstance(payload, dict) else "", "n/a")
-                details = normalize_text(payload.get(details_field) if isinstance(payload, dict) else "", "No detail available")
-                return StepResult(
-                    id="json",
-                    status=status,
-                    value=value,
-                    details=details,
-                    ms=0,
-                    output=cleaned,
-                )
-            except Exception:
-                return StepResult(
-                    id="json",
-                    status="error",
-                    value="parse_error",
-                    details="Parser expected JSON but command output was not valid JSON.",
-                    ms=0,
-                    output=cleaned,
-                )
-
-        if not cleaned:
-            is_error = empty_output_policy == "error"
-            return StepResult(
-                id="raw",
-                status="error" if is_error else "warning",
-                value="empty",
-                details=(
-                    "Step produced no output and emptyOutputPolicy is set to error."
-                    if is_error
-                    else "Step produced no output."
-                ),
-                ms=0,
-                output=cleaned,
-            )
-
-        return StepResult(
-            id="raw",
-            status="ok",
-            value="ok",
-            details="Command executed.",
-            ms=0,
-            output=cleaned,
-        )
-
-    def _collect_step_result_value(self, step_results: list[StepResult], fallback_status: str) -> tuple[str, str]:
-        if not step_results:
-            return "unknown", "No step output available."
-
-        if fallback_status == "error":
-            first = next((r for r in step_results if r.status == "error"), None)
-            if first:
-                return first.value, first.details
-
-        if fallback_status == "warning":
-            first = next((r for r in step_results if r.status == "warning"), None)
-            if first:
-                return first.value, first.details
-
-        last = step_results[-1]
-        return last.value, last.details
-
-    def _aggregate_status(self, statuses: list[str]) -> str:
-        normalized = [normalize_status(s) for s in statuses]
-        if "error" in normalized:
-            return "error"
-        if "warning" in normalized:
-            return "warning"
-        return "ok"
-
-    def _run_single_test(self, robot_id: str, page_session_id: str, test_spec: dict[str, Any], dry_run: bool) -> dict[str, Any]:
-        return self._run_single_test_with_cache(
-            robot_id=robot_id,
-            page_session_id=page_session_id,
-            test_spec=test_spec,
-            dry_run=dry_run,
-            command_output_cache={},
-            run_scope=f"{robot_id}:{page_session_id}:single",
-        )
-
-    def _run_single_test_with_cache(
+    def _execute_definition_once(
         self,
+        *,
         robot_id: str,
         page_session_id: str,
-        test_spec: dict[str, Any],
+        definition_id: str,
+        check_specs: list[dict[str, Any]],
         dry_run: bool,
         command_output_cache: dict[str, str],
         run_scope: str,
     ) -> dict[str, Any]:
-        test_id = normalize_text(test_spec.get("id"), "test")
-        start_ms = int(time.time() * 1000)
+        definition = self._test_definitions_by_id.get(definition_id)
+        if not isinstance(definition, dict):
+            raise HTTPException(status_code=400, detail=f"Unknown definition '{definition_id}'")
 
-        if test_id == "online":
+        mode = normalize_text(definition.get("mode"), "orchestrate")
+        shared_execution_id = f"def-{definition_id}-{uuid.uuid4().hex[:8]}"
+
+        if mode == "online_probe":
+            check_ids = [normalize_text(check.get("id"), "") for check in (definition.get("checks") or []) if isinstance(check, dict)]
+            check_ids = [check_id for check_id in check_ids if check_id]
             if dry_run:
-                return {
-                    "id": "online",
-                    "status": "warning",
-                    "value": "pending",
-                    "details": "Dry-run mode: online check skipped.",
-                    "ms": 0,
-                    "steps": [],
+                outputs = {
+                    check_id: {
+                        "status": "warning",
+                        "value": "pending",
+                        "details": "Dry-run mode: online check skipped.",
+                        "ms": 0,
+                    }
+                    for check_id in check_ids
                 }
-            return self._run_online_test(robot_id=robot_id)
+                return {
+                    "outputs": outputs,
+                    "steps": [],
+                    "sharedExecutionId": shared_execution_id,
+                    "ms": 0,
+                }
 
-        if dry_run:
-            return {
-                "id": test_id,
-                "status": "warning",
-                "value": "pending",
-                "details": "Dry-run mode: definition loaded, command execution skipped.",
-                "ms": 0,
-                "steps": [],
+            online_result = self._run_online_test(robot_id)
+            outputs = {
+                check_id: {
+                    "status": online_result.get("status"),
+                    "value": online_result.get("value"),
+                    "details": online_result.get("details"),
+                    "ms": online_result.get("ms"),
+                }
+                for check_id in check_ids
             }
-
-        raw_steps = test_spec.get("steps") if isinstance(test_spec.get("steps"), list) else []
-        if not raw_steps:
             return {
-                "id": test_id,
-                "status": "error",
-                "value": "invalid_definition",
-                "details": "Test has no executable steps.",
-                "ms": 0,
-                "steps": [],
+                "outputs": outputs,
+                "steps": list(online_result.get("steps") or []),
+                "sharedExecutionId": shared_execution_id,
+                "ms": int(online_result.get("ms") or 0),
             }
-
-        ordered_steps = sorted(
-            [step for step in raw_steps if isinstance(step, dict)],
-            key=lambda step: safe_int(step.get("index"), 0),
-        )
 
         shell = self._get_or_connect(page_session_id, robot_id)
-        step_results: list[StepResult] = []
+        started = int(time.time() * 1000)
 
-        try:
-            for step in ordered_steps:
-                step_id = normalize_text(step.get("id"), f"step-{len(step_results) + 1}")
-                command = normalize_text(step.get("command"), "")
-                timeout = safe_float(step.get("timeoutSec"), safe_float(test_spec.get("timeoutSec"), 12.0))
-                reuse_output_key = normalize_text(step.get("reuseCommandOutputKey"), "")
+        merged_params: dict[str, Any] = {}
+        definition_params = definition.get("params") if isinstance(definition.get("params"), dict) else {}
+        merged_params.update(definition_params)
+        if len(check_specs) == 1:
+            one_params = check_specs[0].get("params") if isinstance(check_specs[0].get("params"), dict) else {}
+            merged_params.update(one_params)
+        merged_params["requestedCheckIds"] = [normalize_text(item.get("id"), "") for item in check_specs]
 
-                stop_on_failure = to_bool(step.get("stopOnFailure", test_spec.get("stopOnFailure", True)))
+        def _run_command(command: str, timeout_sec: float | None) -> str:
+            self._resolve_credentials(robot_id)
+            timeout = timeout_sec if timeout_sec is not None else 12.0
+            return shell.run_command(command, timeout=float(timeout))
 
-                if not command:
-                    step_results.append(
-                        StepResult(
-                            id=step_id,
-                            status="warning",
-                            value="skipped",
-                            details="Step command missing; skipping.",
-                            ms=0,
-                            output="",
-                        )
-                    )
-                    if stop_on_failure:
-                        break
-                    continue
+        orchestrated = self._orchestrate.run_definition(
+            definition,
+            run_scope=f"{run_scope}:{definition_id}",
+            run_command=_run_command,
+            params=merged_params,
+            dry_run=dry_run,
+            command_cache=command_output_cache,
+        )
+        total_ms = max(0, int(time.time() * 1000 - started))
 
-                try:
-                    self._resolve_credentials(robot_id)
-                except HTTPException as exc:
-                    parsed = StepResult(
-                        id=step_id,
-                        status="error",
-                        value="robot_unavailable",
-                        details=normalize_text(exc.detail, "Robot is no longer available."),
-                        ms=0,
-                        output="",
-                    )
-                    step_results.append(parsed)
-                    if stop_on_failure:
-                        break
-                    continue
-
-                try:
-                    step_start = int(time.time() * 1000)
-                    cache_key = ""
-                    if reuse_output_key:
-                        cache_key = self._scoped_cache_key(
-                            run_scope=run_scope,
-                            test_id=test_id,
-                            step_id=step_id,
-                            reuse_output_key=reuse_output_key,
-                        )
-                    if cache_key and cache_key in command_output_cache:
-                        output = command_output_cache[cache_key]
-                    else:
-                        output = shell.run_command(command, timeout=timeout)
-                        if cache_key:
-                            command_output_cache[cache_key] = output
-                    parsed = self._parse_step_output(output, step.get("parser") if isinstance(step.get("parser"), dict) else {}, test_spec)
-                    parsed = StepResult(
-                        id=step_id,
-                        status=parsed.status,
-                        value=parsed.value,
-                        details=parsed.details,
-                        ms=max(0, int(time.time() * 1000 - step_start), 1),
-                        output=parsed.output,
-                    )
-                    step_results.append(parsed)
-                except Exception as exc:
-                    parsed = StepResult(
-                        id=step_id,
-                        status="error",
-                        value="command_error",
-                        details=f"Step failed: {exc}",
-                        ms=0,
-                        output="",
-                    )
-                    step_results.append(parsed)
-
-                if parsed.status == "error" and stop_on_failure:
-                    break
-
-            test_status = self._aggregate_status([r.status for r in step_results])
-            test_value, test_details = self._collect_step_result_value(step_results, test_status)
-            test_ms = max(0, int(time.time() * 1000 - start_ms))
-
-            return {
-                "id": test_id,
-                "status": test_status,
-                "value": test_value,
-                "details": test_details,
-                "ms": test_ms,
-                "raw": {
-                    "requiredTopics": list(test_spec.get("requiredTopics") or []),
-                    "stepCount": len(step_results),
-                },
-                "steps": [
-                    {
-                        "id": result.id,
-                        "status": result.status,
-                        "value": result.value,
-                        "details": result.details,
-                        "ms": result.ms,
-                        "output": result.output,
-                    }
-                    for result in step_results
-                ],
-            }
-        finally:
-            pass
+        return {
+            "outputs": orchestrated.get("checkResults") if isinstance(orchestrated.get("checkResults"), dict) else {},
+            "steps": orchestrated.get("steps") if isinstance(orchestrated.get("steps"), list) else [],
+            "sharedExecutionId": shared_execution_id,
+            "ms": total_ms,
+        }
 
     def run_tests(
         self,
@@ -609,47 +322,89 @@ class TestExecutor:
 
         command_output_cache: dict[str, str] = {}
         run_scope = f"{robot_id}:{page_session_id}:{int(time.time() * 1000)}"
+
+        definition_groups: dict[str, list[dict[str, Any]]] = {}
+        for spec in tests:
+            definition_id = normalize_text(spec.get("definitionId"), "")
+            if definition_id:
+                definition_groups.setdefault(definition_id, []).append(spec)
+
         try:
-            for test_spec in tests:
+            for definition_id, grouped_specs in definition_groups.items():
                 try:
-                    results.append(
-                        self._run_single_test_with_cache(
-                            robot_id=robot_id,
-                            page_session_id=page_session_id,
-                            test_spec=test_spec,
-                            dry_run=dry_run,
-                            command_output_cache=command_output_cache,
-                            run_scope=run_scope,
-                        )
+                    execution = self._execute_definition_once(
+                        robot_id=robot_id,
+                        page_session_id=page_session_id,
+                        definition_id=definition_id,
+                        check_specs=grouped_specs,
+                        dry_run=dry_run,
+                        command_output_cache=command_output_cache,
+                        run_scope=run_scope,
                     )
                 except HTTPException as exc:
-                    test_id = normalize_text(test_spec.get("id"), "test")
-                    results.append(
-                        {
-                            "id": test_id,
-                            "status": "error",
-                            "value": "execution_error",
-                            "details": exc.detail,
-                            "errorCode": "execution_error",
-                            "source": "executor",
-                            "ms": 0,
-                            "steps": [],
-                        }
-                    )
+                    for spec in grouped_specs:
+                        results.append(
+                            {
+                                "id": normalize_text(spec.get("id"), "test"),
+                                "status": "error",
+                                "value": "execution_error",
+                                "details": exc.detail,
+                                "errorCode": "execution_error",
+                                "source": "executor",
+                                "ms": 0,
+                                "steps": [],
+                            }
+                        )
+                    continue
                 except Exception as exc:
-                    test_id = normalize_text(test_spec.get("id"), "test")
+                    for spec in grouped_specs:
+                        results.append(
+                            {
+                                "id": normalize_text(spec.get("id"), "test"),
+                                "status": "error",
+                                "value": "execution_error",
+                                "details": f"Test execution failed: {exc}",
+                                "errorCode": "execution_error",
+                                "source": "executor",
+                                "ms": 0,
+                                "steps": [],
+                            }
+                        )
+                    continue
+
+                outputs = execution.get("outputs") if isinstance(execution.get("outputs"), dict) else {}
+                steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
+                shared_execution_id = normalize_text(
+                    execution.get("sharedExecutionId"),
+                    f"def-{definition_id}-{uuid.uuid4().hex[:8]}",
+                )
+                total_ms = int(execution.get("ms") or 0)
+
+                for spec in grouped_specs:
+                    test_id = normalize_text(spec.get("id"), "test")
+                    payload = outputs.get(test_id)
+                    if not isinstance(payload, dict):
+                        results.append(
+                            self._build_error_result(
+                                test_id=test_id,
+                                value="missing_output",
+                                details=f"Definition '{definition_id}' did not emit output '{test_id}'.",
+                                error_code="definition_output_missing",
+                                source="executor",
+                            )
+                        )
+                        continue
                     results.append(
-                        {
-                            "id": test_id,
-                            "status": "error",
-                            "value": "execution_error",
-                            "details": f"Test execution failed: {exc}",
-                            "errorCode": "execution_error",
-                            "source": "executor",
-                            "ms": 0,
-                            "steps": [],
-                        }
+                        self._normalize_check_output_result(
+                            test_spec=spec,
+                            output_payload=payload,
+                            steps=steps,
+                            definition_id=definition_id,
+                            shared_execution_id=shared_execution_id,
+                            total_ms=total_ms,
+                        )
                     )
         finally:
             self._close_session(page_session_id, robot_id)
+
         return results

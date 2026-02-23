@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,9 +8,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="assets/css/main.css" />
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js" type="module" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js" type="module"
+    crossorigin="anonymous"></script>
 </head>
+
 <body>
   <div class="shell">
     <section id="dashboard" class="view active">
@@ -17,21 +21,27 @@
         <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
         <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
         <div class="kpi err"><span>Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
-        <button class="button button-compact" id="runFleetOnline" type="button" data-button-intent="monitor" title="Refresh online state">Refresh online</button>
-        <div id="fleetOnlineRefreshInfo" class="monitor-next-refresh-timer">Next refresh in --</div>
+        <button class="button button-compact" id="runFleetOnline" type="button" data-button-intent="monitor"
+          title="Refresh online state">Refresh online</button>
       </div>
-      <div id="fleetOnlineSummary" class="panel dashboard-online-summary" style="display: none; padding: 0.65rem 0.8rem;"></div>
+      <div id="fleetOnlineSummary" class="panel dashboard-online-summary"
+        style="display: none; padding: 0.65rem 0.8rem;"></div>
 
       <div class="status-bar dashboard-quickbar">
-        <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all robots</button>
-        <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected tests</button>
-        <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix mode</button>
-        <div id="selectionSummary" class="panel" style="padding: 0.55rem 0.7rem; min-width: 180px;">0 robot(s) selected</div>
+        <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all
+          robots</button>
+        <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected
+          tests</button>
+        <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix
+          mode</button>
+        <div id="selectionSummary" class="panel" style="padding: 0.55rem 0.7rem; min-width: 180px;">0 robot(s) selected
+        </div>
       </div>
       <div id="dashboardFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
         <div class="fix-mode-header">
           <h3>Fix mode</h3>
-          <span id="dashboardFixModeSummary" class="fix-mode-summary">Select one or more robots to see available fixes.</span>
+          <span id="dashboardFixModeSummary" class="fix-mode-summary">Select one or more robots to see available
+            fixes.</span>
         </div>
         <div id="dashboardFixModeActions" class="fix-mode-actions"></div>
         <div id="dashboardFixModeStatus" class="fix-mode-status"></div>
@@ -47,7 +57,7 @@
           </div>
 
           <div class="status-bar dashboard-bulk-actions">
-            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Add robot</button>
+            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
           </div>
           <div class="panel fleet-parallelism-control">
             <label class="fleet-parallelism-label" for="fleetParallelism">
@@ -55,24 +65,41 @@
               <span id="fleetParallelismValue" class="fleet-parallelism-value">8</span>
             </label>
             <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
-            <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected" and "Refresh online" increases speed at the cost of overhead.</p>
+            <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected"
+              and "Refresh online" increases speed at the cost of overhead.</p>
           </div>
 
           <div class="panel monitor-config-control">
-            <label class="fleet-parallelism-label" for="monitorMode">
-              Auto monitor mode:
-            </label>
-            <select id="monitorMode" class="filter-item">
-              <option value="online_battery">Online + Battery</option>
-              <option value="online_battery_topics">Online + Battery + Topics</option>
-            </select>
-            <div class="monitor-config-row">
-              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval (seconds)</label>
-              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5" max="300" step="1" value="30" />
-              <button class="button button-compact" id="applyMonitorConfig" type="button" data-button-intent="monitor">Apply</button>
+            <div class="monitor-config-head">
+              <label class="fleet-parallelism-label" for="monitorMode">
+                Auto monitor mode:
+              </label>
+              <select id="monitorMode" class="filter-item">
+                <option value="online_battery">Online + Battery</option>
+                <option value="online_battery_topics">Online + Battery + Topics</option>
+              </select>
             </div>
-            <p class="fleet-parallelism-hint">Global backend setting. Topics mode runs a shared snapshot command once per robot interval.</p>
+            <div class="monitor-config-row">
+              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval
+                (seconds)</label>
+              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5"
+                max="300" step="1" value="30" />
+              <button class="button button-compact" id="applyMonitorConfig" type="button"
+                data-button-intent="monitor">Apply</button>
+            </div>
+            <p class="fleet-parallelism-hint">Global backend setting. Topics mode runs a shared snapshot command once
+              per robot interval.</p>
             <div id="monitorConfigStatus" class="monitor-config-status"></div>
+          </div>
+          <div class="panel theme-switcher-control">
+            <label class="fleet-parallelism-label" for="themeSelect">
+              Theme:
+            </label>
+            <select id="themeSelect" class="filter-item">
+              <option value="deep-space">Deep Space</option>
+              <option value="arctic-grid">Arctic Grid</option>
+              <option value="ember-signal">Ember Signal</option>
+            </select>
           </div>
         </div>
       </details>
@@ -81,14 +108,16 @@
         <section class="fleet-section" id="onlineSection">
           <div class="fleet-section-head">
             <h2 class="fleet-section-title" id="onlineSectionTitle">Online (0)</h2>
-            <button class="button button-compact" id="selectAllOnlineRobots" type="button" data-button-intent="selection">Select all online</button>
+            <button class="button button-compact" id="selectAllOnlineRobots" type="button"
+              data-button-intent="selection">Select all online</button>
           </div>
           <div id="onlineRobotGrid" class="grid"></div>
         </section>
         <section class="fleet-section" id="offlineSection">
           <div class="fleet-section-head">
             <h2 class="fleet-section-title" id="offlineSectionTitle">Offline (0)</h2>
-            <button class="button button-compact" id="selectAllOfflineRobots" type="button" data-button-intent="selection">Select all offline</button>
+            <button class="button button-compact" id="selectAllOfflineRobots" type="button"
+              data-button-intent="selection">Select all offline</button>
           </div>
           <div id="offlineRobotGrid" class="grid"></div>
         </section>
@@ -99,63 +128,352 @@
     <section id="addRobot" class="view">
       <div class="detail-toolbar">
         <div class="detail-toolbar-left">
-          <button class="button" id="backFromAddRobot" type="button" data-button-intent="navigation">← Back to fleet</button>
-          <div class="detail-title-bar">Add Robot</div>
+          <button class="button" id="backFromAddRobot" type="button" data-button-intent="navigation">← Back to
+            fleet</button>
+          <div class="detail-title-bar">Manage Robots</div>
         </div>
       </div>
-      <div class="add-robot-shell">
-        <div class="panel add-robot-panel">
-            <div class="add-robot-head">
-              <h2>Register a new robot</h2>
-              <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
-            </div>
-          <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
-          <form id="addRobotForm" class="add-robot-form" novalidate>
-            <div class="form-grid">
-              <label class="form-field">
-                Robot name
-                <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input" placeholder="e.g. ROSbot Lab South" required />
-              </label>
-              <label class="form-field">
-                Robot type
-                <select id="addRobotType" name="type" class="form-input" required>
-                  <option value="" disabled selected>Loading robot types...</option>
-                </select>
-              </label>
-              <label class="form-field">
-                IP / Host
-                <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input" placeholder="e.g. 192.168.0.42 or robot-host" required />
-              </label>
-              <label class="form-field">
-                Model URL (optional)
-                <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input" placeholder="assets/models/rosbot-2-pro.glb" />
-              </label>
-              <label class="form-field">
-                SSH username
-                <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input" placeholder="robot" required />
-              </label>
-              <label class="form-field">
-                SSH password
-                <div class="form-password-field">
-                  <input id="addRobotPassword" name="password" type="password" autocomplete="off" class="form-input" placeholder="••••••••" required />
-                  <button id="toggleAddRobotPassword" class="button password-toggle" type="button" data-button-intent="utility" aria-label="Show password">Show</button>
+      <div class="manage-robots-shell">
+        <div class="panel manage-tabs-panel">
+          <div class="manage-tabs" role="tablist" aria-label="Manage robots tabs">
+            <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
+              data-button-intent="navigation">Robots</button>
+            <button id="manageTabButtonTests" class="button button-compact" type="button" data-tab="tests"
+              data-button-intent="navigation">Tests</button>
+            <button id="manageTabButtonFixes" class="button button-compact" type="button" data-tab="fixes"
+              data-button-intent="navigation">Fixes</button>
+            <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
+              data-button-intent="navigation">Recorder</button>
+          </div>
+          <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
+
+          <div id="manageTabPanelRobots" class="manage-tab-panel active" data-tab-panel="robots">
+            <div class="add-robot-shell">
+              <div class="panel add-robot-panel">
+                <div class="add-robot-head">
+                  <h2>Register a new robot</h2>
+                  <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
                 </div>
-              </label>
+                <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
+                <form id="addRobotForm" class="add-robot-form" novalidate>
+                  <div class="form-grid">
+                    <label class="form-field">
+                      Robot name
+                      <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input"
+                        placeholder="e.g. ROSbot Lab South" required />
+                    </label>
+                    <label class="form-field">
+                      Robot type
+                      <select id="addRobotType" name="type" class="form-input" required>
+                        <option value="" disabled selected>Loading robot types...</option>
+                      </select>
+                    </label>
+                    <label class="form-field">
+                      IP / Host
+                      <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
+                        placeholder="e.g. 192.168.0.42 or robot-host" required />
+                    </label>
+                    <label class="form-field">
+                      Model URL (optional)
+                      <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input"
+                        placeholder="assets/models/rosbot-2-pro.glb" />
+                    </label>
+                    <label class="form-field">
+                      SSH username
+                      <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input"
+                        placeholder="robot" required />
+                    </label>
+                    <label class="form-field">
+                      SSH password
+                      <div class="form-password-field">
+                        <input id="addRobotPassword" name="password" type="password" autocomplete="off"
+                          class="form-input" placeholder="••••••••" required />
+                        <button id="toggleAddRobotPassword" class="button password-toggle" type="button"
+                          data-button-intent="utility" aria-label="Show password">Show</button>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="add-robot-actions">
+                    <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
+                    <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+                  </div>
+                </form>
+              </div>
+              <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
+                <h3 class="add-robot-side-title">Before you save</h3>
+                <ul class="add-robot-checklist">
+                  <li>Use a reachable host/IP for diagnostics and terminal access.</li>
+                  <li>Select a known type so tests map correctly.</li>
+                  <li>SSH credentials are stored in the config file.</li>
+                </ul>
+              </aside>
             </div>
-            <div class="add-robot-actions">
-              <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
-              <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+          </div>
+
+          <div id="manageTabPanelTests" class="manage-tab-panel" data-tab-panel="tests">
+            <div class="manage-grid two-cols">
+              <div class="panel manage-list-panel">
+                <h2>Test Definitions</h2>
+                <div id="manageTestsList" class="manage-entity-list"></div>
+              </div>
+              <div class="panel manage-editor-panel">
+                <h2>Create or update test</h2>
+                <form id="manageTestEditorForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Test definition ID
+                    <input id="manageTestId" class="form-input" type="text" placeholder="e.g. topics_snapshot_v2"
+                      required />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="manageTestLabel" class="form-input" type="text" placeholder="Topics Snapshot V2" />
+                  </label>
+                  <div class="form-field" style="display:none;">
+                    Execute steps JSON
+                    <textarea id="manageTestExecuteJson" class="form-input manage-json-input" rows="8"
+                      placeholder='[{"id":"topics","command":"$rostopic_list$","saveAs":"topics_raw"}]'></textarea>
+                  </div>
+                  <div class="form-field" style="display:none;">
+                    Checks JSON
+                    <textarea id="manageTestChecksJson" class="form-input manage-json-input" rows="10"
+                      placeholder='[{"id":"battery","label":"Battery","read":{"kind":"contains_lines_unordered","inputRef":"topics_raw","lines":["/battery"],"requireAll":true},"pass":{"status":"ok","value":"present","details":"Battery present"},"fail":{"status":"error","value":"missing","details":"Battery missing"}}]'></textarea>
+                  </div>
+                  <div class="form-field">
+                    Test Flow Blocks
+                    <div id="manageTestVisualFlow" class="flow-block-container"
+                      style="min-height: 80px; background: rgba(9, 15, 34, 0.4); border-radius: 12px; padding: 10px;">
+                    </div>
+                    <div class="recorder-check-actions" style="margin-top: 10px;">
+                      <button id="manageTestAddWriteBtn" class="button button-compact" type="button"
+                        data-button-intent="utility">Add Write Block</button>
+                      <button id="manageTestAddReadBtn" class="button button-compact" type="button"
+                        data-button-intent="utility">Add Read Block</button>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <h3>Map to robot types</h3>
+                    <div id="manageTestRobotTypeTargets" class="recorder-type-targets"></div>
+                  </div>
+                  <div class="manage-editor-actions">
+                    <button id="manageSaveTestButton" class="button" type="submit" data-button-intent="create">Save test
+                      definition</button>
+                    <button id="manageDeleteTestButton" class="button button-danger" type="button"
+                      data-button-intent="danger" style="display:none;">Delete test</button>
+                  </div>
+                  <div id="manageTestEditorStatus" class="manage-editor-status" aria-live="polite"></div>
+                </form>
+              </div>
             </div>
-          </form>
+          </div>
+
+          <div id="manageTabPanelFixes" class="manage-tab-panel" data-tab-panel="fixes">
+            <div class="manage-grid two-cols">
+              <div class="panel manage-list-panel">
+                <h2>Fix Definitions</h2>
+                <div id="manageFixesList" class="manage-entity-list"></div>
+              </div>
+              <div class="panel manage-editor-panel">
+                <h2>Create or update fix</h2>
+                <form id="manageFixEditorForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Fix ID
+                    <input id="manageFixId" class="form-input" type="text" placeholder="e.g. flash_fix" required />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="manageFixLabel" class="form-input" type="text" placeholder="Flash fix" />
+                  </label>
+                  <label class="form-field">
+                    Description
+                    <input id="manageFixDescription" class="form-input" type="text"
+                      placeholder="Reflash and restart services" />
+                  </label>
+                  <div class="form-field" style="display:none;">
+                    Execute steps JSON
+                    <textarea id="manageFixExecuteJson" class="form-input manage-json-input" rows="8"
+                      placeholder='[{"id":"docker_down","command":"$docker_down$"},{"id":"flash","command":"$flash_firmware$"}]'></textarea>
+                  </div>
+                  <div class="form-field">
+                    Fix Flow Blocks
+                    <div id="manageFixVisualFlow" class="flow-block-container"
+                      style="min-height: 80px; background: rgba(9, 15, 34, 0.4); border-radius: 12px; padding: 10px;">
+                    </div>
+                    <div class="recorder-check-actions" style="margin-top: 10px;">
+                      <button id="manageFixAddWriteBtn" class="button button-compact" type="button"
+                        data-button-intent="utility">Add Write Block</button>
+                    </div>
+                  </div>
+                  <label class="form-field">
+                    Post test IDs (comma separated)
+                    <input id="manageFixPostTests" class="form-input" type="text"
+                      placeholder="general,movement,battery" />
+                  </label>
+                  <div class="form-field">
+                    <h3>Map to robot types</h3>
+                    <div id="manageFixRobotTypeTargets" class="recorder-type-targets"></div>
+                  </div>
+                  <div class="manage-editor-actions">
+                    <button id="manageSaveFixButton" class="button" type="submit" data-button-intent="create">Save fix
+                      definition</button>
+                    <button id="manageDeleteFixButton" class="button button-danger" type="button"
+                      data-button-intent="danger" style="display:none;">Delete fix</button>
+                  </div>
+                  <div id="manageFixEditorStatus" class="manage-editor-status" aria-live="polite"></div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
+            <div class="panel flow-builder-topbar">
+              <div class="flow-builder-topbar-main">
+                <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Create new
+                  test</button>
+                <label class="form-field">
+                  Robot
+                  <select id="recorderRobotSelect" class="form-input">
+                    <option value="">Select robot</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  Definition ID
+                  <input id="recorderDefinitionId" class="form-input" type="text"
+                    placeholder="e.g. topics_snapshot_custom" />
+                </label>
+                <label class="form-field">
+                  Label
+                  <input id="recorderDefinitionLabel" class="form-input" type="text"
+                    placeholder="Topics Snapshot Custom" />
+                </label>
+                <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
+                  test</button>
+              </div>
+              <div class="flow-builder-summary">
+                <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
+                <span id="recorderStepCount" class="recorder-summary-pill">0 write blocks</span>
+                <span id="recorderCheckCount" class="recorder-summary-pill">0 read blocks</span>
+                <span id="recorderOutputCount" class="recorder-summary-pill">0 outputs</span>
+              </div>
+              <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
+            </div>
+
+            <div class="manage-grid two-cols flow-builder-grid">
+              <div class="panel flow-builder-workflow-panel">
+                <h2>1. Outputs</h2>
+                <div class="flow-builder-output-form" style="display:none;">
+                  <label class="form-field">
+                    Output key
+                    <input id="recorderOutputKey" class="form-input" type="text" placeholder="e.g. battery" />
+                  </label>
+                  <label class="form-field">
+                    Output label
+                    <input id="recorderOutputLabel" class="form-input" type="text" placeholder="Battery" />
+                  </label>
+                  <label class="form-field">
+                    Icon
+                    <input id="recorderOutputIcon" class="form-input" type="text" placeholder="🔋" />
+                  </label>
+                  <label class="form-field">
+                    Pass details
+                    <input id="recorderOutputPassDetails" class="form-input" type="text"
+                      placeholder="Battery topic present" />
+                  </label>
+                  <label class="form-field">
+                    Fail details
+                    <input id="recorderOutputFailDetails" class="form-input" type="text"
+                      placeholder="Battery topic missing" />
+                  </label>
+                </div>
+                <div class="recorder-check-actions" style="margin-bottom: 12px;">
+                  <button id="recorderAddOutputBtn" class="button button-compact" type="button"
+                    data-button-intent="create">Add Output Block</button>
+                </div>
+                <div id="recorderOutputs" class="manage-entity-list"></div>
+
+                <h2>2. Flow</h2>
+                <p class="recorder-flow-hint">Write blocks execute immediately in terminal. Read blocks validate
+                  captured write outputs and bind to one output.</p>
+                <div class="recorder-command-row">
+                  <input id="recorderCommandInput" class="form-input" type="text"
+                    placeholder="Type command to run..." />
+                  <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
+                    block</button>
+                </div>
+
+                <div class="flow-builder-read-form" style="display:none;">
+                  <label class="form-field">
+                    Output
+                    <select id="recorderReadOutputKey" class="form-input">
+                      <option value="">Select output</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    Input ref
+                    <select id="recorderReadInputRef" class="form-input">
+                      <option value="">Select write output</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    Matcher
+                    <select id="recorderReadKind" class="form-input">
+                      <option value="contains_string">Contains string</option>
+                      <option value="contains_any_string">Contains any string</option>
+                      <option value="contains_lines_unordered">Contains lines unordered</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    Needle
+                    <input id="recorderReadNeedle" class="form-input" type="text" placeholder="e.g. /battery" />
+                  </label>
+                  <label class="form-field">
+                    Needles (comma separated)
+                    <input id="recorderReadNeedles" class="form-input" type="text" placeholder="/battery,/scan" />
+                  </label>
+                  <label class="form-field">
+                    Lines (one per line)
+                    <textarea id="recorderReadLines" class="form-input manage-json-input"
+                      placeholder="/battery&#10;/scan"></textarea>
+                  </label>
+                  <label class="recorder-primitive-toggle">
+                    <input id="recorderReadRequireAll" type="checkbox" checked />
+                    Require all lines
+                  </label>
+                </div>
+                <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
+                  <button id="recorderAddReadBtn" class="button button-compact" type="button"
+                    data-button-intent="create">Add Read Block</button>
+                </div>
+
+                <div id="recorderFlowBlocks" class="manage-entity-list"></div>
+              </div>
+
+              <div class="panel flow-builder-terminal-panel">
+                <h2>Terminal (SSH)</h2>
+                <p class="recorder-section-hint">Select a robot to connect an interactive SSH session. Highlight text to
+                  automatically populate read blocks.</p>
+                <div class="terminal-shell" style="height: 400px; position:relative; overflow:hidden;">
+                  <button id="recorderTerminalPopReadBtn" class="button button-compact floating-action-btn"
+                    style="position: absolute; top: 10px; right: 10px; z-index: 10; display: none;">+ Add Read
+                    Block</button>
+                  <div id="recorderTerminalActivationOverlay" class="terminal-activation-overlay">
+                    <button class="button terminal-activate-btn" id="activateRecorderTerminal" type="button"
+                      data-button-intent="terminal">Activate terminal</button>
+                  </div>
+                  <div id="recorderTerminalToolbar" class="terminal-toolbar">
+                    <span class="terminal-status warn" id="recorderTerminalBadge">Terminal pending...</span>
+                    <span class="terminal-status" id="recorderTerminalHint">Select robot first.</span>
+                  </div>
+                  <div id="recorderTerminalDisplay" class="fallback" aria-live="polite"
+                    style="height: calc(100% - 40px); background:#060912; overflow-y:auto; padding: 0.5rem;"></div>
+                </div>
+
+                <h3>Map to robot types</h3>
+                <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
-          <h3 class="add-robot-side-title">Before you save</h3>
-          <ul class="add-robot-checklist">
-            <li>Use a reachable host/IP for diagnostics and terminal access.</li>
-            <li>Select a known type so tests map correctly.</li>
-            <li>SSH credentials are stored in the config file.</li>
-          </ul>
-        </aside>
       </div>
     </section>
 
@@ -190,7 +508,8 @@
         <h2>Robot terminal</h2>
         <div class="terminal-shell">
           <div id="terminalActivationOverlay" class="terminal-activation-overlay">
-            <button class="button terminal-activate-btn" id="activateTerminal" type="button" data-button-intent="terminal">Activate terminal</button>
+            <button class="button terminal-activate-btn" id="activateTerminal" type="button"
+              data-button-intent="terminal">Activate terminal</button>
           </div>
           <div id="terminalToolbar" class="terminal-toolbar">
             <span class="terminal-status warn" id="terminalModeBadge">Terminal pending...</span>
@@ -205,7 +524,8 @@
       <div class="test-debug-panel" role="dialog" aria-modal="true" aria-labelledby="testDebugTitle">
         <div class="test-debug-header">
           <h3 id="testDebugTitle">Test Output</h3>
-          <button id="testDebugClose" class="button" type="button" data-button-intent="danger" data-action="close-modal">Close</button>
+          <button id="testDebugClose" class="button" type="button" data-button-intent="danger"
+            data-action="close-modal">Close</button>
         </div>
         <div id="testDebugSummary" class="test-debug-summary"></div>
         <div id="testDebugBody" class="test-debug-body"></div>
@@ -218,12 +538,8 @@
           <h3 id="bugReportTitle">Report a bug</h3>
         </div>
         <label class="bug-report-label" for="bugReportMessage">Describe the issue</label>
-        <textarea
-          id="bugReportMessage"
-          class="bug-report-message"
-          rows="5"
-          placeholder="What happened? Include robot name/id and what you expected."
-        ></textarea>
+        <textarea id="bugReportMessage" class="bug-report-message" rows="5"
+          placeholder="What happened? Include robot name/id and what you expected."></textarea>
         <div id="bugReportStatus" class="bug-report-status" aria-live="polite"></div>
         <div class="bug-report-actions">
           <button id="cancelBugReport" class="button" type="button" data-button-intent="navigation">Cancel</button>
@@ -232,20 +548,16 @@
       </div>
     </div>
 
-    <button
-      id="openBugReportFloating"
-      class="floating-bug-button"
-      type="button"
-      data-button-intent="utility"
-      aria-label="Report bug"
-      title="Report bug"
-    >
+    <button id="openBugReportFloating" class="floating-bug-button" type="button" data-button-intent="utility"
+      aria-label="Report bug" title="Report bug">
       <svg class="floating-bug-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M12 2a4 4 0 0 0-4 4v1.2A5.5 5.5 0 0 0 6 11v3.2l-2.1 2.1a1 1 0 1 0 1.4 1.4L6 17v1a6 6 0 0 0 12 0v-1l.7.7a1 1 0 0 0 1.4-1.4L18 14.2V11a5.5 5.5 0 0 0-2-3.8V6a4 4 0 0 0-4-4Zm-2 7h4a3.5 3.5 0 0 1 3.5 3.5V18a3.5 3.5 0 0 1-7 0v-5.5A3.5 3.5 0 0 1 10 9Z"/>
+        <path
+          d="M12 2a4 4 0 0 0-4 4v1.2A5.5 5.5 0 0 0 6 11v3.2l-2.1 2.1a1 1 0 1 0 1.4 1.4L6 17v1a6 6 0 0 0 12 0v-1l.7.7a1 1 0 0 0 1.4-1.4L18 14.2V11a5.5 5.5 0 0 0-2-3.8V6a4 4 0 0 0-4-4Zm-2 7h4a3.5 3.5 0 0 1 3.5 3.5V18a3.5 3.5 0 0 1-7 0v-5.5A3.5 3.5 0 0 1 10 9Z" />
       </svg>
     </button>
   </div>
 
   <script type="module" src="assets/js/app.js"></script>
 </body>
+
 </html>

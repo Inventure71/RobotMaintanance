@@ -1,11 +1,14 @@
 import { RobotTerminalComponent } from '../../components/robot-terminal-component.js';
+import { WorkflowRecorderComponent } from '../../components/workflow-recorder-component.js';
 import { renderBatteryPill } from '../../components/battery-pill-component.js';
+import { initVisualFlows } from '../../components/visual-flows.js';
 import {
   applyActionButton,
   createActionButton,
   hydrateActionButtons,
   setActionButtonLoading,
 } from '../../components/action-button-component.js';
+import { initThemeSwitcher } from '../../components/theme-switcher-component.js';
 import {
   DEFAULT_TEST_DEFINITIONS,
   PRESET_COMMANDS,
@@ -56,6 +59,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const MONITOR_TOPICS_INTERVAL_DEFAULT_SEC = 30;
     const MONITOR_TOPICS_INTERVAL_MIN_SEC = 5;
     const MONITOR_TOPICS_INTERVAL_MAX_SEC = 300;
+    const DETAIL_TERMINAL_PRESET_IDS = new Set(['restart-docker']);
     const TEST_STEP_TIMEOUT_MS = 12_000;
     const TEST_COUNTDOWN_TICK_MS = 1000;
     const TEST_COUNTDOWN_MIN_SECONDS = 3;
@@ -72,11 +76,11 @@ let ROBOT_TYPE_BY_ID = new Map();
     };
     const FIX_MODE_CONTEXT_DASHBOARD = 'dashboard';
     const FIX_MODE_CONTEXT_DETAIL = 'detail';
-    const FLASH_FIX_ID = 'flash_fix';
-    const FLASH_FIX_SCRIPT_COMMAND = './flash_firmware.sh';
-    const FLASH_FIX_POST_UP_DELAY_MS = 15_000;
-    const FLASH_FIX_COMMAND_TIMEOUT_SEC = 900;
+    const FIX_JOB_POLL_INTERVAL_MS = 1000;
     const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
+    const MANAGE_VIEW_HASH = 'manage-robots';
+    const MANAGE_TABS = ['robots', 'tests', 'fixes', 'recorder'];
+    const MANAGE_TAB_STORAGE_KEY = 'dashboard.manageTab';
     const FORCE_TEXT_TEST_ICONS = (() => {
       try {
         const platformHints = [
@@ -320,6 +324,14 @@ let ROBOT_TYPE_BY_ID = new Map();
       loadMonitorConfig();
     }
 
+    function initThemeControls() {
+      initThemeSwitcher({
+        selectElement: themeSelect,
+        rootElement: document.documentElement,
+        defaultThemeId: 'deep-space',
+      });
+    }
+
     function scheduleMonitorParallelismSync() {
       if (state.monitorParallelismSyncTimer) {
         window.clearTimeout(state.monitorParallelismSyncTimer);
@@ -409,20 +421,15 @@ let ROBOT_TYPE_BY_ID = new Map();
       const id = normalizeText(raw.id, '');
       if (!id) return null;
 
-      const commands = Array.isArray(raw.commands)
-        ? raw.commands.map((item) => normalizeText(item, '')).filter(Boolean)
+      const postTestIds = Array.isArray(raw.postTestIds)
+        ? raw.postTestIds.map((item) => normalizeText(item, '')).filter(Boolean)
         : [];
-      const testIds = Array.isArray(raw.testIds)
-        ? raw.testIds.map((item) => normalizeText(item, '')).filter(Boolean)
-        : [];
-      if (!commands.length && !testIds.length) return null;
 
       return {
         id,
         label: normalizeText(raw.label, id),
         description: normalizeText(raw.description, ''),
-        commands,
-        testIds,
+        postTestIds,
       };
     }
 
@@ -461,7 +468,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       return list
         .map((entry) => {
           if (!entry || typeof entry !== 'object') return null;
-          const typeId = normalizeText(entry.id, entry.name);
+          const typeId = normalizeText(entry.typeId, normalizeText(entry.id, normalizeText(entry.name, '')));
           if (!typeId) return null;
 
           const tests = Array.isArray(entry.tests)
@@ -478,7 +485,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           return {
             typeId,
             typeKey: normalizeTypeId(typeId),
-            label: normalizeText(entry.name, typeId),
+            label: normalizeText(entry.label, normalizeText(entry.name, typeId)),
             topics,
             tests,
             autoFixes,
@@ -625,6 +632,15 @@ let ROBOT_TYPE_BY_ID = new Map();
       isBugReportModalOpen: false,
       isBugReportSubmitInProgress: false,
       isCreateRobotInProgress: false,
+      activeManageTab: 'robots',
+      definitionsSummary: {
+        commandPrimitives: [],
+        tests: [],
+        checks: [],
+        fixes: [],
+        robotTypes: [],
+      },
+      isManageSummaryLoading: false,
       isOnlineRefreshInFlight: false,
       onlineCheckEstimateMs: ONLINE_CHECK_TIMEOUT_MS,
       fleetParallelism: FLEET_PARALLELISM_DEFAULT,
@@ -662,6 +678,10 @@ let ROBOT_TYPE_BY_ID = new Map();
       },
       pageSessionId: createPageSessionId(),
       onlineRefreshStatusTimer: null,
+      workflowRecorder: null,
+      recorderTerminalComponent: null,
+      ignoreNextHashChange: false,
+      recorderSelectionMouseupHandler: null,
     };
 
     const dashboard = $('#dashboard');
@@ -675,7 +695,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const filterType = $('#filterType');
     const filterError = $('#filterError');
     const terminal = $('#terminal');
-    const terminalShell = $('.terminal-shell');
+    const detailTerminalShell = terminal?.closest('.terminal-shell') || null;
     const terminalToolbar = $('#terminalToolbar');
     const terminalBadge = $('#terminalModeBadge');
     const terminalHint = $('#terminalHint');
@@ -686,6 +706,66 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotSavingHint = $('#addRobotSavingHint');
     const addRobotPasswordInput = $('#addRobotPassword');
     const addRobotPasswordToggle = $('#toggleAddRobotPassword');
+    const manageTabStatus = $('#manageTabStatus');
+    const manageTabButtons = $$('[data-tab]');
+    const manageTabPanels = $$('[data-tab-panel]');
+    const manageTestsList = $('#manageTestsList');
+    const manageFixesList = $('#manageFixesList');
+    const manageTestEditorForm = $('#manageTestEditorForm');
+    const manageTestIdInput = $('#manageTestId');
+    const manageTestLabelInput = $('#manageTestLabel');
+    const manageTestExecuteJsonInput = $('#manageTestExecuteJson');
+    const manageTestChecksJsonInput = $('#manageTestChecksJson');
+    const manageTestEditorStatus = $('#manageTestEditorStatus');
+    const manageFixEditorForm = $('#manageFixEditorForm');
+    const manageFixIdInput = $('#manageFixId');
+    const manageFixLabelInput = $('#manageFixLabel');
+    const manageFixDescriptionInput = $('#manageFixDescription');
+    const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
+    const manageFixPostTestsInput = $('#manageFixPostTests');
+    const manageFixEditorStatus = $('#manageFixEditorStatus');
+    const manageDeleteTestButton = $('#manageDeleteTestButton');
+    const manageDeleteFixButton = $('#manageDeleteFixButton');
+    const manageTestRobotTypeTargets = $('#manageTestRobotTypeTargets');
+    const manageFixRobotTypeTargets = $('#manageFixRobotTypeTargets');
+    const recorderCreateNewTestButton = $('#recorderCreateNewTest');
+    const recorderRobotSelect = $('#recorderRobotSelect');
+    const recorderDefinitionIdInput = $('#recorderDefinitionId');
+    const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
+    const recorderPublishTestButton = $('#recorderPublishTest');
+    const recorderStatus = $('#recorderStatus');
+    const recorderPublishStatus = $('#recorderPublishStatus');
+    const recorderStateBadge = $('#recorderStateBadge');
+    const recorderStepCountBadge = $('#recorderStepCount');
+    const recorderCheckCountBadge = $('#recorderCheckCount');
+    const recorderOutputCountBadge = $('#recorderOutputCount');
+    const recorderCommandInput = $('#recorderCommandInput');
+    const recorderRunCaptureButton = $('#recorderRunCapture');
+    const recorderOutputKeyInput = $('#recorderOutputKey');
+    const recorderOutputLabelInput = $('#recorderOutputLabel');
+    const recorderOutputIconInput = $('#recorderOutputIcon');
+    const recorderOutputPassDetailsInput = $('#recorderOutputPassDetails');
+    const recorderOutputFailDetailsInput = $('#recorderOutputFailDetails');
+    const recorderAddOutputBtn = $('#recorderAddOutputBtn');
+    const recorderReadOutputKeySelect = $('#recorderReadOutputKey');
+    const recorderReadInputRefSelect = $('#recorderReadInputRef');
+    const recorderReadKindSelect = $('#recorderReadKind');
+    const recorderReadNeedleInput = $('#recorderReadNeedle');
+    const recorderReadNeedlesInput = $('#recorderReadNeedles');
+    const recorderReadLinesInput = $('#recorderReadLines');
+    const recorderReadRequireAllInput = $('#recorderReadRequireAll');
+    const recorderAddReadBtn = $('#recorderAddReadBtn');
+    const recorderOutputs = $('#recorderOutputs');
+    const recorderFlowBlocks = $('#recorderFlowBlocks');
+    const recorderTerminalDisplay = $('#recorderTerminalDisplay');
+    const recorderTerminalShell = recorderTerminalDisplay?.closest('.terminal-shell') || null;
+    const recorderTerminalToolbar = $('#recorderTerminalToolbar');
+    const recorderTerminalBadge = $('#recorderTerminalBadge');
+    const recorderTerminalHint = $('#recorderTerminalHint');
+    const recorderTerminalPopReadBtn = $('#recorderTerminalPopReadBtn');
+    const activateRecorderTerminalButton = $('#activateRecorderTerminal');
+    const recorderTerminalActivationOverlay = $('#recorderTerminalActivationOverlay');
+
     const toggleDashboardFixModeButton = $('#toggleDashboardFixMode');
     const toggleDetailFixModeButton = $('#toggleDetailFixMode');
     const dashboardFixModePanel = $('#dashboardFixModePanel');
@@ -700,7 +780,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const monitorTopicsIntervalInput = $('#monitorTopicsIntervalSec');
     const monitorApplyButton = $('#applyMonitorConfig');
     const monitorConfigStatus = $('#monitorConfigStatus');
-    const fleetOnlineRefreshInfo = $('#fleetOnlineRefreshInfo');
+    const themeSelect = $('#themeSelect');
     const testDebugModal = $('#testDebugModal');
     const testDebugTitle = $('#testDebugTitle');
     const testDebugSummary = $('#testDebugSummary');
@@ -803,6 +883,10 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function isRobotFixing(robotIdValue) {
       return state.fixingRobotIds.has(robotId(robotIdValue));
+    }
+
+    function isRobotBusyForOnlineRefresh(robotIdValue) {
+      return isRobotSearching(robotIdValue) || isRobotTesting(robotIdValue) || isRobotFixing(robotIdValue);
     }
 
     function isRobotAutoSearching(robotIdValue) {
@@ -1103,8 +1187,21 @@ let ROBOT_TYPE_BY_ID = new Map();
       state.onlineRefreshStatusTimer = null;
     }
 
+    function setFleetOnlineButtonIdleLabel(label, title = '') {
+      const runAllButton = $('#runFleetOnline');
+      if (!runAllButton) return;
+      runAllButton.dataset.idleLabel = label;
+      if (!state.isOnlineRefreshInFlight) {
+        runAllButton.textContent = label;
+      }
+      if (title) {
+        runAllButton.title = title;
+      }
+    }
+
     function updateFleetOnlineRefreshStatus() {
-      if (!fleetOnlineRefreshInfo) return;
+      const runAllButton = $('#runFleetOnline');
+      if (!runAllButton) return;
       const autoSummary = state.autoMonitorRefreshSummary || {};
       const now = Date.now();
       const includeTopics = isTopicsMonitorMode(state.monitorMode);
@@ -1133,16 +1230,26 @@ let ROBOT_TYPE_BY_ID = new Map();
 
       const nextOnlineInMs = onlineNextCandidates.length ? Math.min(...onlineNextCandidates) : null;
       const nextTopicsInMs = topicsNextCandidates.length ? Math.min(...topicsNextCandidates) : null;
+      const nextCountdownCandidates = [];
+      if (nextOnlineInMs !== null) nextCountdownCandidates.push(nextOnlineInMs);
+      if (nextTopicsInMs !== null) nextCountdownCandidates.push(nextTopicsInMs);
+      const nextRefreshInMs = nextCountdownCandidates.length ? Math.min(...nextCountdownCandidates) : null;
+      const nextCountdownLabel = nextRefreshInMs === null ? '--' : formatDurationMs(nextRefreshInMs);
 
       if (!includeTopics) {
-        fleetOnlineRefreshInfo.textContent =
-          nextOnlineInMs === null ? 'Next refresh in --' : `Next refresh in ${formatDurationMs(nextOnlineInMs)}`;
+        const onlineTitle =
+          nextOnlineInMs === null
+            ? 'Refresh online state. Next refresh unavailable.'
+            : `Refresh online state. Next refresh in ${formatDurationMs(nextOnlineInMs)}.`;
+        setFleetOnlineButtonIdleLabel(`Refresh online (${nextCountdownLabel})`, onlineTitle);
         return;
       }
 
-      const onlineLabel = nextOnlineInMs === null ? 'Next online/battery refresh: --' : `Online/Battery: ${formatDurationMs(nextOnlineInMs)}`;
-      const topicsLabel = nextTopicsInMs === null ? 'Topics: --' : `Topics: ${formatDurationMs(nextTopicsInMs)}`;
-      fleetOnlineRefreshInfo.textContent = `${onlineLabel} • ${topicsLabel}`;
+      const onlineLabel =
+        nextOnlineInMs === null ? 'online/battery: --' : `online/battery: ${formatDurationMs(nextOnlineInMs)}`;
+      const topicsLabel = nextTopicsInMs === null ? 'topics: --' : `topics: ${formatDurationMs(nextTopicsInMs)}`;
+      const title = `Refresh online state. Next ${onlineLabel}, ${topicsLabel}.`;
+      setFleetOnlineButtonIdleLabel(`Refresh online (${nextCountdownLabel})`, title);
     }
 
     function startOnlineRefreshStatusTimer() {
@@ -1911,22 +2018,25 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
-    function updateFleetOnlineSummary(onlineNames, offlineNames) {
+    function updateFleetOnlineSummary(onlineNames, offlineNames, skippedNames = []) {
       const summary = $('#fleetOnlineSummary');
       if (!summary) return;
 
       const total = state.robots.length;
+      const skippedCount = Array.isArray(skippedNames) ? skippedNames.length : 0;
       summary.style.display = 'block';
       summary.innerHTML = `
         <div style="font-size: 0.92rem; margin-bottom: 0.35rem; opacity: 0.9;">
-          Online check complete • ${onlineNames.length} reachable / ${total} total
+          Online check complete • ${onlineNames.length} reachable / ${Math.max(0, total - skippedCount)} checked
         </div>
         <div><strong>Reachable:</strong> ${onlineNames.length ? onlineNames.join(', ') : 'none'}</div>
         <div><strong>Unreachable:</strong> ${offlineNames.length ? offlineNames.join(', ') : 'none'}</div>
+        <div><strong>Skipped (busy):</strong> ${skippedCount ? skippedNames.join(', ') : 'none'}</div>
       `;
       state.onlineRefreshSummary = {
         onlineCount: onlineNames.length,
         offlineCount: offlineNames.length,
+        skippedCount,
         totalCount: total,
       };
     }
@@ -1934,10 +2044,14 @@ let ROBOT_TYPE_BY_ID = new Map();
     function setFleetOnlineButtonState(isRunning) {
       const runAllButton = $('#runFleetOnline');
       if (!runAllButton) return;
+      const idleLabel = normalizeText(runAllButton.dataset.idleLabel, 'Refresh online');
       setActionButtonLoading(runAllButton, isRunning, {
         loadingLabel: 'Refreshing...',
-        idleLabel: 'Refresh online',
+        idleLabel,
       });
+      if (!isRunning) {
+        updateFleetOnlineRefreshStatus();
+      }
     }
 
     function selectAllRobots() {
@@ -2055,11 +2169,10 @@ let ROBOT_TYPE_BY_ID = new Map();
           if (!byKey.has(key)) {
             byKey.set(key, {
               key,
-              id: fix.id,
-              label: fix.label,
-              description: fix.description,
-              commands: fix.commands || [],
-              testIds: fix.testIds || [],
+                id: fix.id,
+                label: fix.label,
+                description: fix.description,
+              postTestIds: fix.postTestIds || [],
               typeLabel,
               robotIds: [],
             });
@@ -2087,8 +2200,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         id: fix.id,
         label: fix.label,
         description: fix.description,
-        commands: fix.commands || [],
-        testIds: fix.testIds || [],
+        postTestIds: fix.postTestIds || [],
         typeLabel: robot.type,
         robotIds: [robotId(robot)],
       }));
@@ -2120,84 +2232,130 @@ let ROBOT_TYPE_BY_ID = new Map();
     async function runAutoFixForRobot(robot, candidate) {
       if (!robot || !candidate) return;
       const normalizedRobotId = robotId(robot);
-      const commandList = Array.isArray(candidate.commands) ? candidate.commands : [];
-      const isFlashFix = normalizeText(candidate.id, '') === FLASH_FIX_ID;
-      const configuredTestIds = Array.isArray(candidate.testIds) ? candidate.testIds : [];
-      const testIds = isFlashFix ? getConfiguredDefaultTestIds(robot, false) : configuredTestIds;
-      const shouldMarkFixing = commandList.length > 0;
-      const shouldMarkTesting = testIds.length > 0;
-      const fixCountdownMs = normalizeCountdownMs(
-        commandList.length * TEST_STEP_TIMEOUT_MS +
-          (isFlashFix ? FLASH_FIX_COMMAND_TIMEOUT_SEC * 1000 + FLASH_FIX_POST_UP_DELAY_MS : 0),
-        TEST_STEP_TIMEOUT_MS * 2,
-      );
+      const configuredPostTestIds = Array.isArray(candidate.postTestIds) ? candidate.postTestIds : [];
+      let sawPostTests = false;
 
-      if (shouldMarkFixing) {
-        setRobotFixing(normalizedRobotId, true, fixCountdownMs);
+      const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
+      if (currentOnlineStatus !== 'ok') {
+        appendTerminalLine(
+          `Robot ${robot.name || normalizedRobotId} is not online. Running online check first...`,
+          'warn',
+        );
+        setRobotSearching(normalizedRobotId, true, getOnlineCheckCountdownMs());
+        const onlineStatus = await runOneRobotOnlineCheck(robot);
+        setRobotSearching(normalizedRobotId, false);
+        updateOnlineCheckEstimateFromResults([onlineStatus]);
+        state.robots = state.robots.map((item) =>
+          robotId(item) === normalizedRobotId
+            ? {
+                ...item,
+                tests: {
+                  ...(item.tests || {}),
+                  online: {
+                    status: onlineStatus.status,
+                    value: onlineStatus.value,
+                    details: onlineStatus.details,
+                  },
+                },
+              }
+            : item,
+        );
+        renderDashboard();
+        const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
+        if (activeRobotPostOnline) {
+          renderDetail(activeRobotPostOnline);
+        }
+        if (normalizeStatus(onlineStatus.status) !== 'ok') {
+          throw new Error(`Robot is offline (${onlineStatus.details}).`);
+        }
       }
 
-      try {
-        for (const command of commandList) {
-          appendTerminalLine(`Auto-fix (${candidate.label}) on ${robot.name}: ${command}`, 'warn');
-          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/terminal`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              robotId: normalizedRobotId,
-              pageSessionId: state.pageSessionId,
-              command,
-              commandId: candidate.key,
-              source: 'auto-fix',
-              timeoutSec:
-                isFlashFix && command.includes(FLASH_FIX_SCRIPT_COMMAND)
-                  ? FLASH_FIX_COMMAND_TIMEOUT_SEC
-                  : undefined,
-            }),
-          });
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `HTTP ${response.status}`);
+      setRobotFixing(normalizedRobotId, true, TEST_STEP_TIMEOUT_MS * 2);
+      setRobotTesting(normalizedRobotId, false);
+
+      let runId = '';
+      let cursor = 0;
+      let finalPayload = null;
+
+      const startResponse = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/${encodeURIComponent(candidate.id)}/runs`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageSessionId: state.pageSessionId,
+        }),
+      });
+      if (!startResponse.ok) {
+        const message = await startResponse.text();
+        throw new Error(message || `HTTP ${startResponse.status}`);
+      }
+      const startPayload = await startResponse.json();
+      runId = normalizeText(startPayload?.runId, '');
+      if (!runId) {
+        throw new Error('Fix run did not return a runId');
+      }
+
+      appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name} (run ${runId}).`, 'warn');
+
+      while (true) {
+        const response = await fetch(
+          buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/runs/${encodeURIComponent(runId)}`),
+          { method: 'GET' },
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        finalPayload = payload;
+
+        const events = Array.isArray(payload?.events) ? payload.events : [];
+        const unseen = events.slice(cursor);
+        cursor = events.length;
+        unseen.forEach((event) => {
+          const message = normalizeText(event?.message, '');
+          if (message) {
+            const tone = normalizeText(event?.type, '').includes('failed') ? 'err' : 'warn';
+            appendTerminalLine(message, tone);
           }
-          try {
-            const payload = await response.json();
-            if (payload?.output !== undefined) {
-              appendTerminalPayload(payload.output);
-            } else if (payload) {
-              appendTerminalPayload(payload);
-            }
-          } catch (_error) {
-            // Ignore payload parse errors for auto-fix command output.
+          const eventData = event?.data;
+          if (eventData && typeof eventData === 'object' && eventData.output !== undefined) {
+            appendTerminalPayload(eventData.output);
           }
-        }
+          if (normalizeText(event?.type, '') === 'post_tests_started') {
+            sawPostTests = true;
+            setRobotFixing(normalizedRobotId, false);
+            setRobotTesting(
+              normalizedRobotId,
+              true,
+              estimateTestCountdownMsFromBody({ testIds: configuredPostTestIds }),
+            );
+          }
+          if (normalizeText(event?.type, '') === 'post_tests_finished') {
+            setRobotTesting(normalizedRobotId, false);
+          }
+        });
 
-        if (isFlashFix) {
-          appendTerminalLine(
-            `Flash fix complete on ${robot.name}. Waiting ${Math.floor(FLASH_FIX_POST_UP_DELAY_MS / 1000)}s before retesting...`,
-            'warn',
-          );
-          await new Promise((resolve) => window.setTimeout(resolve, FLASH_FIX_POST_UP_DELAY_MS));
+        const status = normalizeText(payload?.status, '').toLowerCase();
+        if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
+          break;
         }
-      } finally {
-        if (shouldMarkFixing) {
-          setRobotFixing(normalizedRobotId, false);
-        }
+        await new Promise((resolve) => window.setTimeout(resolve, FIX_JOB_POLL_INTERVAL_MS));
       }
 
-      if (shouldMarkTesting) {
-        setRobotTesting(normalizedRobotId, true, estimateTestCountdownMsFromBody({ testIds }));
+      if (sawPostTests) {
+        setRobotTesting(normalizedRobotId, false);
       }
-      try {
-        if (testIds.length) {
-          const result = await runRobotTestsForRobot(normalizedRobotId, {
-            pageSessionId: state.pageSessionId,
-            testIds,
-          });
-          updateRobotTestState(normalizedRobotId, result.results || [], result);
-        }
-      } finally {
-        if (shouldMarkTesting) {
-          setRobotTesting(normalizedRobotId, false);
-        }
+      setRobotFixing(normalizedRobotId, false);
+
+      const status = normalizeText(finalPayload?.status, '').toLowerCase();
+      if (status !== 'succeeded') {
+        const errorMessage = normalizeText(finalPayload?.error, `Auto-fix failed with status: ${status || 'unknown'}`);
+        throw new Error(errorMessage);
+      }
+
+      const testResults = Array.isArray(finalPayload?.testRun?.results) ? finalPayload.testRun.results : [];
+      if (testResults.length) {
+        updateRobotTestState(normalizedRobotId, testResults, finalPayload?.testRun || {});
       }
     }
 
@@ -2371,13 +2529,33 @@ let ROBOT_TYPE_BY_ID = new Map();
     async function runOnlineCheckForAllRobots() {
       if (!state.robots.length || state.isOnlineRefreshInFlight || state.isAutoFixInProgress) return;
 
+      const activeRobotIds = state.robots.map((robot) => robotId(robot)).filter(Boolean);
+      if (!activeRobotIds.length) return;
+      const busyRobotIds = activeRobotIds.filter((id) => isRobotBusyForOnlineRefresh(id));
+      const busyRobotIdSet = new Set(busyRobotIds);
+      const eligibleRobotIds = activeRobotIds.filter((id) => !busyRobotIdSet.has(id));
+      const skippedNameSet = new Set(
+        busyRobotIds
+          .map((id) => {
+            const robot = getRobotById(id);
+            return normalizeText(robot?.name, id);
+          })
+          .filter(Boolean),
+      );
+      if (!eligibleRobotIds.length) {
+        state.onlineRefreshLastAt = Date.now();
+        state.onlineRefreshNextAt = state.onlineRefreshLastAt + getMonitorOnlineIntervalMs();
+        startOnlineRefreshStatusTimer();
+        updateFleetOnlineSummary([], [], Array.from(skippedNameSet).sort());
+        return;
+      }
+
       state.isOnlineRefreshInFlight = true;
       setFleetOnlineButtonState(true);
       state.onlineRefreshStartedAt = Date.now();
       state.onlineRefreshNextAt = 0;
       startOnlineRefreshStatusTimer();
-      const activeRobotIds = state.robots.map((robot) => robotId(robot)).filter(Boolean);
-      setRobotSearchingBulk(activeRobotIds, true, getOnlineCheckCountdownMs());
+      setRobotSearchingBulk(eligibleRobotIds, true, getOnlineCheckCountdownMs());
 
       const onlineNames = [];
       const offlineNames = [];
@@ -2388,7 +2566,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              robotIds: state.robots.map((robot) => robot.id).filter(Boolean),
+              robotIds: eligibleRobotIds,
               pageSessionId: state.pageSessionId,
               forceRefresh: true,
               timeoutSec: ONLINE_CHECK_TIMEOUT_MS / 1000,
@@ -2411,17 +2589,22 @@ let ROBOT_TYPE_BY_ID = new Map();
                 status: normalizeStatus(entry?.status),
                 value: normalizeText(entry?.value, 'n/a'),
                 details: normalizeText(entry?.details, 'No detail available'),
+                skipped: Boolean(entry?.skipped),
               });
             });
           }
 
           state.robots = state.robots.map((robot) => {
-            const label = normalizeText(robot.name, robot.id);
-            const statusUpdate = byId.get(robot.id) || {
-              status: 'error',
-              value: 'unreachable',
-              details: 'Backend returned no online result for this robot.',
-            };
+            const normalizedRobotId = robotId(robot);
+            if (!normalizedRobotId) return robot;
+            const label = normalizeText(robot.name, normalizedRobotId);
+            const statusUpdate = byId.get(normalizedRobotId);
+            if (!statusUpdate || statusUpdate.skipped) {
+              if (busyRobotIdSet.has(normalizedRobotId) || statusUpdate?.skipped) {
+                skippedNameSet.add(label);
+              }
+              return robot;
+            }
             if (statusUpdate.status === 'ok') {
               onlineNames.push(label);
             } else {
@@ -2437,56 +2620,62 @@ let ROBOT_TYPE_BY_ID = new Map();
           });
         } else {
           const fallbackOnlineResults = [];
-          const updatedRobots = state.robots.map((robot) => {
-            const label = normalizeText(robot.name, robot.id);
-            if (!robot.id) {
-              offlineNames.push(label);
-              return {
-                ...robot,
-                tests: {
-                  ...(robot.tests || {}),
-                  online: {
-                    status: 'error',
-                    value: 'unreachable',
-                    details: 'Missing robot id; cannot run online test.',
-                  },
-                },
-              };
+          const fallbackUpdates = await Promise.all(eligibleRobotIds.map(async (normalizedRobotId) => {
+            const robot = getRobotById(normalizedRobotId);
+            if (!robot) return null;
+            const statusUpdate = await runOneRobotOnlineCheck(robot);
+            return {
+              robotId: normalizedRobotId,
+              statusUpdate,
+            };
+          }));
+          const fallbackById = new Map();
+          fallbackUpdates.forEach((entry) => {
+            if (!entry) return;
+            fallbackById.set(entry.robotId, entry.statusUpdate);
+            if (!entry.statusUpdate?.skipped) {
+              fallbackOnlineResults.push(entry.statusUpdate);
             }
-
-            return runOneRobotOnlineCheck(robot).then((statusUpdate) => {
-              fallbackOnlineResults.push(statusUpdate);
-              const isOnline = statusUpdate.status === 'ok';
-              const nextStatus = {
-                status: statusUpdate.status,
-                value: statusUpdate.value,
-                details: statusUpdate.details,
-              };
-              if (isOnline) {
-                onlineNames.push(label);
-              } else {
-                offlineNames.push(label);
-              }
-
-              return {
-                ...robot,
-                tests: {
-                  ...(robot.tests || {}),
-                  online: nextStatus,
-                },
-              };
-            });
           });
-          state.robots = await Promise.all(updatedRobots);
+
+          state.robots = state.robots.map((robot) => {
+            const normalizedRobotId = robotId(robot);
+            if (!normalizedRobotId) return robot;
+            const label = normalizeText(robot.name, normalizedRobotId);
+            const statusUpdate = fallbackById.get(normalizedRobotId);
+            if (!statusUpdate || statusUpdate.skipped) {
+              if (statusUpdate?.skipped) {
+                skippedNameSet.add(label);
+              }
+              return robot;
+            }
+            if (statusUpdate.status === 'ok') {
+              onlineNames.push(label);
+            } else {
+              offlineNames.push(label);
+            }
+            return {
+              ...robot,
+              tests: {
+                ...(robot.tests || {}),
+                online: {
+                  status: statusUpdate.status,
+                  value: statusUpdate.value,
+                  details: statusUpdate.details,
+                },
+              },
+            };
+          });
+
           updateOnlineCheckEstimateFromResults(fallbackOnlineResults);
         }
 
         renderDashboard();
-        updateFleetOnlineSummary(onlineNames, offlineNames);
+        updateFleetOnlineSummary(onlineNames, offlineNames, Array.from(skippedNameSet).sort());
       } finally {
-        setFleetOnlineButtonState(false);
-        setRobotSearchingBulk(activeRobotIds, false);
         state.isOnlineRefreshInFlight = false;
+        setFleetOnlineButtonState(false);
+        setRobotSearchingBulk(eligibleRobotIds, false);
         state.onlineRefreshLastAt = Date.now();
         state.onlineRefreshNextAt = state.onlineRefreshLastAt + getMonitorOnlineIntervalMs();
         startOnlineRefreshStatusTimer();
@@ -2548,6 +2737,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           value: normalizeText(onlineResult.value, 'n/a'),
           details: normalizeText(onlineResult.details, 'No detail available'),
           ms: Number.isFinite(Number(onlineResult.ms)) ? Number(onlineResult.ms) : 0,
+          skipped: Boolean(onlineResult?.skipped),
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -3113,19 +3303,133 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
-    function openDetail(id) {
+    function normalizeManageTab(tabId) {
+      const normalized = normalizeText(tabId, '').toLowerCase();
+      return MANAGE_TABS.includes(normalized) ? normalized : '';
+    }
+
+    function getPersistedManageTab() {
+      try {
+        return normalizeManageTab(window.sessionStorage.getItem(MANAGE_TAB_STORAGE_KEY));
+      } catch (_error) {
+        return '';
+      }
+    }
+
+    function persistManageTab(tabId) {
+      const normalized = normalizeManageTab(tabId);
+      if (!normalized) return;
+      try {
+        window.sessionStorage.setItem(MANAGE_TAB_STORAGE_KEY, normalized);
+      } catch (_error) {
+        // Best effort persistence.
+      }
+    }
+
+    function resolveManageTab(tabId = '') {
+      return (
+        normalizeManageTab(tabId)
+        || getPersistedManageTab()
+        || normalizeManageTab(state.activeManageTab)
+        || 'robots'
+      );
+    }
+
+    function buildManageHash(tabId) {
+      const normalized = normalizeManageTab(tabId) || 'robots';
+      return normalized === 'robots' ? MANAGE_VIEW_HASH : `${MANAGE_VIEW_HASH}/${normalized}`;
+    }
+
+    function parseManageRoute(hashValue) {
+      const hash = normalizeText(hashValue, '').replace(/^#/, '');
+      if (hash === MANAGE_VIEW_HASH || hash === 'add-robot') {
+        return { isManageRoute: true, tabId: '' };
+      }
+      if (!hash.startsWith(`${MANAGE_VIEW_HASH}/`)) {
+        return { isManageRoute: false, tabId: '' };
+      }
+      const tabId = hash.slice(MANAGE_VIEW_HASH.length + 1);
+      return { isManageRoute: true, tabId: normalizeManageTab(tabId) || 'robots' };
+    }
+
+    function setLocationHash(hashValue) {
+      const nextHash = normalizeText(hashValue, '').replace(/^#/, '');
+      const currentHash = normalizeText(window.location.hash, '').replace(/^#/, '');
+      if (currentHash === nextHash) return;
+      state.ignoreNextHashChange = true;
+      window.location.hash = nextHash ? `#${nextHash}` : '';
+    }
+
+    function isManageViewActive() {
+      return Boolean(addRobotSection?.classList?.contains('active'));
+    }
+
+    function hideRecorderReadPopover() {
+      if (recorderTerminalPopReadBtn) {
+        recorderTerminalPopReadBtn.style.display = 'none';
+      }
+    }
+
+    function syncRecorderReadPopoverVisibility() {
+      if (
+        !isManageViewActive()
+        || state.activeManageTab !== 'recorder'
+        || !state.recorderTerminalComponent?.terminal
+        || !state.workflowRecorder?.started
+      ) {
+        hideRecorderReadPopover();
+        return;
+      }
+      try {
+        const selection = state.recorderTerminalComponent.terminal.getSelection();
+        if (selection && selection.trim()) {
+          if (recorderTerminalPopReadBtn) recorderTerminalPopReadBtn.style.display = 'block';
+          return;
+        }
+      } catch (_error) {
+        // Best effort UI hint.
+      }
+      hideRecorderReadPopover();
+    }
+
+    function closeRecorderTerminalSession() {
+      hideRecorderReadPopover();
+      if (recorderTerminalShell) {
+        recorderTerminalShell.classList.remove('active');
+      }
+      if (recorderTerminalActivationOverlay) {
+        recorderTerminalActivationOverlay.style.display = '';
+      }
+      if (state.recorderTerminalComponent) {
+        state.recorderTerminalComponent.dispose();
+      }
+    }
+
+    function setRecorderTerminalActive() {
+      if (recorderTerminalShell) {
+        recorderTerminalShell.classList.add('active');
+      }
+      if (recorderTerminalActivationOverlay) {
+        recorderTerminalActivationOverlay.style.display = 'none';
+      }
+    }
+
+    function openDetail(id, { syncHash = true } = {}) {
       const robot = state.robots.find((r) => r.id === id);
       if (!robot) return;
       state.detailRobotId = id;
+      closeRecorderTerminalSession();
       addRobotSection.classList.remove('active');
       dashboard.classList.remove('active');
       detail.classList.add('active');
       renderDetail(robot);
       syncFixModePanels();
-      window.location.hash = `robot/${id}`;
+      if (syncHash) {
+        setLocationHash(`robot/${id}`);
+      }
     }
 
-    function showAddRobotPage() {
+    function showAddRobotPage({ tabId = '', syncHash = true, refreshDefinitions = true } = {}) {
       closeTestDebugModal();
       closeBugReportModal();
       closeTerminalSession();
@@ -3145,15 +3449,24 @@ let ROBOT_TYPE_BY_ID = new Map();
       detail.classList.remove('active');
       dashboard.classList.remove('active');
       populateAddRobotTypeOptions();
+      renderRecorderRobotOptions();
+      const activeTab = resolveManageTab(tabId);
+      setActiveManageTab(activeTab, { syncHash: false, persist: true });
       addRobotSection.classList.add('active');
       syncFixModePanels();
-      window.location.hash = 'add-robot';
+      if (syncHash) {
+        setLocationHash(buildManageHash(activeTab));
+      }
+      if (refreshDefinitions) {
+        loadDefinitionsSummary();
+      }
     }
 
-    function showDashboard() {
+    function showDashboard({ syncHash = true } = {}) {
       closeTestDebugModal();
       closeBugReportModal();
       closeTerminalSession();
+      closeRecorderTerminalSession();
       if (addRobotForm) {
         addRobotForm.reset();
       }
@@ -3170,7 +3483,9 @@ let ROBOT_TYPE_BY_ID = new Map();
       state.detailRobotId = null;
       renderDashboard();
       syncFixModePanels();
-      window.location.hash = '';
+      if (syncHash) {
+        setLocationHash('');
+      }
     }
 
     function closeTerminalSession() {
@@ -3190,8 +3505,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     }
 
     function setTerminalInactive(robot = null) {
-      if (terminalShell) {
-        terminalShell.classList.remove('active');
+      if (detailTerminalShell) {
+        detailTerminalShell.classList.remove('active');
       }
       if (activateTerminalButton) {
         const target = robot?.name || 'robot';
@@ -3203,8 +3518,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     }
 
     function setTerminalActive() {
-      if (terminalShell) {
-        terminalShell.classList.add('active');
+      if (detailTerminalShell) {
+        detailTerminalShell.classList.add('active');
       }
     }
 
@@ -3349,10 +3664,17 @@ let ROBOT_TYPE_BY_ID = new Map();
       appendTerminalLine('--- End checks ---', 'warn');
     }
 
+    function getDetailTerminalPresets() {
+      return PRESET_COMMANDS.filter((preset) => {
+        const presetId = normalizeText(preset?.id, '').toLowerCase();
+        return DETAIL_TERMINAL_PRESET_IDS.has(presetId);
+      });
+    }
+
     function initRobotTerminal(robot) {
       if (!robot) return;
       if (!state.terminalComponent) return;
-      state.terminalComponent.connect(robot, PRESET_COMMANDS);
+      state.terminalComponent.connect(robot, getDetailTerminalPresets());
       state.activeTerminalRobotId = robotId(robot);
       setTerminalActive();
     }
@@ -3726,11 +4048,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         }
 
         setAddRobotMessage('Robot created and written to config.', 'ok');
-        const refreshed = await loadRobotsFromBackend();
-        state.robots = refreshed;
-        populateFilters();
-        populateAddRobotTypeOptions();
-        renderDashboard();
+        await refreshRobotsFromBackendSnapshot();
         showDashboard();
       } finally {
         state.isCreateRobotInProgress = false;
@@ -3745,11 +4063,1149 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
+    async function refreshRobotsFromBackendSnapshot() {
+      const previousSelectedIds = Array.from(state.selectedRobotIds || []);
+      const previousDetailRobotId = normalizeText(state.detailRobotId, '');
+      try {
+        const refreshed = await loadRobotsFromBackend();
+        state.robots = refreshed;
+      } catch (_error) {
+        return false;
+      }
+
+      const validRobotIds = new Set(state.robots.map((robot) => robotId(robot)).filter(Boolean));
+      state.selectedRobotIds = new Set(previousSelectedIds.filter((id) => validRobotIds.has(id)));
+      state.testingRobotIds = new Set(Array.from(state.testingRobotIds).filter((id) => validRobotIds.has(id)));
+      state.searchingRobotIds = new Set(Array.from(state.searchingRobotIds).filter((id) => validRobotIds.has(id)));
+      state.fixingRobotIds = new Set(Array.from(state.fixingRobotIds).filter((id) => validRobotIds.has(id)));
+      state.autoTestingRobotIds = new Set(Array.from(state.autoTestingRobotIds).filter((id) => validRobotIds.has(id)));
+      state.autoSearchingRobotIds = new Set(Array.from(state.autoSearchingRobotIds).filter((id) => validRobotIds.has(id)));
+      state.autoActivityRobotIds = new Set(Array.from(state.autoActivityRobotIds).filter((id) => validRobotIds.has(id)));
+
+      if (previousDetailRobotId && !validRobotIds.has(previousDetailRobotId)) {
+        state.detailRobotId = null;
+      }
+
+      syncAutomatedRobotActivityFromState();
+      syncAutoMonitorRefreshState();
+      populateFilters();
+      populateAddRobotTypeOptions();
+      renderRecorderRobotOptions();
+
+      if (dashboard.classList.contains('active')) {
+        renderDashboard();
+      }
+
+      if (detail.classList.contains('active')) {
+        const activeRobot = getRobotById(previousDetailRobotId || state.detailRobotId);
+        if (activeRobot) {
+          renderDetail(activeRobot);
+        } else {
+          showDashboard({ syncHash: false });
+        }
+      }
+
+      return true;
+    }
+
     function initAddRobotPasswordToggle() {
       if (!addRobotPasswordToggle || !addRobotPasswordInput) return;
       addRobotPasswordToggle.addEventListener('click', () => {
         setAddRobotPasswordVisibility(addRobotPasswordInput.type === 'password');
       });
+    }
+
+    function setManageTabStatus(message = '', tone = '') {
+      if (!manageTabStatus) return;
+      manageTabStatus.textContent = message;
+      manageTabStatus.classList.remove('ok', 'warn', 'error');
+      if (tone) {
+        manageTabStatus.classList.add(tone);
+      }
+    }
+
+    function setManageEditorStatus(element, message = '', tone = '') {
+      if (!element) return;
+      element.textContent = message;
+      element.classList.remove('ok', 'warn', 'error');
+      if (tone) {
+        element.classList.add(tone);
+      }
+    }
+
+    function normalizeDefinitionsSummary(payload) {
+      const safe = payload && typeof payload === 'object' ? payload : {};
+      return {
+        commandPrimitives: Array.isArray(safe.commandPrimitives) ? safe.commandPrimitives : [],
+        tests: Array.isArray(safe.tests) ? safe.tests : [],
+        checks: Array.isArray(safe.checks) ? safe.checks : [],
+        fixes: Array.isArray(safe.fixes) ? safe.fixes : [],
+        robotTypes: Array.isArray(safe.robotTypes) ? safe.robotTypes : [],
+      };
+    }
+
+    function normalizeIdList(values) {
+      const list = Array.isArray(values) ? values : [];
+      const seen = new Set();
+      const out = [];
+      list.forEach((item) => {
+        const normalized = normalizeText(item, '');
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        out.push(normalized);
+      });
+      return out;
+    }
+
+    function slugifyRecorderValue(value, fallback = '') {
+      const slug = normalizeText(value, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_.-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      return slug || fallback;
+    }
+
+    function renderRecorderRobotTypeTargets() {
+      if (!recorderRobotTypeTargets) return;
+      recorderRobotTypeTargets.replaceChildren();
+      const robotTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
+      const normalizedDefinitionId = slugifyRecorderValue(definitionId, '');
+      const checkIdPrefix = normalizedDefinitionId ? `${normalizedDefinitionId}__` : '';
+      const recorderCheckIdsRaw = state.workflowRecorder?.getCheckIdsForDefinition?.(definitionId);
+      const recorderCheckIds = Array.isArray(recorderCheckIdsRaw) ? recorderCheckIdsRaw : [];
+      const mappedTypeIds = new Set();
+
+      if (checkIdPrefix) {
+        robotTypes.forEach((typePayload) => {
+          const typeId = normalizeText(typePayload?.id, '');
+          if (!typeId) return;
+          const testRefs = normalizeIdList(typePayload?.testRefs);
+          const isMappedByRef = recorderCheckIds.length
+            ? recorderCheckIds.some((checkId) => testRefs.includes(checkId))
+            : testRefs.some((ref) => ref.startsWith(checkIdPrefix));
+          if (isMappedByRef) {
+            mappedTypeIds.add(typeId);
+          }
+        });
+      }
+
+      if (!mappedTypeIds.size) {
+        const selectedRobotId = normalizeText(recorderRobotSelect?.value, '');
+        const selectedRobot = state.robots.find((robot) => robotId(robot) === selectedRobotId);
+        const selectedTypeId = normalizeText(selectedRobot?.typeId, '');
+        if (selectedTypeId) {
+          mappedTypeIds.add(selectedTypeId);
+        }
+      }
+
+      if (!robotTypes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No robot types available.';
+        recorderRobotTypeTargets.appendChild(empty);
+        return;
+      }
+      robotTypes.forEach((typePayload) => {
+        const typeId = normalizeText(typePayload?.id, '');
+        if (!typeId) return;
+        const label = normalizeText(typePayload?.name, typeId);
+        const row = document.createElement('label');
+        row.className = 'recorder-type-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = typeId;
+        input.checked = mappedTypeIds.has(typeId);
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.append(input, text);
+        recorderRobotTypeTargets.appendChild(row);
+      });
+    }
+
+    function getSelectedRecorderTypeIds() {
+      if (!recorderRobotTypeTargets) return [];
+      const selected = Array.from(recorderRobotTypeTargets.querySelectorAll('input[type="checkbox"]:checked'));
+      return selected
+        .map((input) => normalizeText(input?.value, ''))
+        .filter(Boolean);
+    }
+
+    function renderTestRobotTypeTargets(testId) {
+      if (!manageTestRobotTypeTargets) return;
+      manageTestRobotTypeTargets.replaceChildren();
+      const robotTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      const testIdKey = normalizeText(testId, '');
+      const testDefinition = Array.isArray(state.definitionsSummary?.tests)
+        ? state.definitionsSummary.tests.find((item) => normalizeText(item?.id, '') === testIdKey)
+        : null;
+      const checkIds = Array.isArray(testDefinition?.checks)
+        ? testDefinition.checks
+          .map((check) => normalizeText(check?.id, ''))
+          .filter(Boolean)
+        : [];
+      const mappingRefs = normalizeIdList([testIdKey, ...checkIds]);
+      const legacyPrefix = testIdKey ? `${testIdKey}__` : '';
+      
+      robotTypes.forEach((typePayload) => {
+        const typeId = normalizeText(typePayload?.id, '');
+        if (!typeId) return;
+        const label = normalizeText(typePayload?.name, typeId);
+        const testRefs = normalizeIdList(typePayload?.testRefs);
+        const isMapped = mappingRefs.some((ref) => testRefs.includes(ref))
+          || (legacyPrefix ? testRefs.some((ref) => ref.startsWith(legacyPrefix)) : false);
+
+        const row = document.createElement('label');
+        row.className = 'recorder-type-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = typeId;
+        input.checked = isMapped;
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.append(input, text);
+        manageTestRobotTypeTargets.appendChild(row);
+      });
+    }
+
+    function renderFixRobotTypeTargets(fixId) {
+      if (!manageFixRobotTypeTargets) return;
+      manageFixRobotTypeTargets.replaceChildren();
+      const robotTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      const fixIdKey = normalizeText(fixId, '');
+      
+      robotTypes.forEach((typePayload) => {
+        const typeId = normalizeText(typePayload?.id, '');
+        if (!typeId) return;
+        const label = normalizeText(typePayload?.name, typeId);
+        const fixRefs = Array.isArray(typePayload?.fixRefs) ? typePayload.fixRefs : [];
+        const isMapped = fixRefs.includes(fixIdKey);
+
+        const row = document.createElement('label');
+        row.className = 'recorder-type-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = typeId;
+        input.checked = isMapped;
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.append(input, text);
+        manageFixRobotTypeTargets.appendChild(row);
+      });
+    }
+
+    function getSelectedMappingTypeIds(container) {
+      if (!container) return [];
+      const selected = Array.from(container.querySelectorAll('input[type="checkbox"]:checked'));
+      return selected
+        .map((input) => normalizeText(input?.value, ''))
+        .filter(Boolean);
+    }
+
+    function renderManageTestsList() {
+      if (!manageTestsList) return;
+      manageTestsList.replaceChildren();
+      const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
+      if (!tests.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No test definitions found.';
+        manageTestsList.appendChild(empty);
+        return;
+      }
+      tests
+        .slice()
+        .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
+        .forEach((testDefinition) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'manage-list-item';
+          const id = normalizeText(testDefinition?.id, '');
+          const label = normalizeText(testDefinition?.label, id);
+          const checkCount = Array.isArray(testDefinition?.checks) ? testDefinition.checks.length : 0;
+          row.textContent = `${label} (${id}) • ${checkCount} check(s)`;
+          row.addEventListener('click', () => {
+            if (manageTestIdInput) manageTestIdInput.value = id;
+            if (manageTestLabelInput) manageTestLabelInput.value = label;
+            if (manageTestExecuteJsonInput) {
+              const execute = Array.isArray(testDefinition?.execute) ? testDefinition.execute : [];
+              manageTestExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageTestChecksJsonInput) {
+              const checks = Array.isArray(testDefinition?.checks) ? testDefinition.checks : [];
+              const editableChecks = checks.map((check) => ({
+                id: normalizeText(check?.id, ''),
+                label: normalizeText(check?.label, ''),
+                icon: normalizeText(check?.icon, ''),
+                read: check?.read || {},
+                pass: check?.pass || { status: 'ok', value: 'present', details: 'Check passed.' },
+                fail: check?.fail || { status: 'error', value: 'missing', details: 'Check failed.' },
+              }));
+              manageTestChecksJsonInput.value = JSON.stringify(editableChecks, null, 2);
+            }
+            renderTestRobotTypeTargets(id);
+            if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'inline-block';
+            setManageEditorStatus(manageTestEditorStatus, `Loaded ${id} into editor.`, 'ok');
+          });
+          manageTestsList.appendChild(row);
+        });
+    }
+
+    function renderManageFixesList() {
+      if (!manageFixesList) return;
+      manageFixesList.replaceChildren();
+      const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
+      if (!fixes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'manage-list-empty';
+        empty.textContent = 'No fix definitions found.';
+        manageFixesList.appendChild(empty);
+        return;
+      }
+      fixes
+        .slice()
+        .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
+        .forEach((fixDefinition) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'manage-list-item';
+          const id = normalizeText(fixDefinition?.id, '');
+          const label = normalizeText(fixDefinition?.label, id);
+          row.textContent = `${label} (${id})`;
+          row.addEventListener('click', () => {
+            if (manageFixIdInput) manageFixIdInput.value = id;
+            if (manageFixLabelInput) manageFixLabelInput.value = label;
+            if (manageFixDescriptionInput) {
+              manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
+            }
+            if (manageFixExecuteJsonInput) {
+              const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
+              manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageFixPostTestsInput) {
+              const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
+              manageFixPostTestsInput.value = postTests.join(', ');
+            }
+            renderFixRobotTypeTargets(id);
+            if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'inline-block';
+            setManageEditorStatus(manageFixEditorStatus, `Loaded ${id} into editor.`, 'ok');
+          });
+          manageFixesList.appendChild(row);
+        });
+    }
+
+    function renderRecorderRobotOptions() {
+      if (!recorderRobotSelect) return;
+      const previousValue = normalizeText(recorderRobotSelect.value, '');
+      recorderRobotSelect.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select robot';
+      recorderRobotSelect.appendChild(placeholder);
+      state.robots.forEach((robot) => {
+        const id = normalizeText(robot?.id, '');
+        if (!id) return;
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `${normalizeText(robot?.name, id)} (${id})`;
+        recorderRobotSelect.appendChild(option);
+      });
+      if (previousValue) {
+        recorderRobotSelect.value = previousValue;
+      }
+      syncRecorderUiState();
+    }
+
+    function renderManageDefinitions() {
+      renderManageTestsList();
+      renderManageFixesList();
+      renderRecorderRobotTypeTargets();
+      renderRecorderRobotOptions();
+    }
+
+    async function loadDefinitionsSummary() {
+      if (state.isManageSummaryLoading) return;
+      state.isManageSummaryLoading = true;
+      setManageTabStatus('Loading definitions...', 'warn');
+      try {
+        const response = await fetch(buildApiUrl('/api/definitions/summary'));
+        const raw = await response.text();
+        const contentType = normalizeText(response.headers?.get('content-type'), '').toLowerCase();
+        const trimmedRaw = raw.trim();
+        const appearsJson = trimmedRaw.startsWith('{') || trimmedRaw.startsWith('[');
+        const expectsJson = contentType.includes('json');
+        const shouldParseJson = expectsJson || appearsJson;
+        let payload = {};
+        let parseError = null;
+        if (raw && shouldParseJson) {
+          try {
+            payload = JSON.parse(raw);
+          } catch (error) {
+            parseError = error;
+          }
+        }
+        if (!response.ok) {
+          if (shouldParseJson && parseError) {
+            throw new Error(`Unable to load definitions summary (HTTP ${response.status}).`);
+          }
+          const fallback = raw || `Unable to load definitions summary (HTTP ${response.status}).`;
+          throw new Error(normalizeText(payload?.detail, fallback));
+        }
+        if (shouldParseJson && parseError) {
+          throw new Error('Definitions summary response could not be parsed as JSON.');
+        }
+        if (!shouldParseJson && raw) {
+          throw new Error('Definitions summary response was not JSON.');
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(payload);
+        renderManageDefinitions();
+        setManageTabStatus('Definitions loaded.', 'ok');
+      } catch (error) {
+        setManageTabStatus(
+          `Definitions load failed: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        );
+      } finally {
+        state.isManageSummaryLoading = false;
+      }
+    }
+
+    function setActiveManageTab(tabId, { syncHash = false, persist = true } = {}) {
+      const normalizedTab = resolveManageTab(tabId);
+      state.activeManageTab = normalizedTab;
+      if (persist) {
+        persistManageTab(normalizedTab);
+      }
+      manageTabButtons.forEach((button) => {
+        const tab = normalizeText(button?.dataset?.tab, '');
+        button.classList.toggle('active', tab === normalizedTab);
+      });
+      manageTabPanels.forEach((panel) => {
+        const tab = normalizeText(panel?.dataset?.tabPanel, '');
+        panel.classList.toggle('active', tab === normalizedTab);
+      });
+      if (normalizedTab === 'recorder') {
+        syncRecorderUiState();
+      } else {
+        hideRecorderReadPopover();
+      }
+      if (syncHash) {
+        setLocationHash(buildManageHash(normalizedTab));
+      }
+    }
+
+    function parseJsonInput(input, label) {
+      const raw = normalizeText(input?.value, '');
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          throw new Error(`${label} must be a JSON array.`);
+        }
+        return parsed;
+      } catch (error) {
+        throw new Error(
+          `${label} is invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    async function saveManageTestDefinition() {
+      if (!manageTestIdInput || !manageTestExecuteJsonInput || !manageTestChecksJsonInput) return;
+      setManageEditorStatus(manageTestEditorStatus, 'Saving test definition...', 'warn');
+      try {
+        const testId = normalizeText(manageTestIdInput.value, '');
+        if (!testId) {
+          throw new Error('Test definition ID is required.');
+        }
+        const execute = parseJsonInput(manageTestExecuteJsonInput, 'Execute steps');
+        const checks = parseJsonInput(manageTestChecksJsonInput, 'Checks');
+        const payload = {
+          id: testId,
+          label: normalizeText(manageTestLabelInput?.value, testId),
+          mode: 'orchestrate',
+          enabled: true,
+          execute,
+          checks,
+        };
+        const response = await fetch(buildApiUrl('/api/definitions/tests'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to save test definition.'));
+        }
+
+        const selectedTypeIds = getSelectedMappingTypeIds(manageTestRobotTypeTargets);
+        const mappingResult = await updateTestMappings(testId, selectedTypeIds);
+        state.definitionsSummary = normalizeDefinitionsSummary(
+          mappingResult?.summary || body?.summary || body,
+        );
+        renderManageDefinitions();
+        const refreshed = await refreshRobotsFromBackendSnapshot();
+        setManageEditorStatus(manageTestEditorStatus, `Saved test definition '${testId}' and updated mappings.`, 'ok');
+        if (refreshed) {
+          setManageTabStatus(`Saved test definition '${testId}'.`, 'ok');
+        } else {
+          setManageTabStatus(
+            `Saved test definition '${testId}', but robot views did not refresh. Reload the page if needed.`,
+            'warn',
+          );
+        }
+      } catch (error) {
+        setManageEditorStatus(
+          manageTestEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function deleteManageTestDefinition() {
+      if (!manageTestIdInput) return;
+      const testId = normalizeText(manageTestIdInput.value, '');
+      if (!testId) return;
+      if (!confirm(`Are you sure you want to delete test definition '${testId}'? This will also remove it from all robot type mappings.`)) {
+        return;
+      }
+      setManageEditorStatus(manageTestEditorStatus, 'Deleting test definition...', 'warn');
+      try {
+        const response = await fetch(buildApiUrl(`/api/definitions/tests/${encodeURIComponent(testId)}`), {
+          method: 'DELETE',
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.detail || 'Unable to delete test definition.');
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        renderManageDefinitions();
+        const refreshed = await refreshRobotsFromBackendSnapshot();
+        if (manageTestIdInput) manageTestIdInput.value = '';
+        if (manageTestLabelInput) manageTestLabelInput.value = '';
+        if (manageTestExecuteJsonInput) manageTestExecuteJsonInput.value = '';
+        if (manageTestChecksJsonInput) manageTestChecksJsonInput.value = '';
+        if (manageTestRobotTypeTargets) manageTestRobotTypeTargets.replaceChildren();
+        if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'none';
+        setManageEditorStatus(manageTestEditorStatus, `Deleted test definition '${testId}'.`, 'ok');
+        if (refreshed) {
+          setManageTabStatus(`Deleted test definition '${testId}'.`, 'ok');
+        } else {
+          setManageTabStatus(
+            `Deleted test definition '${testId}', but robot views did not refresh. Reload the page if needed.`,
+            'warn',
+          );
+        }
+      } catch (error) {
+        setManageEditorStatus(
+          manageTestEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function updateTestMappings(testId, robotTypeIds) {
+      const response = await fetch(buildApiUrl(`/api/definitions/tests/${encodeURIComponent(testId)}/mappings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robotTypeIds }),
+      });
+      const raw = await response.text();
+      const body = raw ? JSON.parse(raw) : {};
+      if (!response.ok) {
+        throw new Error(normalizeText(body?.detail, raw || 'Unable to update test mappings.'));
+      }
+      return body;
+    }
+
+    async function updateFixMappings(fixId, robotTypeIds) {
+      const response = await fetch(buildApiUrl(`/api/definitions/fixes/${encodeURIComponent(fixId)}/mappings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robotTypeIds }),
+      });
+      const raw = await response.text();
+      const body = raw ? JSON.parse(raw) : {};
+      if (!response.ok) {
+        throw new Error(normalizeText(body?.detail, raw || 'Unable to update fix mappings.'));
+      }
+      return body;
+    }
+
+    async function saveManageFixDefinition() {
+      if (!manageFixIdInput || !manageFixExecuteJsonInput) return;
+      setManageEditorStatus(manageFixEditorStatus, 'Saving fix definition...', 'warn');
+      try {
+        const fixId = normalizeText(manageFixIdInput.value, '');
+        if (!fixId) {
+          throw new Error('Fix ID is required.');
+        }
+        const execute = parseJsonInput(manageFixExecuteJsonInput, 'Execute steps');
+        const postTests = normalizeIdList(
+          normalizeText(manageFixPostTestsInput?.value, '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        );
+        const payload = {
+          id: fixId,
+          label: normalizeText(manageFixLabelInput?.value, fixId),
+          description: normalizeText(manageFixDescriptionInput?.value, ''),
+          enabled: true,
+          execute,
+          postTestIds: postTests,
+        };
+        const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to save fix definition.'));
+        }
+
+        const selectedTypeIds = getSelectedMappingTypeIds(manageFixRobotTypeTargets);
+        const mappingResult = await updateFixMappings(fixId, selectedTypeIds);
+        state.definitionsSummary = normalizeDefinitionsSummary(
+          mappingResult?.summary || body?.summary || body,
+        );
+        renderManageDefinitions();
+        const refreshed = await refreshRobotsFromBackendSnapshot();
+        setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}' and updated mappings.`, 'ok');
+        if (refreshed) {
+          setManageTabStatus(`Saved fix definition '${fixId}'.`, 'ok');
+        } else {
+          setManageTabStatus(
+            `Saved fix definition '${fixId}', but robot views did not refresh. Reload the page if needed.`,
+            'warn',
+          );
+        }
+      } catch (error) {
+        setManageEditorStatus(
+          manageFixEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function deleteManageFixDefinition() {
+      if (!manageFixIdInput) return;
+      const fixId = normalizeText(manageFixIdInput.value, '');
+      if (!fixId) return;
+      if (!confirm(`Are you sure you want to delete fix definition '${fixId}'? This will also remove it from all robot type mappings.`)) {
+        return;
+      }
+      setManageEditorStatus(manageFixEditorStatus, 'Deleting fix definition...', 'warn');
+      try {
+        const response = await fetch(buildApiUrl(`/api/definitions/fixes/${encodeURIComponent(fixId)}`), {
+          method: 'DELETE',
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.detail || 'Unable to delete fix definition.');
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        renderManageDefinitions();
+        const refreshed = await refreshRobotsFromBackendSnapshot();
+        if (manageFixIdInput) manageFixIdInput.value = '';
+        if (manageFixLabelInput) manageFixLabelInput.value = '';
+        if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
+        if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
+        if (manageFixPostTestsInput) manageFixPostTestsInput.value = '';
+        if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
+        if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
+        setManageEditorStatus(manageFixEditorStatus, `Deleted fix definition '${fixId}'.`, 'ok');
+        if (refreshed) {
+          setManageTabStatus(`Deleted fix definition '${fixId}'.`, 'ok');
+        } else {
+          setManageTabStatus(
+            `Deleted fix definition '${fixId}', but robot views did not refresh. Reload the page if needed.`,
+            'warn',
+          );
+        }
+      } catch (error) {
+        setManageEditorStatus(
+          manageFixEditorStatus,
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    async function patchRobotTypeMapping(typeId, testRefs, fixRefs) {
+      const payload = {};
+      if (Array.isArray(testRefs)) payload.testRefs = normalizeIdList(testRefs);
+      if (Array.isArray(fixRefs)) payload.fixRefs = normalizeIdList(fixRefs);
+      const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(typeId)}/mappings`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const raw = await response.text();
+      const body = raw ? JSON.parse(raw) : {};
+      if (!response.ok) {
+        throw new Error(normalizeText(body?.detail, raw || `Unable to patch robot type ${typeId}.`));
+      }
+      return body;
+    }
+
+    async function applyRecorderMappings({ checkIds = [], fixId = '' }) {
+      const selectedTypeIds = getSelectedRecorderTypeIds();
+      if (!selectedTypeIds.length) return;
+      const summaryTypes = Array.isArray(state.definitionsSummary?.robotTypes)
+        ? state.definitionsSummary.robotTypes
+        : [];
+      for (const typeId of selectedTypeIds) {
+        const existing = summaryTypes.find((item) => normalizeText(item?.id, '') === typeId) || {};
+        const nextTestRefs = normalizeIdList([...(existing.testRefs || []), ...checkIds]);
+        const nextFixRefs = fixId
+          ? normalizeIdList([...(existing.fixRefs || []), fixId])
+          : normalizeIdList(existing.fixRefs || []);
+        const patchResult = await patchRobotTypeMapping(typeId, nextTestRefs, nextFixRefs);
+        state.definitionsSummary = normalizeDefinitionsSummary(patchResult?.summary || state.definitionsSummary);
+      }
+    }
+
+    let recorderLastEditingOutputKey = '';
+    let recorderLastEditingReadBlockId = '';
+
+    function clearRecorderOutputForm() {
+      if (recorderOutputKeyInput) recorderOutputKeyInput.value = '';
+      if (recorderOutputLabelInput) recorderOutputLabelInput.value = '';
+      if (recorderOutputIconInput) recorderOutputIconInput.value = '';
+      if (recorderOutputPassDetailsInput) recorderOutputPassDetailsInput.value = '';
+      if (recorderOutputFailDetailsInput) recorderOutputFailDetailsInput.value = '';
+    }
+
+    function clearRecorderReadForm() {
+      if (recorderReadOutputKeySelect) recorderReadOutputKeySelect.value = '';
+      if (recorderReadInputRefSelect) recorderReadInputRefSelect.value = '';
+      if (recorderReadKindSelect) recorderReadKindSelect.value = 'contains_string';
+      if (recorderReadNeedleInput) recorderReadNeedleInput.value = '';
+      if (recorderReadNeedlesInput) recorderReadNeedlesInput.value = '';
+      if (recorderReadLinesInput) recorderReadLinesInput.value = '';
+      if (recorderReadRequireAllInput) recorderReadRequireAllInput.checked = true;
+      syncRecorderReadKindFields();
+    }
+
+    function syncRecorderReadKindFields() {
+      const kind = normalizeText(recorderReadKindSelect?.value, 'contains_string');
+      const isString = kind === 'contains_string';
+      const isAny = kind === 'contains_any_string';
+      const isLines = kind === 'contains_lines_unordered';
+      if (recorderReadNeedleInput) recorderReadNeedleInput.disabled = !isString;
+      if (recorderReadNeedlesInput) recorderReadNeedlesInput.disabled = !isAny;
+      if (recorderReadLinesInput) recorderReadLinesInput.disabled = !isLines;
+      if (recorderReadRequireAllInput) recorderReadRequireAllInput.disabled = !isLines;
+    }
+
+    function syncRecorderUiState() {
+      const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
+      const recorder = state.workflowRecorder;
+      const recorderState = recorder && typeof recorder.getState === 'function'
+        ? recorder.getState(definitionId)
+        : {
+            started: false,
+            writeCount: 0,
+            readCount: 0,
+            outputCount: 0,
+            publishReady: false,
+            blockingIssues: [],
+            editingOutputKey: '',
+            editingReadBlockId: '',
+          };
+
+      const robotSelected = normalizeText(recorderRobotSelect?.value, '') !== '';
+      const commandReady = normalizeText(recorderCommandInput?.value, '') !== '';
+
+      if (recorderStateBadge) {
+        recorderStateBadge.textContent = recorderState.started ? 'Draft active' : 'Draft idle';
+        recorderStateBadge.classList.toggle('active', !!recorderState.started);
+      }
+      if (recorderStepCountBadge) {
+        recorderStepCountBadge.textContent = `${Number(recorderState.writeCount || 0)} write block${Number(recorderState.writeCount || 0) === 1 ? '' : 's'}`;
+      }
+      if (recorderCheckCountBadge) {
+        recorderCheckCountBadge.textContent = `${Number(recorderState.readCount || 0)} read block${Number(recorderState.readCount || 0) === 1 ? '' : 's'}`;
+      }
+      if (recorderOutputCountBadge) {
+        recorderOutputCountBadge.textContent = `${Number(recorderState.outputCount || 0)} output${Number(recorderState.outputCount || 0) === 1 ? '' : 's'}`;
+      }
+
+      if (recorderCreateNewTestButton) {
+        applyActionButton(recorderCreateNewTestButton, {
+          intent: 'create',
+          label: 'Create new test',
+        });
+      }
+      if (recorderRunCaptureButton) {
+        recorderRunCaptureButton.disabled = !(recorderState.started && robotSelected && commandReady);
+      }
+      if (recorderAddOutputBtn) {
+        recorderAddOutputBtn.disabled = !recorderState.started;
+      }
+      if (recorderAddReadBtn) {
+        recorderAddReadBtn.disabled = !(
+          recorderState.started
+          && Number(recorderState.outputCount || 0) > 0
+          && Number(recorderState.writeCount || 0) > 0
+        );
+      }
+      if (recorderPublishTestButton) {
+        recorderPublishTestButton.disabled = !(recorderState.publishReady && robotSelected);
+      }
+
+      if (recorderState.editingOutputKey !== recorderLastEditingOutputKey) {
+        recorderLastEditingOutputKey = recorderState.editingOutputKey || '';
+        if (recorderLastEditingOutputKey) {
+          const output = state.workflowRecorder?.getOutput?.(recorderLastEditingOutputKey);
+          if (output) {
+            if (recorderOutputKeyInput) recorderOutputKeyInput.value = output.key;
+            if (recorderOutputLabelInput) recorderOutputLabelInput.value = output.label;
+            if (recorderOutputIconInput) recorderOutputIconInput.value = output.icon;
+            if (recorderOutputPassDetailsInput) recorderOutputPassDetailsInput.value = output.passDetails;
+            if (recorderOutputFailDetailsInput) recorderOutputFailDetailsInput.value = output.failDetails;
+          }
+        }
+      }
+
+      if (recorderState.editingReadBlockId !== recorderLastEditingReadBlockId) {
+        recorderLastEditingReadBlockId = recorderState.editingReadBlockId || '';
+        if (recorderLastEditingReadBlockId) {
+          const block = state.workflowRecorder?.getReadBlock?.(recorderLastEditingReadBlockId);
+          if (block) {
+            if (recorderReadOutputKeySelect) recorderReadOutputKeySelect.value = block.outputKey;
+            if (recorderReadInputRefSelect) recorderReadInputRefSelect.value = normalizeText(block.read?.inputRef, '');
+            if (recorderReadKindSelect) recorderReadKindSelect.value = normalizeText(block.read?.kind, 'contains_string');
+            if (recorderReadNeedleInput) recorderReadNeedleInput.value = normalizeText(block.read?.needle, '');
+            if (recorderReadNeedlesInput) {
+              const needles = Array.isArray(block.read?.needles) ? block.read.needles : [];
+              recorderReadNeedlesInput.value = needles.join(',');
+            }
+            if (recorderReadLinesInput) {
+              const lines = Array.isArray(block.read?.lines) ? block.read.lines : [];
+              recorderReadLinesInput.value = lines.join('\n');
+            }
+            if (recorderReadRequireAllInput) {
+              recorderReadRequireAllInput.checked = Boolean(block.read?.requireAll ?? true);
+            }
+          }
+        }
+      }
+
+      syncRecorderReadKindFields();
+      syncRecorderReadPopoverVisibility();
+    }
+
+    async function runRecorderCommandAndCapture() {
+      if (!state.workflowRecorder) return;
+      const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+      const command = normalizeText(recorderCommandInput?.value, '');
+      if (!robotIdValue) {
+        state.workflowRecorder.setStatus('Select a robot first.', 'error');
+        return;
+      }
+      if (!state.workflowRecorder.started) {
+        state.workflowRecorder.setStatus('Click "Create new test" first.', 'warn');
+        return;
+      }
+      if (!command) {
+        state.workflowRecorder.setStatus('Command is required.', 'error');
+        return;
+      }
+
+      setRecorderTerminalActive();
+      if (recorderRunCaptureButton) {
+        recorderRunCaptureButton.disabled = true;
+      }
+      state.workflowRecorder.setStatus('Running command in SSH session...', 'warn');
+      try {
+        if (!state.recorderTerminalComponent || state.recorderTerminalComponent.mode !== 'live') {
+          const robot = ROBOT_TYPES.length ? { id: robotIdValue, name: robotIdValue } : { id: robotIdValue };
+          await state.recorderTerminalComponent?.connect(robot);
+        }
+        
+        await state.recorderTerminalComponent?.runCommand(command);
+
+        const capturedStep = state.workflowRecorder.addWriteBlock({
+          command,
+          outputPayload: { stdout: '[Output streaming in terminal session]' },
+        });
+        
+        if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
+          const suggested = slugifyRecorderValue(
+            `${robotIdValue}_${normalizeText(capturedStep?.id, 'workflow')}`,
+            'recorded_workflow',
+          );
+          recorderDefinitionIdInput.value = suggested;
+        }
+        if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
+          recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
+        }
+        if (recorderCommandInput) recorderCommandInput.value = '';
+        state.workflowRecorder.setStatus('Write block added. Check terminal for output.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setStatus(
+          `Run failed: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        );
+      } finally {
+        if (recorderRunCaptureButton) {
+          recorderRunCaptureButton.disabled = false;
+        }
+        syncRecorderUiState();
+      }
+    }
+
+    async function publishRecorderAsTest() {
+      if (!state.workflowRecorder) return;
+      state.workflowRecorder.setPublishStatus('Publishing test...', 'warn');
+      try {
+        const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
+        const definition = state.workflowRecorder.buildTestDefinition({
+          definitionId,
+          label: normalizeText(recorderDefinitionLabelInput?.value, ''),
+        });
+
+        const response = await fetch(buildApiUrl('/api/definitions/tests'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(definition),
+        });
+        const raw = await response.text();
+        const body = raw ? JSON.parse(raw) : {};
+        if (!response.ok) {
+          throw new Error(normalizeText(body?.detail, raw || 'Unable to publish test definition.'));
+        }
+        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
+        await applyRecorderMappings({
+          checkIds: state.workflowRecorder.getCheckIdsForDefinition(definitionId),
+          fixId: '',
+        });
+        renderManageDefinitions();
+        state.workflowRecorder.setPublishStatus('Test definition published and mapped to selected robot types.', 'ok');
+        setManageTabStatus('Recorder test published.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setPublishStatus(
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    function addRecorderOutputVisual() {
+      if (!state.workflowRecorder || !state.workflowRecorder.started) return;
+      try {
+        const outId = window.prompt("Enter Output Key (e.g. status):");
+        if (!outId || !outId.trim()) return;
+        state.workflowRecorder.addOrUpdateOutput({
+          key: normalizeText(outId, ''),
+          label: normalizeText(outId, ''),
+          icon: '💾',
+          passDetails: 'Passed',
+          failDetails: 'Failed',
+        });
+        state.workflowRecorder.setStatus('Added output block. Expand to edit.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setStatus(error instanceof Error ? error.message : String(error), 'error');
+      }
+    }
+
+    function addRecorderReadVisual() {
+      if (!state.workflowRecorder || !state.workflowRecorder.started) return;
+      try {
+        state.workflowRecorder.clearReadEdit();
+        const outputs = state.workflowRecorder.getOutputKeys();
+        if (!outputs.length) {
+          state.workflowRecorder.setStatus('You must create an Output block first.', 'error');
+          return;
+        }
+        const key = outputs[0];
+        const latestWrite = state.workflowRecorder.getWriteRefs().pop();
+        const ref = latestWrite ? latestWrite.saveAs : '';
+        
+        state.workflowRecorder.addOrUpdateReadBlock({
+          outputKey: key,
+          inputRef: ref,
+          kind: 'contains_string',
+          needle: 'success text',
+          needles: '',
+          lines: '',
+          requireAll: true
+        });
+        state.workflowRecorder.setStatus('Added read block. Expand to edit.', 'ok');
+      } catch (error) {
+        state.workflowRecorder.setStatus(error instanceof Error ? error.message : String(error), 'error');
+      }
+    }
+
+    function initManageTabs() {
+      manageTabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          setActiveManageTab(normalizeText(button?.dataset?.tab, 'robots'), { syncHash: true, persist: true });
+        });
+      });
+      if (manageDeleteTestButton) {
+        manageDeleteTestButton.addEventListener('click', deleteManageTestDefinition);
+      }
+      if (manageDeleteFixButton) {
+        manageDeleteFixButton.addEventListener('click', deleteManageFixDefinition);
+      }
+    }
+
+    function initWorkflowRecorder() {
+      state.workflowRecorder = new WorkflowRecorderComponent({
+        terminalOutputEl: null,
+        outputsEl: recorderOutputs,
+        blocksEl: recorderFlowBlocks,
+        outputSelectEl: recorderReadOutputKeySelect,
+        inputRefSelectEl: recorderReadInputRefSelect,
+        statusEl: recorderStatus,
+        publishStatusEl: recorderPublishStatus,
+        onStateChange: () => {
+          syncRecorderUiState();
+        },
+      });
+      state.workflowRecorder.render();
+
+      try {
+        state.recorderTerminalComponent = new RobotTerminalComponent({
+          terminalElement: recorderTerminalDisplay,
+          toolbarElement: recorderTerminalToolbar,
+          badgeElement: recorderTerminalBadge,
+          hintElement: recorderTerminalHint,
+          terminalCtor: window.Terminal,
+          fitAddonCtor: window.FitAddon ? window.FitAddon.FitAddon : null,
+          endpointBuilder: (robotId) => buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/terminal`),
+        });
+      } catch (error) {
+        console.warn('Recorder terminal init failed', error);
+      }
+
+      if (state.recorderSelectionMouseupHandler) {
+        document.removeEventListener('mouseup', state.recorderSelectionMouseupHandler);
+      }
+      state.recorderSelectionMouseupHandler = () => {
+        syncRecorderReadPopoverVisibility();
+      };
+      document.addEventListener('mouseup', state.recorderSelectionMouseupHandler);
+
+      recorderTerminalPopReadBtn?.addEventListener('click', () => {
+        if (!state.recorderTerminalComponent?.terminal || !state.workflowRecorder?.started) return;
+        try {
+          const selection = state.recorderTerminalComponent.terminal.getSelection();
+          if (selection && selection.trim()) {
+            state.workflowRecorder.clearReadEdit();
+            const outputs = state.workflowRecorder.getOutputKeys();
+            if (!outputs.length) {
+              state.workflowRecorder.setStatus('Create an Output Block first to bind terminal selections to.', 'warn');
+              return;
+            }
+            const lines = selection.trim().split('\n').map(s => s.trim()).filter(Boolean);
+            const latestWrite = state.workflowRecorder.getWriteRefs().pop();
+            const ref = latestWrite ? latestWrite.saveAs : '';
+
+            let kind = 'contains_string';
+            let needle = '';
+            let linesStr = '';
+
+            if (lines.length > 1) {
+              kind = 'contains_lines_unordered';
+              linesStr = lines.join('\n');
+            } else if (lines.length === 1) {
+              kind = 'contains_string';
+              needle = lines[0];
+            }
+            state.workflowRecorder.addOrUpdateReadBlock({
+               outputKey: outputs[0],
+               inputRef: ref,
+               kind: kind,
+               needle: needle,
+               needles: '',
+               lines: linesStr,
+               requireAll: true
+            });
+            state.workflowRecorder.setStatus('Read block created from terminal selection. Expand to edit.', 'ok');
+            hideRecorderReadPopover();
+            state.recorderTerminalComponent.terminal.clearSelection();
+          }
+        } catch (_e) {}
+      });
+
+      activateRecorderTerminalButton?.addEventListener('click', () => {
+        const rId = normalizeText(recorderRobotSelect?.value, '');
+        if (!rId) {
+          state.workflowRecorder.setStatus('Select a robot first.', 'error');
+          return;
+        }
+        const robot = ROBOT_TYPES.length ? { id: rId, name: rId } : { id: rId };
+        state.recorderTerminalComponent?.connect(robot);
+        setRecorderTerminalActive();
+      });
+
+      recorderCreateNewTestButton?.addEventListener('click', () => {
+        const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+        if (!robotIdValue) {
+          state.workflowRecorder.setStatus('Select a robot first.', 'error');
+          return;
+        }
+        state.workflowRecorder.createNewTest();
+        clearRecorderOutputForm();
+        clearRecorderReadForm();
+        if (recorderDefinitionIdInput) {
+          recorderDefinitionIdInput.value = slugifyRecorderValue(`${robotIdValue}_flow`, 'recorded_workflow');
+        }
+        if (recorderDefinitionLabelInput) {
+          recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
+        }
+        renderRecorderRobotTypeTargets();
+      });
+      recorderRunCaptureButton?.addEventListener('click', () => {
+        runRecorderCommandAndCapture();
+      });
+      recorderCommandInput?.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        runRecorderCommandAndCapture();
+      });
+      recorderAddOutputBtn?.addEventListener('click', () => {
+        addRecorderOutputVisual();
+      });
+      recorderAddReadBtn?.addEventListener('click', () => {
+        addRecorderReadVisual();
+      });
+      recorderReadKindSelect?.addEventListener('change', () => {
+        syncRecorderReadKindFields();
+      });
+      recorderPublishTestButton?.addEventListener('click', () => {
+        publishRecorderAsTest();
+      });
+      recorderRobotSelect?.addEventListener('change', () => {
+        renderRecorderRobotTypeTargets();
+        syncRecorderUiState();
+      });
+      recorderCommandInput?.addEventListener('input', () => {
+        syncRecorderUiState();
+      });
+      recorderDefinitionIdInput?.addEventListener('input', () => {
+        renderRecorderRobotTypeTargets();
+        syncRecorderUiState();
+      });
+      clearRecorderOutputForm();
+      clearRecorderReadForm();
+      syncRecorderUiState();
     }
 
     function onFilterChange() {
@@ -3775,13 +5231,20 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     async function loadRobotTypeConfig() {
       try {
-        const response = await fetch(ROBOT_TYPES_CONFIG_URL);
-        if (!response.ok) throw new Error('config unavailable');
+        const response = await fetch(buildApiUrl('/api/robot-types'));
+        if (!response.ok) throw new Error('api unavailable');
         const payload = await response.json();
         return setRobotTypeDefinitions(payload);
       } catch (_error) {
-        setRobotTypeDefinitions([]);
-        return [];
+        try {
+          const response = await fetch(ROBOT_TYPES_CONFIG_URL);
+          if (!response.ok) throw new Error('config unavailable');
+          const payload = await response.json();
+          return setRobotTypeDefinitions(payload);
+        } catch (_fallbackError) {
+          setRobotTypeDefinitions([]);
+          return [];
+        }
       }
     }
 
@@ -3977,20 +5440,27 @@ let ROBOT_TYPE_BY_ID = new Map();
     function routeFromHash() {
       const hash = window.location.hash.replace(/^#/, '');
       if (!hash) {
-        showDashboard();
+        showDashboard({ syncHash: false });
         return;
       }
-      if (hash === 'add-robot') {
-        showAddRobotPage();
+      const manageRoute = parseManageRoute(hash);
+      if (manageRoute.isManageRoute) {
+        const shouldCanonicalize = hash === 'add-robot';
+        showAddRobotPage({
+          tabId: manageRoute.tabId,
+          syncHash: shouldCanonicalize,
+          refreshDefinitions: !isManageViewActive(),
+        });
         return;
       }
       if (!hash.startsWith('robot/')) return;
       const id = hash.split('/')[1];
-      if (id) openDetail(id);
+      if (id) openDetail(id, { syncHash: false });
     }
 
     export function initDashboardApp() {
       hydrateActionButtons(document);
+      initThemeControls();
       syncModalScrollLock();
       try {
         state.terminalComponent = new RobotTerminalComponent({
@@ -4007,6 +5477,9 @@ let ROBOT_TYPE_BY_ID = new Map();
           onModeChange: (mode) => {
             state.terminalMode = mode;
           },
+          showReconnectButton: true,
+          showRebuildButton: true,
+          showFullscreenButton: false,
         });
       } catch (error) {
         console.error('Terminal component initialization failed, falling back to compatibility mode.', error);
@@ -4039,6 +5512,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           syncAutoMonitorRefreshState();
           populateFilters();
           populateAddRobotTypeOptions();
+          renderRecorderRobotOptions();
           renderDashboard();
           routeFromHash();
           syncFixModePanels();
@@ -4049,6 +5523,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           syncAutoMonitorRefreshState();
           populateFilters();
           populateAddRobotTypeOptions();
+          renderRecorderRobotOptions();
           renderDashboard();
           routeFromHash();
           syncFixModePanels();
@@ -4062,10 +5537,25 @@ let ROBOT_TYPE_BY_ID = new Map();
       $('#openBugReport')?.addEventListener('click', openBugReportModal);
       $('#openBugReportFloating')?.addEventListener('click', openBugReportModal);
       $('#backFromAddRobot')?.addEventListener('click', showDashboard);
+      initManageTabs();
+      initWorkflowRecorder();
+      initVisualFlows();
       if (addRobotForm) {
         addRobotForm.addEventListener('submit', (event) => {
           event.preventDefault();
           createRobotFromForm();
+        });
+      }
+      if (manageTestEditorForm) {
+        manageTestEditorForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          saveManageTestDefinition();
+        });
+      }
+      if (manageFixEditorForm) {
+        manageFixEditorForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          saveManageFixDefinition();
         });
       }
       initFleetParallelism();
@@ -4090,8 +5580,12 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
 
       window.addEventListener('hashchange', () => {
+        if (state.ignoreNextHashChange) {
+          state.ignoreNextHashChange = false;
+          return;
+        }
         if (!window.location.hash) {
-          showDashboard();
+          showDashboard({ syncHash: false });
           return;
         }
         routeFromHash();

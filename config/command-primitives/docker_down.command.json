@@ -1,0 +1,5 @@
+{
+  "id": "docker_down",
+  "command": "docker compose down",
+  "description": "Stop docker stack"
+}

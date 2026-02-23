@@ -1,0 +1,6 @@
+{
+  "id": "rostopic_list",
+  "command": "timeout 12s rostopic list",
+  "timeoutSec": 12,
+  "description": "ROS topic snapshot"
+}

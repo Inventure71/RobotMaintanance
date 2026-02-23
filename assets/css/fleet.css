@@ -36,30 +36,35 @@
     }
 
     .status-chip {
-      padding: 0.2rem 0.6rem;
+      min-height: var(--pill-height);
+      padding: 0 var(--pill-padding-x);
       border-radius: 999px;
       border: 1px solid;
       align-self: center;
-      font-size: 0.78rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--pill-font-size);
       text-transform: uppercase;
       white-space: nowrap;
-      background: rgba(0,0,0,0.2);
+      line-height: 1;
+      background: var(--status-chip-bg);
       font-weight: 700;
     }
 
     .status-chip.ok {
       color: var(--ok);
-      border-color: rgba(56, 217, 169, 0.6);
+      border-color: var(--status-chip-ok-border);
     }
 
     .status-chip.warn {
       color: var(--warn);
-      border-color: rgba(255, 209, 102, 0.7);
+      border-color: var(--status-chip-warn-border);
     }
 
     .status-chip.err {
       color: var(--err);
-      border-color: rgba(255, 90, 121, 0.7);
+      border-color: var(--status-chip-err-border);
     }
 
     .model-wrap {
@@ -385,7 +390,8 @@
       opacity: 0.8;
     }
 
-    .finding-overlay video {
+    .finding-overlay video,
+    .fixing-overlay video {
       width: auto;
       height: auto;
       max-width: min(72%, 72vh);
@@ -480,12 +486,18 @@
     }
 
     .pill {
-      font-size: 0.78rem;
+      min-height: var(--pill-height);
       border-radius: 999px;
       border: 1px solid var(--line);
-      padding: 0.12rem 0.6rem;
+      padding: 0 var(--pill-padding-x);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      font-size: var(--pill-font-size);
+      font-weight: 700;
       color: #dce5ff;
-      background: rgba(8, 15, 29, 0.5);
+      background: var(--pill-surface-strong);
     }
 
     .battery-pill {
@@ -493,12 +505,14 @@
       --battery-pill-border: rgba(95, 222, 177, 0.42);
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 0.44rem;
+      min-height: var(--pill-height);
       border-radius: 999px;
       border: 1px solid var(--battery-pill-border);
-      padding: 0.18rem 0.58rem;
+      padding: 0 var(--pill-padding-x);
       color: #e8f5ff;
-      background: linear-gradient(145deg, rgba(6, 13, 24, 0.88), rgba(11, 20, 35, 0.7));
+      background: linear-gradient(145deg, var(--pill-surface-strong), rgba(11, 20, 35, 0.7));
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
@@ -542,8 +556,9 @@
     }
 
     .battery-pill-value {
-      font-size: 0.78rem;
-      font-weight: 600;
+      font-size: var(--pill-font-size);
+      font-weight: 700;
+      line-height: 1;
       letter-spacing: 0.015em;
       white-space: nowrap;
     }
@@ -691,57 +706,57 @@
     }
 
     .button.app-button.app-button--intent-run {
-      background: linear-gradient(150deg, rgba(22, 84, 64, 0.95), rgba(17, 62, 50, 0.95));
-      border-color: rgba(56, 217, 169, 0.65);
-      color: #e8fff6;
+      background: var(--button-intent-run-bg);
+      border-color: var(--button-intent-run-border);
+      color: var(--button-intent-run-text);
     }
 
     .button.app-button.app-button--intent-monitor {
-      background: linear-gradient(150deg, rgba(27, 58, 115, 0.95), rgba(22, 48, 96, 0.95));
-      border-color: rgba(138, 198, 255, 0.7);
-      color: #eef7ff;
+      background: var(--button-intent-monitor-bg);
+      border-color: var(--button-intent-monitor-border);
+      color: var(--button-intent-monitor-text);
     }
 
     .button.app-button.app-button--intent-selection {
-      background: linear-gradient(150deg, rgba(104, 78, 30, 0.95), rgba(82, 61, 22, 0.95));
-      border-color: rgba(255, 209, 102, 0.75);
-      color: #fff4d7;
+      background: var(--button-intent-selection-bg);
+      border-color: var(--button-intent-selection-border);
+      color: var(--button-intent-selection-text);
     }
 
     .button.app-button.app-button--intent-navigation {
-      background: linear-gradient(150deg, rgba(50, 61, 87, 0.95), rgba(35, 44, 66, 0.95));
-      border-color: rgba(179, 196, 230, 0.52);
-      color: #ebf1ff;
+      background: var(--button-intent-navigation-bg);
+      border-color: var(--button-intent-navigation-border);
+      color: var(--button-intent-navigation-text);
     }
 
     .button.app-button.app-button--intent-create {
-      background: linear-gradient(150deg, rgba(28, 90, 103, 0.95), rgba(21, 70, 80, 0.95));
-      border-color: rgba(93, 229, 255, 0.62);
-      color: #eaffff;
+      background: var(--button-intent-create-bg);
+      border-color: var(--button-intent-create-border);
+      color: var(--button-intent-create-text);
     }
 
     .button.app-button.app-button--intent-terminal {
-      background: linear-gradient(150deg, rgba(38, 57, 114, 0.95), rgba(29, 43, 91, 0.95));
-      border-color: rgba(144, 168, 255, 0.66);
-      color: #eef2ff;
+      background: var(--button-intent-terminal-bg);
+      border-color: var(--button-intent-terminal-border);
+      color: var(--button-intent-terminal-text);
     }
 
     .button.app-button.app-button--intent-danger {
-      background: linear-gradient(150deg, rgba(116, 31, 50, 0.95), rgba(87, 24, 39, 0.95));
-      border-color: rgba(255, 110, 138, 0.75);
-      color: #ffe8ef;
+      background: var(--button-intent-danger-bg);
+      border-color: var(--button-intent-danger-border);
+      color: var(--button-intent-danger-text);
     }
 
     .button.app-button.app-button--intent-fix {
-      background: linear-gradient(150deg, rgba(102, 64, 20, 0.95), rgba(82, 50, 17, 0.95));
-      border-color: rgba(255, 177, 92, 0.75);
-      color: #fff1dd;
+      background: var(--button-intent-fix-bg);
+      border-color: var(--button-intent-fix-border);
+      color: var(--button-intent-fix-text);
     }
 
     .button.app-button.app-button--intent-utility {
-      background: linear-gradient(150deg, rgba(28, 40, 76, 0.95), rgba(22, 34, 65, 0.95));
-      border-color: rgba(138, 198, 255, 0.44);
-      color: var(--text);
+      background: var(--button-intent-utility-bg);
+      border-color: var(--button-intent-utility-border);
+      color: var(--button-intent-utility-text);
     }
 
     .fix-mode-panel {
@@ -995,6 +1010,336 @@
       line-height: 1.35;
     }
 
+    .manage-robots-shell {
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .manage-tabs-panel {
+      display: grid;
+      gap: 0.7rem;
+      padding: 0.85rem;
+    }
+
+    .manage-tabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .manage-tabs .button.active {
+      border-color: rgba(56, 217, 169, 0.68);
+      background: rgba(18, 58, 46, 0.68);
+      color: #d6ffe9;
+    }
+
+    .manage-tab-status {
+      min-height: 1rem;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .manage-tab-status.ok {
+      color: var(--ok);
+    }
+
+    .manage-tab-status.warn {
+      color: var(--warn);
+    }
+
+    .manage-tab-status.error {
+      color: var(--err);
+    }
+
+    .manage-tab-panel {
+      display: none;
+    }
+
+    .manage-tab-panel.active {
+      display: block;
+    }
+
+    .manage-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .manage-grid.two-cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .manage-list-panel,
+    .manage-editor-panel,
+    .recorder-terminal-panel,
+    .recorder-checks-panel {
+      display: grid;
+      gap: 0.55rem;
+      align-content: start;
+    }
+
+    .manage-list-panel h2,
+    .manage-editor-panel h2,
+    .recorder-terminal-panel h2,
+    .recorder-checks-panel h2 {
+      margin: 0;
+      font-size: 0.92rem;
+    }
+
+    .manage-entity-list {
+      display: grid;
+      gap: 0.4rem;
+      max-height: 42vh;
+      overflow: auto;
+    }
+
+    .manage-list-item {
+      border: 1px solid rgba(138, 198, 255, 0.2);
+      border-radius: 10px;
+      padding: 0.45rem 0.55rem;
+      background: rgba(9, 16, 35, 0.72);
+      color: #d9e6ff;
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      width: 100%;
+      text-align: left;
+    }
+
+    .manage-list-empty {
+      color: var(--muted);
+      font-size: 0.84rem;
+      border: 1px dashed rgba(138, 198, 255, 0.24);
+      border-radius: 10px;
+      padding: 0.55rem;
+      background: rgba(8, 14, 30, 0.45);
+    }
+
+    .manage-editor-form {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .manage-editor-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .manage-editor-status {
+      min-height: 1rem;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .manage-editor-status.ok {
+      color: var(--ok);
+    }
+
+    .manage-editor-status.warn {
+      color: var(--warn);
+    }
+
+    .manage-editor-status.error {
+      color: var(--err);
+    }
+
+    .manage-json-input {
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.82rem;
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .flow-builder-topbar {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .flow-builder-topbar-main {
+      display: grid;
+      grid-template-columns: auto minmax(180px, 240px) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+      gap: 0.55rem;
+      align-items: end;
+    }
+
+    .flow-builder-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .recorder-summary-pill {
+      border: 1px solid rgba(138, 198, 255, 0.28);
+      background: rgba(9, 16, 35, 0.7);
+      color: #d9e6ff;
+      border-radius: 999px;
+      padding: 0.16rem 0.55rem;
+      font-size: 0.76rem;
+      letter-spacing: 0.01em;
+      font-weight: 700;
+    }
+
+    .recorder-summary-pill.active {
+      border-color: rgba(56, 217, 169, 0.58);
+      background: rgba(18, 58, 46, 0.72);
+      color: #d6ffe9;
+    }
+
+    .recorder-flow-hint,
+    .recorder-section-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.3;
+    }
+
+    .flow-builder-grid {
+      align-items: start;
+    }
+
+    .recorder-terminal-output {
+      border: 1px solid rgba(138, 198, 255, 0.2);
+      border-radius: 10px;
+      background: rgba(5, 9, 20, 0.9);
+      color: #dff9ff;
+      min-height: 210px;
+      max-height: 320px;
+      padding: 0.55rem;
+      overflow: auto;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.8rem;
+      line-height: 1.34;
+      white-space: pre-wrap;
+    }
+
+    .recorder-terminal-line {
+      margin-bottom: 0.22rem;
+    }
+
+    .recorder-terminal-line.ok {
+      color: var(--ok);
+    }
+
+    .recorder-terminal-line.warn {
+      color: var(--warn);
+    }
+
+    .recorder-terminal-line.err {
+      color: var(--err);
+    }
+
+    .recorder-command-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .recorder-primitive-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      color: #d6e2ff;
+      white-space: nowrap;
+    }
+
+    .recorder-step-item.active {
+      border-color: rgba(56, 217, 169, 0.6);
+      background: rgba(18, 58, 46, 0.62);
+      color: #d6ffe9;
+    }
+
+    .recorder-step-main,
+    .recorder-check-main,
+    .recorder-output-main {
+      display: grid;
+      gap: 0.14rem;
+      min-width: 0;
+    }
+
+    .recorder-step-title,
+    .recorder-check-title,
+    .recorder-output-title {
+      font-size: 0.82rem;
+      color: #e0ebff;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .recorder-step-meta,
+    .recorder-check-meta,
+    .recorder-output-meta {
+      color: var(--muted);
+      font-size: 0.75rem;
+      line-height: 1.22;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .flow-builder-output-form,
+    .flow-builder-read-form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+
+    .flow-builder-output-form .form-field,
+    .flow-builder-read-form .form-field {
+      margin-bottom: 0;
+    }
+
+    .flow-builder-workflow-panel,
+    .flow-builder-terminal-panel {
+      display: grid;
+      gap: 0.55rem;
+      align-content: start;
+    }
+
+    .flow-builder-workflow-panel h2,
+    .flow-builder-terminal-panel h2 {
+      margin-top: 0.2rem;
+    }
+
+    .recorder-output-item,
+    .recorder-flow-item {
+      align-items: flex-start;
+    }
+
+    .recorder-check-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .recorder-type-targets {
+      border: 1px solid rgba(138, 198, 255, 0.22);
+      border-radius: 10px;
+      background: rgba(8, 14, 30, 0.52);
+      min-height: 52px;
+      max-height: 180px;
+      overflow: auto;
+      padding: 0.45rem;
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .recorder-type-option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.4rem;
+      align-items: center;
+      font-size: 0.82rem;
+      color: #d6e2ff;
+    }
+
     .layout-cols {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1089,6 +1434,14 @@
       flex: 0 0 auto;
     }
 
+    .test-row .pill,
+    .test-row .status-chip,
+    .test-title .pill {
+      min-height: 1.28rem;
+      padding: 0.08rem 0.42rem;
+      font-size: 0.72rem;
+    }
+
     .test-value {
       font-size: 0.72rem;
       color: var(--muted);
@@ -1148,10 +1501,24 @@
       .add-robot-side-panel {
         position: static;
       }
+
+      .manage-grid.two-cols {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-builder-topbar-main {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
     }
 
     @media (max-width: 640px) {
       .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-builder-output-form,
+      .flow-builder-read-form {
         grid-template-columns: 1fr;
       }
     }

@@ -4,7 +4,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 .run/
+.vscode/
 *.log
 tasks
 logs
 NextSteps.md
+.env
+.env.local

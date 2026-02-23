@@ -1,0 +1,16 @@
+{
+  "id": "flash_fix",
+  "label": "Flash fix",
+  "enabled": true,
+  "description": "Reflash firmware and restart docker stack, then rerun diagnostics.",
+  "params": {
+    "flashTimeoutSec": 900
+  },
+  "execute": [
+    { "id": "docker_down", "command": "$docker_down$" },
+    { "id": "flash", "command": "$flash_firmware$", "timeoutSec": { "ref": "flashTimeoutSec" } },
+    { "id": "docker_up", "command": "$docker_up$" },
+    { "id": "wait", "command": "$sleep_20s$" }
+  ],
+  "postTestIds": ["general", "movement", "battery", "lidar", "camera", "proximity"]
+}

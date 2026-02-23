@@ -1,0 +1,157 @@
+{
+  "id": "topics_snapshot",
+  "label": "Topics Snapshot",
+  "enabled": true,
+  "execute": [
+    {
+      "id": "setup_ros",
+      "command": "source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true"
+    },
+    {
+      "id": "topics",
+      "command": "$rostopic_list$",
+      "saveAs": "topics_raw",
+      "reuseKey": "rostopic_list"
+    }
+  ],
+  "checks": [
+    {
+      "id": "general",
+      "metadata": {
+        "label": "General Topics",
+        "icon": "📡",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "All required topics present" },
+          { "status": "error", "value": "missing", "details": "Missing required topics" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/buttons", "/diagnostics", "/imu", "/joint_states", "/pose", "/rosout", "/rosout_agg", "/tf", "/tf_static"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "All required topics present" },
+      "fail": { "status": "error", "value": "missing", "details": "Missing required topics" }
+    },
+    {
+      "id": "movement",
+      "metadata": {
+        "label": "Movement",
+        "icon": "🚗",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "All movement topics present" },
+          { "status": "error", "value": "missing", "details": "Missing movement topics" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/cmd_ser", "/cmd_vel", "/odom", "/odom/wheel", "/set_pose", "/velocity"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "All movement topics present" },
+      "fail": { "status": "error", "value": "missing", "details": "Missing movement topics" }
+    },
+    {
+      "id": "battery",
+      "metadata": {
+        "label": "Battery",
+        "icon": "🔋",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "Battery topic present" },
+          { "status": "error", "value": "missing", "details": "Battery topic missing" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/battery"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "Battery topic present" },
+      "fail": { "status": "error", "value": "missing", "details": "Battery topic missing" }
+    },
+    {
+      "id": "lidar",
+      "metadata": {
+        "label": "Lidar",
+        "icon": "🌐",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "Lidar topic present" },
+          { "status": "error", "value": "missing", "details": "Lidar topic missing" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/scan"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "Lidar topic present" },
+      "fail": { "status": "error", "value": "missing", "details": "Lidar topic missing" }
+    },
+    {
+      "id": "proximity",
+      "metadata": {
+        "label": "Proximity Sensors",
+        "icon": "👁️",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "All proximity topics present" },
+          { "status": "error", "value": "missing", "details": "Missing proximity topics" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/range/fl", "/range/fr", "/range/rl", "/range/rr"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "All proximity topics present" },
+      "fail": { "status": "error", "value": "missing", "details": "Missing proximity topics" }
+    },
+    {
+      "id": "camera",
+      "metadata": {
+        "label": "Camera",
+        "icon": "📷",
+        "manualOnly": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet",
+        "possibleResults": [
+          { "status": "ok", "value": "all_present", "details": "All camera topics present" },
+          { "status": "error", "value": "missing", "details": "Missing camera topics" }
+        ]
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": ["/camera/color/camera_info", "/camera/color/image_raw", "/camera/depth/camera_info", "/camera/depth/image_raw", "/camera/depth/points", "/camera/depth_registered/points", "/camera/extrinsic/depth_to_color", "/camera/ir/camera_info", "/camera/ir/image_raw", "/camera/reset_device"],
+        "requireAll": true
+      },
+      "pass": { "status": "ok", "value": "all_present", "details": "All camera topics present" },
+      "fail": { "status": "error", "value": "missing", "details": "Missing camera topics" }
+    }
+  ]
+}

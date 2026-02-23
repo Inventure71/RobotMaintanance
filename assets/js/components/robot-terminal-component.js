@@ -15,6 +15,9 @@ export class RobotTerminalComponent {
       this.onFallbackCommand = options.onFallbackCommand || (() => {});
       this.onPresetLaunch = options.onPresetLaunch || (() => {});
       this.onModeChange = options.onModeChange || (() => {});
+      this.showReconnectButton = options.showReconnectButton !== false;
+      this.showRebuildButton = options.showRebuildButton !== false;
+      this.showFullscreenButton = options.showFullscreenButton !== false;
       this.terminal = null;
       this.fitAddon = null;
       this.streamSocket = null;
@@ -255,33 +258,43 @@ export class RobotTerminalComponent {
         label: 'Reconnect SSH',
         title: 'Reconnect the SSH session for this terminal',
       });
-      reconnect.classList.add('terminal-reconnect-btn');
-      this._reconnectButtonElement = reconnect;
-      reconnect.addEventListener('click', () => {
-        this._reconnectSession();
-      });
-      actionRow.appendChild(reconnect);
+      if (this.showReconnectButton) {
+        reconnect.classList.add('terminal-reconnect-btn');
+        this._reconnectButtonElement = reconnect;
+        reconnect.addEventListener('click', () => {
+          this._reconnectSession();
+        });
+        actionRow.appendChild(reconnect);
+      } else {
+        this._reconnectButtonElement = null;
+      }
 
       const rebuildTerminal = createActionButton({
         intent: 'utility',
         compact: true,
         label: 'Rebuild terminal',
       });
-      rebuildTerminal.addEventListener('click', () => {
-        this.connect(this.currentRobot, this.presetCommands);
-      });
-      actionRow.appendChild(rebuildTerminal);
+      if (this.showRebuildButton) {
+        rebuildTerminal.addEventListener('click', () => {
+          this.connect(this.currentRobot, this.presetCommands);
+        });
+        actionRow.appendChild(rebuildTerminal);
+      }
 
-      const fullscreenButton = createActionButton({
-        intent: 'navigation',
-        compact: true,
-      });
-      this._fullscreenButtonElement = fullscreenButton;
-      fullscreenButton.addEventListener('click', () => {
-        this._toggleFullscreen();
-      });
-      this._syncFullscreenButtonLabel();
-      mainRow.appendChild(fullscreenButton);
+      if (this.showFullscreenButton) {
+        const fullscreenButton = createActionButton({
+          intent: 'navigation',
+          compact: true,
+        });
+        this._fullscreenButtonElement = fullscreenButton;
+        fullscreenButton.addEventListener('click', () => {
+          this._toggleFullscreen();
+        });
+        this._syncFullscreenButtonLabel();
+        mainRow.appendChild(fullscreenButton);
+      } else {
+        this._fullscreenButtonElement = null;
+      }
 
       this._setConnectionStatus(this._connectionState, this._connectionMessage);
     }
