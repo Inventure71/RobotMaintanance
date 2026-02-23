@@ -152,6 +152,7 @@ class TestRunnerMixin:
                 updates[test_id] = {
                     "status": "warning",
                     "value": "unknown",
+                    "reason": "OFFLINE_STALE",
                     "details": stale_details,
                     "ms": ms,
                     "checkedAt": checked_at,

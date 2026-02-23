@@ -60,6 +60,7 @@ class BatteryParserMixin:
                 return {
                     "status": "error",
                     "value": "unavailable",
+                    "reason": "BATTERY_UNREADABLE",
                     "details": "Unable to read /battery topic.",
                     "ms": elapsed_ms,
                     "checkedAt": checked_at,
@@ -112,7 +113,8 @@ class BatteryParserMixin:
             return {
                 "status": "warning",
                 "value": "unknown",
-                "details": "Read /battery but could not extract percentage or usable voltage.",
+                "reason": "BATTERY_UNREADABLE",
+                "details": "Battery unreadable: read /battery but could not extract percentage or usable voltage.",
                 "ms": elapsed_ms,
                 "checkedAt": checked_at,
                 "source": "auto-monitor",
@@ -120,10 +122,13 @@ class BatteryParserMixin:
 
         if percent_value <= self.LOW_BATTERY_ERROR_PERCENT:
             status = "error"
+            reason = "LOW_BATTERY"
         elif percent_value <= self.LOW_BATTERY_WARNING_PERCENT:
             status = "warning"
+            reason = "LOW_BATTERY"
         else:
             status = "ok"
+            reason = "BATTERY_OK"
 
         percent_text = f"{int(round(percent_value))}%"
         details = "Battery percentage from /battery topic."
@@ -134,12 +139,20 @@ class BatteryParserMixin:
             )
         else:
             details = f"Battery {percent_text} from /battery topic."
+        if status == "error":
+            details = (
+                f"{details} Critical battery threshold is <= {self.LOW_BATTERY_ERROR_PERCENT:.0f}% "
+                f"(warning <= {self.LOW_BATTERY_WARNING_PERCENT:.0f}%)."
+            )
+        elif status == "warning":
+            details = f"{details} Low battery threshold is <= {self.LOW_BATTERY_WARNING_PERCENT:.0f}%."
         if voltage_value is not None:
             details = f"{details} Voltage {voltage_value:.2f}V."
 
         return {
             "status": status,
             "value": percent_text,
+            "reason": reason,
             "details": details,
             "ms": elapsed_ms,
             "checkedAt": checked_at,

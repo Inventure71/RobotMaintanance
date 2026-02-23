@@ -31,6 +31,7 @@ def test_parse_battery_output_extracts_percentage_and_voltage():
 
     assert result["status"] == "ok"
     assert result["value"] == "82%"
+    assert result["reason"] == "BATTERY_OK"
     assert "12.61V" in result["details"]
 
 
@@ -43,6 +44,7 @@ def test_parse_battery_output_falls_back_to_voltage_scale_when_percentage_zero()
 
     assert result["status"] == "ok"
     assert result["value"] == "70%"
+    assert result["reason"] == "BATTERY_OK"
     assert "estimated from voltage" in result["details"]
 
 
@@ -55,6 +57,21 @@ def test_parse_battery_output_marks_dying_voltage_as_zero_percent():
 
     assert result["status"] == "error"
     assert result["value"] == "0%"
+    assert result["reason"] == "LOW_BATTERY"
+    assert "Critical battery threshold is <= 15%" in result["details"]
+
+
+def test_parse_battery_output_marks_unreadable_payload_with_explicit_reason():
+    manager = _manager()
+    result = manager._parse_battery_output(
+        "this payload has no parsable battery fields\n",
+        elapsed_ms=8,
+    )
+
+    assert result["status"] == "warning"
+    assert result["value"] == "unknown"
+    assert result["reason"] == "BATTERY_UNREADABLE"
+    assert "Battery unreadable" in result["details"]
 
 
 def test_parse_battery_output_handles_ros_battery_with_present_false():
@@ -519,8 +536,10 @@ def test_apply_online_probe_sets_non_online_results_to_warning():
     assert runtime["online"]["source"] == "live"
     assert runtime["battery"]["status"] == "warning"
     assert runtime["battery"]["value"] == "unknown"
+    assert runtime["battery"]["reason"] == "OFFLINE_STALE"
     assert runtime["general"]["status"] == "warning"
     assert runtime["general"]["value"] == "unknown"
+    assert runtime["general"]["reason"] == "OFFLINE_STALE"
 
 
 def test_monitor_config_defaults_and_update():

@@ -104,6 +104,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       proximity: 'PRX',
       camera: 'CAM',
     });
+    const LOW_BATTERY_WARNING_PERCENT = 30;
 
     function clampOnlineCountdownMs(valueMs) {
       const numeric = Number.isFinite(valueMs) ? valueMs : ONLINE_CHECK_TIMEOUT_MS;
@@ -540,6 +541,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         status: result ? normalizeStatus(result.status) : normalizeStatus(def.defaultStatus),
         value: normalizeText(result ? result.value : def.defaultValue, def.defaultValue),
         details: normalizeText(result ? result.details : def.defaultDetails, def.defaultDetails),
+        reason: normalizeText(result?.reason, ''),
       };
     }
 
@@ -558,6 +560,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             status: normalizeStatus(raw.status),
             value: normalizeText(raw.value, 'n/a'),
             details: normalizeText(raw.details, 'Backend populated test'),
+            reason: normalizeText(raw.reason, ''),
           };
         }
       });
@@ -592,8 +595,48 @@ let ROBOT_TYPE_BY_ID = new Map();
       };
     }
 
-    function buildTestPreviewText(value, details) {
-      return `${normalizeText(value, 'n/a')} • ${normalizeText(details, 'No detail available')}`;
+    function normalizeBatteryReason(reason) {
+      return normalizeText(reason, '').toUpperCase();
+    }
+
+    function batteryReasonText(result, options = {}) {
+      const reason = normalizeBatteryReason(result?.reason);
+      if (reason === 'LOW_BATTERY') {
+        if (options.short) return 'Low battery';
+        return `Low battery (<${LOW_BATTERY_WARNING_PERCENT}%)`;
+      }
+      if (reason === 'BATTERY_UNREADABLE') {
+        if (options.short) return 'Battery unreadable';
+        return 'Battery unreadable';
+      }
+      if (reason === 'OFFLINE_STALE') {
+        if (options.short) return 'Battery stale';
+        return 'Battery stale (offline)';
+      }
+      return '';
+    }
+
+    function buildTestPreviewText(value, details, options = {}) {
+      const prefix = normalizeText(options.prefix, '');
+      const base = `${normalizeText(value, 'n/a')} • ${normalizeText(details, 'No detail available')}`;
+      return prefix ? `${prefix} • ${base}` : base;
+    }
+
+    function buildTestPreviewTextForResult(testId, result) {
+      const prefix =
+        normalizeText(testId, '').toLowerCase() === 'battery'
+          ? batteryReasonText(result)
+          : '';
+      return buildTestPreviewText(result?.value, result?.details, { prefix });
+    }
+
+    function getIssueLabel(testId, testResult, definitions) {
+      const id = normalizeText(testId, '');
+      if (id.toLowerCase() === 'battery') {
+        const batteryReasonLabel = batteryReasonText(testResult, { short: true });
+        if (batteryReasonLabel) return batteryReasonLabel;
+      }
+      return getDefinitionLabel(definitions, id);
     }
 
     function syncModalScrollLock() {
@@ -1572,7 +1615,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       return Object.entries(robot.tests)
         .filter(([, test]) => test.status !== 'ok')
         .slice(0, 3)
-        .map(([id]) => getDefinitionLabel(testDefinitions, id));
+        .map(([id, test]) => getIssueLabel(id, test, testDefinitions));
     }
 
     function renderCard(robot) {
@@ -1645,6 +1688,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           <span data-role="summary-battery-pill">${renderBatteryPill({
             value: batteryState.value,
             status: batteryState.status,
+            reason: batteryState.reason,
             size: 'default',
           })}</span>
         </div>`;
@@ -1830,6 +1874,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         summaryBatteryHost.innerHTML = renderBatteryPill({
           value: batteryState.value,
           status: batteryState.status,
+          reason: batteryState.reason,
           size: 'default',
         });
       }
@@ -1906,6 +1951,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           ${renderBatteryPill({
             value: batteryState.value,
             status: batteryState.status,
+            reason: batteryState.reason,
             size: 'small',
           })}
           <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
@@ -1970,7 +2016,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           }
           const valueNode = row.querySelector('[data-role="detail-test-value"]');
           if (valueNode) {
-            const previewText = buildTestPreviewText(value, details);
+            const previewText = buildTestPreviewTextForResult(testId, result);
             valueNode.textContent = previewText;
             valueNode.title = previewText;
           }
@@ -2878,6 +2924,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           status: normalizeStatus(result.status),
           value: normalizeText(result.value, 'n/a'),
           details: normalizeText(result.details, 'No detail available'),
+          reason: normalizeText(result.reason, ''),
         };
         const debugResult = normalizeTestDebugResult(result);
         if (debugResult) {
@@ -3005,6 +3052,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           ${renderBatteryPill({
             value: batteryState.value,
             status: batteryState.status,
+            reason: batteryState.reason,
             size: 'small',
           })}
           <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
@@ -3037,7 +3085,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       definitions.forEach((def) => {
         const result = robot.tests[def.id];
         const icon = getTestIconPresentation(def.id, def.icon);
-        const previewText = buildTestPreviewText(result.value, result.details);
+        const previewText = buildTestPreviewTextForResult(def.id, result);
         const row = document.createElement('div');
         row.className = 'test-row';
         row.setAttribute('data-test-id', def.id);
@@ -3074,7 +3122,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         .filter(([id]) => !definitions.find((test) => test.id === id))
         .forEach(([id, result]) => {
           const icon = getTestIconPresentation(id, '⚙️');
-          const previewText = buildTestPreviewText(result.value, result.details);
+          const previewText = buildTestPreviewTextForResult(id, result);
           const row = document.createElement('div');
           row.className = 'test-row';
           row.setAttribute('data-test-id', id);
@@ -3836,9 +3884,13 @@ let ROBOT_TYPE_BY_ID = new Map();
       const definitionLabel = getDefinitionLabel(definitions, testId);
       const basicResult = robot?.tests?.[testId] || { status: 'warning', value: 'n/a', details: 'No detail available' };
       const debugResult = robot?.testDebug?.[testId] || null;
+      const reasonLabel =
+        normalizeText(testId, '').toLowerCase() === 'battery'
+          ? batteryReasonText(basicResult)
+          : '';
 
       testDebugTitle.textContent = `${robot.name} • ${definitionLabel}`;
-      testDebugSummary.textContent = `Status: ${basicResult.status} | Value: ${basicResult.value} | Details: ${basicResult.details}`;
+      testDebugSummary.textContent = `Status: ${basicResult.status} | Value: ${basicResult.value} | Details: ${basicResult.details}${reasonLabel ? ` | Reason: ${reasonLabel}` : ''}`;
       testDebugBody.replaceChildren();
 
       const summaryBlock = document.createElement('pre');
@@ -5293,6 +5345,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         status: normalizeStatus(raw.status),
         value: normalizeText(raw.value, 'n/a'),
         details: normalizeText(raw.details, 'No detail available'),
+        reason: normalizeText(raw.reason, ''),
         source,
         checkedAt: Number.isFinite(Number(raw?.checkedAt)) ? Number(raw.checkedAt) : 0,
       };
@@ -5340,7 +5393,8 @@ let ROBOT_TYPE_BY_ID = new Map();
           return (
             normalizeStatus(prior.status) !== update.status ||
             normalizeText(prior.value, '') !== update.value ||
-            normalizeText(prior.details, '') !== update.details
+            normalizeText(prior.details, '') !== update.details ||
+            normalizeText(prior.reason, '') !== update.reason
           );
         });
         const previousActivity = normalizeRobotActivity(currentRobot?.activity);

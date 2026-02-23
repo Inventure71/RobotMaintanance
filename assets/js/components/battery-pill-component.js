@@ -42,6 +42,17 @@ function normalizeBatteryDisplayValue(rawValue) {
   return `${Math.round(percent)}%`;
 }
 
+function normalizeReason(value) {
+  return normalizeText(value, '').toUpperCase();
+}
+
+function batteryReasonBadge(reason) {
+  if (reason === 'LOW_BATTERY') return 'low';
+  if (reason === 'BATTERY_UNREADABLE') return 'unreadable';
+  if (reason === 'OFFLINE_STALE') return 'stale';
+  return '';
+}
+
 function normalizeBatteryTone(status, levelPercent) {
   const state = normalizeText(status, '').toLowerCase();
   if (state === 'error') return 'critical';
@@ -58,13 +69,16 @@ export function renderBatteryPill(options = {}) {
   const label = normalizeText(options.label, 'Battery');
   const size = options.size === 'small' ? 'small' : 'default';
   const showLabel = options.showLabel !== false;
+  const reason = normalizeReason(options.reason);
   const displayValue = normalizeBatteryDisplayValue(options.value);
   const levelPercent = getPercentFromRaw(options.value);
   const tone = normalizeBatteryTone(options.status, levelPercent);
   const safeLevelPercent = Number.isFinite(levelPercent) ? Math.round(levelPercent) : 0;
   const levelStyle = `style="width:${safeLevelPercent}%"`;
-  const valueWithLabel = showLabel ? `${label} ${displayValue}` : displayValue;
-  const titleText = showLabel ? `${label}: ${displayValue}` : displayValue;
+  const reasonText = batteryReasonBadge(reason);
+  const valueWithReason = reasonText ? `${displayValue} (${reasonText})` : displayValue;
+  const valueWithLabel = showLabel ? `${label} ${valueWithReason}` : valueWithReason;
+  const titleText = showLabel ? `${label}: ${valueWithReason}` : valueWithReason;
 
   return `
     <span class="battery-pill battery-pill-${tone} battery-pill-${size}" title="${escapeHtml(titleText)}" aria-label="${escapeHtml(titleText)}">
