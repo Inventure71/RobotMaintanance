@@ -42,13 +42,26 @@ class ActivityGuardMixin:
                 return True
             return any(active_robot_id == robot_id for active_robot_id, _session in self._active_test_runs)
 
-    def start_search_run(self, robot_id: str) -> None:
+    def is_robot_busy(self, robot_id: str) -> bool:
         normalized_robot_id = normalize_text(robot_id, "")
         if not normalized_robot_id:
-            return
-        self._mark_manual_activity(robot_id=normalized_robot_id, source="manual-search")
+            return False
+        return self._is_robot_busy(normalized_robot_id)
+
+    def start_search_run(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
         with self._lock:
+            if normalized_robot_id in self._active_search_runs:
+                return False
+            if normalized_robot_id in self._active_fix_runs:
+                return False
+            if any(active_robot_id == normalized_robot_id for active_robot_id, _session in self._active_test_runs):
+                return False
             self._active_search_runs.add(normalized_robot_id)
+        self._mark_manual_activity(robot_id=normalized_robot_id, source="manual-search")
+        return True
 
     def finish_search_run(self, robot_id: str) -> None:
         normalized_robot_id = normalize_text(robot_id, "")

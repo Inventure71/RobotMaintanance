@@ -9,3 +9,5 @@ __pycache__/
 tasks
 logs
 NextSteps.md
+.env
+.env.local

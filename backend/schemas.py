@@ -150,3 +150,7 @@ class PrimitiveUpsertRequest(BaseModel):
 class RobotTypeMappingPatchRequest(BaseModel):
     testRefs: list[str] | None = None
     fixRefs: list[str] | None = None
+
+
+class MappingUpdateRequest(BaseModel):
+    robotTypeIds: list[str] = Field(default_factory=list)

@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from ..connectors import OrchestrateConnector, ReadConnector, WriteConnector
-from ..normalization import normalize_type_key
+from ..normalization import normalize_text, normalize_type_key
 from ..test_executor import TestExecutor
 from .activity_guard import ActivityGuardMixin
 from .auto_monitor_worker import AutoMonitorWorkerMixin
@@ -214,6 +214,50 @@ class TerminalManager(
                 check_definitions_by_id=self._check_definitions_by_id,
                 orchestrate_connector=self._orchestrate_connector,
             )
+
+            valid_test_ids_by_robot: dict[str, set[str]] = {}
+            for robot_id, robot_payload in self.robots_by_id.items():
+                normalized_robot_id = normalize_text(robot_id, "")
+                if not normalized_robot_id or not isinstance(robot_payload, dict):
+                    continue
+                type_key = normalize_type_key(robot_payload.get("type"))
+                robot_type = self.robot_types_by_id.get(type_key) if type_key else {}
+                raw_tests = robot_type.get("tests") if isinstance(robot_type, dict) else []
+                valid_test_ids = {"online"}
+                for test_entry in raw_tests if isinstance(raw_tests, list) else []:
+                    if not isinstance(test_entry, dict):
+                        continue
+                    test_id = normalize_text(test_entry.get("id"), "")
+                    if test_id:
+                        valid_test_ids.add(test_id)
+                valid_test_ids_by_robot[normalized_robot_id] = valid_test_ids
+
+            for runtime_robot_id in list(self._runtime_tests.keys()):
+                normalized_runtime_robot_id = normalize_text(runtime_robot_id, "")
+                valid_test_ids = valid_test_ids_by_robot.get(normalized_runtime_robot_id)
+                if not valid_test_ids:
+                    self._runtime_tests.pop(runtime_robot_id, None)
+                    self._runtime_activity.pop(runtime_robot_id, None)
+                    self._online_cache.pop(runtime_robot_id, None)
+                    continue
+
+                existing_tests = self._runtime_tests.get(runtime_robot_id, {})
+                pruned_tests = {
+                    normalize_text(test_id, ""): payload
+                    for test_id, payload in existing_tests.items()
+                    if isinstance(payload, dict) and normalize_text(test_id, "") in valid_test_ids
+                }
+                if pruned_tests:
+                    self._runtime_tests[runtime_robot_id] = pruned_tests
+                else:
+                    self._runtime_tests.pop(runtime_robot_id, None)
+                if "online" not in pruned_tests:
+                    self._online_cache.pop(runtime_robot_id, None)
+
+            for runtime_robot_id in list(self._runtime_activity.keys()):
+                normalized_runtime_robot_id = normalize_text(runtime_robot_id, "")
+                if normalized_runtime_robot_id not in valid_test_ids_by_robot:
+                    self._runtime_activity.pop(runtime_robot_id, None)
 
         return {
             "robotCount": len(self.robots_by_id),

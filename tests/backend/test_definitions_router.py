@@ -379,3 +379,102 @@ def test_publish_and_mapping_make_test_immediately_runnable(tmp_path: Path):
     results = run_response.json().get("results", [])
     assert len(results) == 1
     assert results[0]["id"] == "ping_check"
+
+
+def test_update_test_mappings_uses_check_ids_and_supports_unmap(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    create_response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "camera_snapshot_v2",
+            "label": "Camera Snapshot V2",
+            "enabled": True,
+            "mode": "orchestrate",
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "camera_snapshot_v2__camera",
+                    "label": "Camera",
+                    "read": {
+                        "kind": "contains_string",
+                        "inputRef": "topics_raw",
+                        "needle": "/camera",
+                        "caseSensitive": False,
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "found"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    )
+    assert create_response.status_code == 200
+
+    map_response = client.put(
+        "/api/definitions/tests/camera_snapshot_v2/mappings",
+        json={"robotTypeIds": ["rosbot-lite"]},
+    )
+    assert map_response.status_code == 200
+    summary = map_response.json().get("summary", {})
+    robot_types = summary.get("robotTypes", [])
+    lite_type = next(item for item in robot_types if item.get("id") == "rosbot-lite")
+    assert "camera_snapshot_v2__camera" in lite_type.get("testRefs", [])
+    assert "camera_snapshot_v2" not in lite_type.get("testRefs", [])
+
+    unmap_response = client.put(
+        "/api/definitions/tests/camera_snapshot_v2/mappings",
+        json={"robotTypeIds": []},
+    )
+    assert unmap_response.status_code == 200
+    summary = unmap_response.json().get("summary", {})
+    robot_types = summary.get("robotTypes", [])
+    lite_type = next(item for item in robot_types if item.get("id") == "rosbot-lite")
+    assert "camera_snapshot_v2__camera" not in lite_type.get("testRefs", [])
+    assert "camera_snapshot_v2" not in lite_type.get("testRefs", [])
+
+
+def test_delete_test_removes_mapped_check_refs(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    create_response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "delete_probe",
+            "label": "Delete Probe",
+            "enabled": True,
+            "mode": "orchestrate",
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "delete_probe__camera",
+                    "label": "Camera",
+                    "read": {
+                        "kind": "contains_string",
+                        "inputRef": "topics_raw",
+                        "needle": "/camera",
+                        "caseSensitive": False,
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "found"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    )
+    assert create_response.status_code == 200
+
+    map_response = client.put(
+        "/api/definitions/tests/delete_probe/mappings",
+        json={"robotTypeIds": ["rosbot-2-pro"]},
+    )
+    assert map_response.status_code == 200
+    mapped_refs = next(
+        item for item in map_response.json().get("summary", {}).get("robotTypes", [])
+        if item.get("id") == "rosbot-2-pro"
+    ).get("testRefs", [])
+    assert "delete_probe__camera" in mapped_refs
+
+    delete_response = client.delete("/api/definitions/tests/delete_probe")
+    assert delete_response.status_code == 200
+    summary = delete_response.json().get("summary", {})
+    robot_types = summary.get("robotTypes", [])
+    rosbot_type = next(item for item in robot_types if item.get("id") == "rosbot-2-pro")
+    assert "delete_probe__camera" not in rosbot_type.get("testRefs", [])
+    assert all(not ref.startswith("delete_probe__") for ref in rosbot_type.get("testRefs", []))

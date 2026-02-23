@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from ..definition_service import DefinitionService
 from ..schemas import (
     FixDefinitionUpsertRequest,
+    MappingUpdateRequest,
     PrimitiveUpsertRequest,
     RobotTypeMappingPatchRequest,
     TestDefinitionUpsertRequest,
@@ -46,5 +47,21 @@ def create_definitions_router(definition_service: DefinitionService) -> APIRoute
             test_refs=body.testRefs,
             fix_refs=body.fixRefs,
         )
+
+    @router.delete("/api/definitions/tests/{test_id}")
+    def delete_test_definition(test_id: str) -> dict[str, Any]:
+        return definition_service.delete_test(test_id)
+
+    @router.delete("/api/definitions/fixes/{fix_id}")
+    def delete_fix_definition(fix_id: str) -> dict[str, Any]:
+        return definition_service.delete_fix(fix_id)
+
+    @router.put("/api/definitions/tests/{test_id}/mappings")
+    def update_test_mappings(test_id: str, body: MappingUpdateRequest) -> dict[str, Any]:
+        return definition_service.set_test_mappings(test_id, body.robotTypeIds)
+
+    @router.put("/api/definitions/fixes/{fix_id}/mappings")
+    def update_fix_mappings(fix_id: str, body: MappingUpdateRequest) -> dict[str, Any]:
+        return definition_service.set_fix_mappings(fix_id, body.robotTypeIds)
 
     return router

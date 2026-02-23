@@ -58,6 +58,52 @@ class DefinitionService:
             out.append(text)
         return out
 
+    def _get_check_ids_for_test_definition(self, definition_id: str) -> list[str]:
+        target_definition_id = normalize_text(definition_id, "")
+        if not target_definition_id:
+            return []
+        check_definitions_by_id = getattr(self._terminal_manager, "_check_definitions_by_id", {}) or {}
+        check_ids: list[str] = []
+        seen: set[str] = set()
+        for check_id, check_payload in check_definitions_by_id.items():
+            if not isinstance(check_payload, dict):
+                continue
+            if normalize_text(check_payload.get("definitionId"), "") != target_definition_id:
+                continue
+            normalized_check_id = normalize_text(check_id, "")
+            if not normalized_check_id or normalized_check_id in seen:
+                continue
+            seen.add(normalized_check_id)
+            check_ids.append(normalized_check_id)
+        return check_ids
+
+    def _remove_test_refs_for_definition(
+        self,
+        refs: list[str],
+        *,
+        definition_id: str,
+        check_ids: set[str],
+    ) -> list[str]:
+        target_definition_id = normalize_text(definition_id, "")
+        if not target_definition_id:
+            return self._normalize_string_list(refs)
+        legacy_prefix = f"{target_definition_id}__"
+        check_definitions_by_id = getattr(self._terminal_manager, "_check_definitions_by_id", {}) or {}
+        cleaned: list[str] = []
+        for ref in self._normalize_string_list(refs):
+            if ref == target_definition_id:
+                continue
+            if ref in check_ids:
+                continue
+            if ref.startswith(legacy_prefix):
+                continue
+            check_payload = check_definitions_by_id.get(ref)
+            if isinstance(check_payload, dict):
+                if normalize_text(check_payload.get("definitionId"), "") == target_definition_id:
+                    continue
+            cleaned.append(ref)
+        return cleaned
+
     @staticmethod
     def _write_json(path: Path, payload: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -414,3 +460,139 @@ class DefinitionService:
             "fixRefs": self._normalize_string_list(target_entry.get("fixRefs")),
             "summary": self.get_summary(),
         }
+
+    def delete_test(self, test_id: str) -> dict[str, Any]:
+        target_id = self._ensure_valid_id(test_id, "Test")
+        path = self._tests_dir / f"{target_id}.test.json"
+        existing_check_ids = set(self._get_check_ids_for_test_definition(target_id))
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        changed = False
+        for entry in robot_type_entries:
+            test_refs = self._normalize_string_list(entry.get("testRefs"))
+            next_refs = self._remove_test_refs_for_definition(
+                test_refs,
+                definition_id=target_id,
+                check_ids=existing_check_ids,
+            )
+            if next_refs != test_refs:
+                entry["testRefs"] = next_refs
+                changed = True
+
+        existed_test = path.exists()
+        previous_test = path.read_text(encoding="utf-8") if existed_test else None
+        existed_robot_types = self._robot_types_config_path.exists()
+        previous_robot_types = (
+            self._robot_types_config_path.read_text(encoding="utf-8")
+            if existed_robot_types
+            else None
+        )
+        if existed_test:
+            path.unlink()
+        if changed:
+            if isinstance(root_payload, dict):
+                root_payload["robotTypes"] = robot_type_entries
+            self._write_json(self._robot_types_config_path, root_payload)
+
+        try:
+            self._reload_catalog_and_runtime()
+        except Exception as exc:
+            if existed_test and previous_test is not None:
+                path.write_text(previous_test, encoding="utf-8")
+            elif not existed_test and path.exists():
+                path.unlink()
+            if existed_robot_types and previous_robot_types is not None:
+                self._robot_types_config_path.write_text(previous_robot_types, encoding="utf-8")
+            raise HTTPException(status_code=400, detail=f"Failed to delete test definition: {exc}") from exc
+        return {"ok": True, "id": target_id, "summary": self.get_summary()}
+
+    def delete_fix(self, fix_id: str) -> dict[str, Any]:
+        target_id = self._ensure_valid_id(fix_id, "Fix")
+        path = self._fixes_dir / f"{target_id}.fix.json"
+        
+        # Remove from filesystem
+        if path.exists():
+            path.unlink()
+            
+        # Cleanup mappings in robot_types.json
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        changed = False
+        for entry in robot_type_entries:
+            fix_refs = self._normalize_string_list(entry.get("fixRefs"))
+            if target_id in fix_refs:
+                entry["fixRefs"] = [r for r in fix_refs if r != target_id]
+                changed = True
+        
+        if changed:
+            if isinstance(root_payload, dict):
+                root_payload["robotTypes"] = robot_type_entries
+            self._write_json(self._robot_types_config_path, root_payload)
+            
+        self._reload_catalog_and_runtime()
+        return {"ok": True, "id": target_id, "summary": self.get_summary()}
+
+    def set_test_mappings(self, test_id: str, robot_type_ids: list[str]) -> dict[str, Any]:
+        target_test_id = self._ensure_valid_id(test_id, "Test")
+        check_ids = self._get_check_ids_for_test_definition(target_test_id)
+        if not check_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot map test '{target_test_id}' because it has no resolved checks.",
+            )
+        check_id_set = set(check_ids)
+        normalized_targets = {normalize_type_key(tid) for tid in robot_type_ids if tid}
+
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        for entry in robot_type_entries:
+            entry_id = normalize_text(entry.get("id") or entry.get("name"), "")
+            type_key = normalize_type_key(entry_id)
+            test_refs = self._normalize_string_list(entry.get("testRefs"))
+            test_refs = self._remove_test_refs_for_definition(
+                test_refs,
+                definition_id=target_test_id,
+                check_ids=check_id_set,
+            )
+
+            if type_key in normalized_targets:
+                test_refs = self._normalize_string_list([*test_refs, *check_ids])
+            entry["testRefs"] = test_refs
+
+        if isinstance(root_payload, dict):
+            root_payload["robotTypes"] = robot_type_entries
+        existed = self._robot_types_config_path.exists()
+        previous = (
+            self._robot_types_config_path.read_text(encoding="utf-8")
+            if existed
+            else None
+        )
+        self._write_json(self._robot_types_config_path, root_payload)
+        try:
+            self._reload_catalog_and_runtime()
+        except Exception as exc:
+            if existed and previous is not None:
+                self._robot_types_config_path.write_text(previous, encoding="utf-8")
+            raise HTTPException(status_code=400, detail=f"Failed to apply test mappings: {exc}") from exc
+        return {"ok": True, "id": target_test_id, "summary": self.get_summary()}
+
+    def set_fix_mappings(self, fix_id: str, robot_type_ids: list[str]) -> dict[str, Any]:
+        target_fix_id = self._ensure_valid_id(fix_id, "Fix")
+        normalized_targets = {normalize_type_key(tid) for tid in robot_type_ids if tid}
+        
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        for entry in robot_type_entries:
+            entry_id = normalize_text(entry.get("id") or entry.get("name"), "")
+            type_key = normalize_type_key(entry_id)
+            fix_refs = self._normalize_string_list(entry.get("fixRefs"))
+            
+            if type_key in normalized_targets:
+                if target_fix_id not in fix_refs:
+                    fix_refs.append(target_fix_id)
+            else:
+                if target_fix_id in fix_refs:
+                    fix_refs = [r for r in fix_refs if r != target_fix_id]
+            entry["fixRefs"] = fix_refs
+
+        if isinstance(root_payload, dict):
+            root_payload["robotTypes"] = robot_type_entries
+        self._write_json(self._robot_types_config_path, root_payload)
+        self._reload_catalog_and_runtime()
+        return {"ok": True, "id": target_fix_id, "summary": self.get_summary()}
