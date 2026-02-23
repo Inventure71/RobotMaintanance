@@ -709,32 +709,39 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
     const manageFixPostTestsInput = $('#manageFixPostTests');
     const manageFixEditorStatus = $('#manageFixEditorStatus');
+    const recorderCreateNewTestButton = $('#recorderCreateNewTest');
     const recorderRobotSelect = $('#recorderRobotSelect');
-    const recorderStartButton = $('#recorderStartRecording');
-    const recorderResetButton = $('#recorderResetRecording');
-    const recorderCommandInput = $('#recorderCommandInput');
-    const recorderRunCaptureButton = $('#recorderRunCapture');
-    const recorderPromotePrimitiveInput = $('#recorderPromotePrimitive');
-    const recorderPrimitiveIdInput = $('#recorderPrimitiveId');
-    const recorderCheckSourceStep = $('#recorderCheckSourceStep');
-    const recorderCheckIdInput = $('#recorderCheckId');
-    const recorderCheckLabelInput = $('#recorderCheckLabel');
-    const recorderCheckIconInput = $('#recorderCheckIcon');
-    const recorderContainsStringInput = $('#recorderContainsString');
-    const recorderAddLineCheckButton = $('#recorderAddLineCheck');
-    const recorderAddStringCheckButton = $('#recorderAddStringCheck');
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
     const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
-    const recorderFixPostTestsInput = $('#recorderFixPostTests');
     const recorderPublishTestButton = $('#recorderPublishTest');
-    const recorderPublishFixButton = $('#recorderPublishFix');
-    const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
     const recorderStatus = $('#recorderStatus');
     const recorderPublishStatus = $('#recorderPublishStatus');
     const recorderStateBadge = $('#recorderStateBadge');
     const recorderStepCountBadge = $('#recorderStepCount');
     const recorderCheckCountBadge = $('#recorderCheckCount');
-    const recorderActiveStepBadge = $('#recorderActiveStepBadge');
+    const recorderOutputCountBadge = $('#recorderOutputCount');
+    const recorderCommandInput = $('#recorderCommandInput');
+    const recorderRunCaptureButton = $('#recorderRunCapture');
+    const recorderOutputKeyInput = $('#recorderOutputKey');
+    const recorderOutputLabelInput = $('#recorderOutputLabel');
+    const recorderOutputIconInput = $('#recorderOutputIcon');
+    const recorderOutputPassDetailsInput = $('#recorderOutputPassDetails');
+    const recorderOutputFailDetailsInput = $('#recorderOutputFailDetails');
+    const recorderSaveOutputButton = $('#recorderSaveOutput');
+    const recorderClearOutputFormButton = $('#recorderClearOutputForm');
+    const recorderReadOutputKeySelect = $('#recorderReadOutputKey');
+    const recorderReadInputRefSelect = $('#recorderReadInputRef');
+    const recorderReadKindSelect = $('#recorderReadKind');
+    const recorderReadNeedleInput = $('#recorderReadNeedle');
+    const recorderReadNeedlesInput = $('#recorderReadNeedles');
+    const recorderReadLinesInput = $('#recorderReadLines');
+    const recorderReadRequireAllInput = $('#recorderReadRequireAll');
+    const recorderSaveReadBlockButton = $('#recorderSaveReadBlock');
+    const recorderClearReadFormButton = $('#recorderClearReadForm');
+    const recorderOutputs = $('#recorderOutputs');
+    const recorderFlowBlocks = $('#recorderFlowBlocks');
+    const recorderTerminalOutput = $('#recorderTerminalOutput');
+    const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
     const toggleDashboardFixModeButton = $('#toggleDashboardFixMode');
     const toggleDetailFixModeButton = $('#toggleDetailFixMode');
     const dashboardFixModePanel = $('#dashboardFixModePanel');
@@ -4194,72 +4201,134 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
+    let recorderLastEditingOutputKey = '';
+    let recorderLastEditingReadBlockId = '';
+
+    function clearRecorderOutputForm() {
+      if (recorderOutputKeyInput) recorderOutputKeyInput.value = '';
+      if (recorderOutputLabelInput) recorderOutputLabelInput.value = '';
+      if (recorderOutputIconInput) recorderOutputIconInput.value = '';
+      if (recorderOutputPassDetailsInput) recorderOutputPassDetailsInput.value = '';
+      if (recorderOutputFailDetailsInput) recorderOutputFailDetailsInput.value = '';
+    }
+
+    function clearRecorderReadForm() {
+      if (recorderReadOutputKeySelect) recorderReadOutputKeySelect.value = '';
+      if (recorderReadInputRefSelect) recorderReadInputRefSelect.value = '';
+      if (recorderReadKindSelect) recorderReadKindSelect.value = 'contains_string';
+      if (recorderReadNeedleInput) recorderReadNeedleInput.value = '';
+      if (recorderReadNeedlesInput) recorderReadNeedlesInput.value = '';
+      if (recorderReadLinesInput) recorderReadLinesInput.value = '';
+      if (recorderReadRequireAllInput) recorderReadRequireAllInput.checked = true;
+      syncRecorderReadKindFields();
+    }
+
+    function syncRecorderReadKindFields() {
+      const kind = normalizeText(recorderReadKindSelect?.value, 'contains_string');
+      const isString = kind === 'contains_string';
+      const isAny = kind === 'contains_any_string';
+      const isLines = kind === 'contains_lines_unordered';
+      if (recorderReadNeedleInput) recorderReadNeedleInput.disabled = !isString;
+      if (recorderReadNeedlesInput) recorderReadNeedlesInput.disabled = !isAny;
+      if (recorderReadLinesInput) recorderReadLinesInput.disabled = !isLines;
+      if (recorderReadRequireAllInput) recorderReadRequireAllInput.disabled = !isLines;
+    }
+
     function syncRecorderUiState() {
+      const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
       const recorder = state.workflowRecorder;
       const recorderState = recorder && typeof recorder.getState === 'function'
-        ? recorder.getState()
-        : { recording: false, stepCount: 0, checkCount: 0, activeStepId: '' };
+        ? recorder.getState(definitionId)
+        : {
+            started: false,
+            writeCount: 0,
+            readCount: 0,
+            outputCount: 0,
+            publishReady: false,
+            blockingIssues: [],
+            editingOutputKey: '',
+            editingReadBlockId: '',
+          };
 
       const robotSelected = normalizeText(recorderRobotSelect?.value, '') !== '';
       const commandReady = normalizeText(recorderCommandInput?.value, '') !== '';
-      const definitionReady = normalizeText(recorderDefinitionIdInput?.value, '') !== '';
-      const activeStepSelected = normalizeText(recorderCheckSourceStep?.value, '') !== ''
-        || normalizeText(recorderState.activeStepId, '') !== '';
 
       if (recorderStateBadge) {
-        recorderStateBadge.textContent = recorderState.recording ? 'Recording' : 'Idle';
-        recorderStateBadge.classList.toggle('active', !!recorderState.recording);
+        recorderStateBadge.textContent = recorderState.started ? 'Draft active' : 'Draft idle';
+        recorderStateBadge.classList.toggle('active', !!recorderState.started);
       }
       if (recorderStepCountBadge) {
-        recorderStepCountBadge.textContent = `${Number(recorderState.stepCount || 0)} step${Number(recorderState.stepCount || 0) === 1 ? '' : 's'}`;
+        recorderStepCountBadge.textContent = `${Number(recorderState.writeCount || 0)} write block${Number(recorderState.writeCount || 0) === 1 ? '' : 's'}`;
       }
       if (recorderCheckCountBadge) {
-        recorderCheckCountBadge.textContent = `${Number(recorderState.checkCount || 0)} check${Number(recorderState.checkCount || 0) === 1 ? '' : 's'}`;
+        recorderCheckCountBadge.textContent = `${Number(recorderState.readCount || 0)} read block${Number(recorderState.readCount || 0) === 1 ? '' : 's'}`;
       }
-      if (recorderActiveStepBadge) {
-        recorderActiveStepBadge.textContent = recorderState.activeStepId
-          ? `Active: ${recorderState.activeStepId}`
-          : 'No active step';
+      if (recorderOutputCountBadge) {
+        recorderOutputCountBadge.textContent = `${Number(recorderState.outputCount || 0)} output${Number(recorderState.outputCount || 0) === 1 ? '' : 's'}`;
       }
 
-      if (recorderStartButton) {
-        applyActionButton(recorderStartButton, {
-          intent: recorderState.recording ? 'danger' : 'run',
-          label: recorderState.recording ? 'Stop recording' : 'Start recording',
+      if (recorderCreateNewTestButton) {
+        applyActionButton(recorderCreateNewTestButton, {
+          intent: 'create',
+          label: 'Create new test',
         });
-        recorderStartButton.disabled = !recorderState.recording && !robotSelected;
       }
       if (recorderRunCaptureButton) {
-        recorderRunCaptureButton.disabled = !(recorderState.recording && robotSelected && commandReady);
+        recorderRunCaptureButton.disabled = !(recorderState.started && robotSelected && commandReady);
       }
-      if (recorderPrimitiveIdInput) {
-        recorderPrimitiveIdInput.disabled = !Boolean(recorderPromotePrimitiveInput?.checked);
+      if (recorderSaveOutputButton) {
+        recorderSaveOutputButton.disabled = !recorderState.started;
       }
-      if (recorderCheckSourceStep) {
-        recorderCheckSourceStep.disabled = Number(recorderState.stepCount || 0) === 0;
-      }
-      if (recorderContainsStringInput) {
-        recorderContainsStringInput.disabled = !activeStepSelected;
-      }
-      if (recorderAddLineCheckButton) {
-        recorderAddLineCheckButton.disabled = !activeStepSelected;
-      }
-      if (recorderAddStringCheckButton) {
-        recorderAddStringCheckButton.disabled = !activeStepSelected;
+      if (recorderSaveReadBlockButton) {
+        recorderSaveReadBlockButton.disabled = !(
+          recorderState.started
+          && Number(recorderState.outputCount || 0) > 0
+          && Number(recorderState.writeCount || 0) > 0
+        );
       }
       if (recorderPublishTestButton) {
-        recorderPublishTestButton.disabled = !(
-          definitionReady &&
-          Number(recorderState.stepCount || 0) > 0 &&
-          Number(recorderState.checkCount || 0) > 0
-        );
+        recorderPublishTestButton.disabled = !(recorderState.publishReady && robotSelected);
       }
-      if (recorderPublishFixButton) {
-        recorderPublishFixButton.disabled = !(
-          definitionReady &&
-          Number(recorderState.stepCount || 0) > 0
-        );
+
+      if (recorderState.editingOutputKey !== recorderLastEditingOutputKey) {
+        recorderLastEditingOutputKey = recorderState.editingOutputKey || '';
+        if (recorderLastEditingOutputKey) {
+          const output = state.workflowRecorder?.getOutput?.(recorderLastEditingOutputKey);
+          if (output) {
+            if (recorderOutputKeyInput) recorderOutputKeyInput.value = output.key;
+            if (recorderOutputLabelInput) recorderOutputLabelInput.value = output.label;
+            if (recorderOutputIconInput) recorderOutputIconInput.value = output.icon;
+            if (recorderOutputPassDetailsInput) recorderOutputPassDetailsInput.value = output.passDetails;
+            if (recorderOutputFailDetailsInput) recorderOutputFailDetailsInput.value = output.failDetails;
+          }
+        }
       }
+
+      if (recorderState.editingReadBlockId !== recorderLastEditingReadBlockId) {
+        recorderLastEditingReadBlockId = recorderState.editingReadBlockId || '';
+        if (recorderLastEditingReadBlockId) {
+          const block = state.workflowRecorder?.getReadBlock?.(recorderLastEditingReadBlockId);
+          if (block) {
+            if (recorderReadOutputKeySelect) recorderReadOutputKeySelect.value = block.outputKey;
+            if (recorderReadInputRefSelect) recorderReadInputRefSelect.value = normalizeText(block.read?.inputRef, '');
+            if (recorderReadKindSelect) recorderReadKindSelect.value = normalizeText(block.read?.kind, 'contains_string');
+            if (recorderReadNeedleInput) recorderReadNeedleInput.value = normalizeText(block.read?.needle, '');
+            if (recorderReadNeedlesInput) {
+              const needles = Array.isArray(block.read?.needles) ? block.read.needles : [];
+              recorderReadNeedlesInput.value = needles.join(',');
+            }
+            if (recorderReadLinesInput) {
+              const lines = Array.isArray(block.read?.lines) ? block.read.lines : [];
+              recorderReadLinesInput.value = lines.join('\n');
+            }
+            if (recorderReadRequireAllInput) {
+              recorderReadRequireAllInput.checked = Boolean(block.read?.requireAll ?? true);
+            }
+          }
+        }
+      }
+
+      syncRecorderReadKindFields();
     }
 
     async function runRecorderCommandAndCapture() {
@@ -4270,8 +4339,8 @@ let ROBOT_TYPE_BY_ID = new Map();
         state.workflowRecorder.setStatus('Select a robot first.', 'error');
         return;
       }
-      if (!state.workflowRecorder.recording) {
-        state.workflowRecorder.setStatus('Click "Start recording" first.', 'warn');
+      if (!state.workflowRecorder.started) {
+        state.workflowRecorder.setStatus('Click "Create new test" first.', 'warn');
         return;
       }
       if (!command) {
@@ -4300,16 +4369,10 @@ let ROBOT_TYPE_BY_ID = new Map();
           throw new Error(normalizeText(payload?.detail, raw || 'Command failed.'));
         }
 
-        const capturedStep = state.workflowRecorder.addCapturedStep({
+        const capturedStep = state.workflowRecorder.addWriteBlock({
           command,
           outputPayload: payload,
-          promotePrimitive: Boolean(recorderPromotePrimitiveInput?.checked),
-          primitiveId: normalizeText(recorderPrimitiveIdInput?.value, ''),
         });
-        if (recorderCheckSourceStep && capturedStep?.id) {
-          recorderCheckSourceStep.value = capturedStep.id;
-          state.workflowRecorder.setActiveStep(capturedStep.id);
-        }
         if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
           const suggested = slugifyRecorderValue(
             `${robotIdValue}_${normalizeText(capturedStep?.id, 'workflow')}`,
@@ -4318,12 +4381,10 @@ let ROBOT_TYPE_BY_ID = new Map();
           recorderDefinitionIdInput.value = suggested;
         }
         if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
-          recorderDefinitionLabelInput.value = `Recorded workflow (${robotIdValue})`;
+          recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
         }
         if (recorderCommandInput) recorderCommandInput.value = '';
-        if (recorderPrimitiveIdInput) recorderPrimitiveIdInput.value = '';
-        if (recorderPromotePrimitiveInput) recorderPromotePrimitiveInput.checked = false;
-        state.workflowRecorder.setStatus('Step captured.', 'ok');
+        state.workflowRecorder.setStatus('Write block added and output captured.', 'ok');
       } catch (error) {
         state.workflowRecorder.setStatus(
           `Capture failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -4341,25 +4402,11 @@ let ROBOT_TYPE_BY_ID = new Map();
       if (!state.workflowRecorder) return;
       state.workflowRecorder.setPublishStatus('Publishing test...', 'warn');
       try {
+        const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
         const definition = state.workflowRecorder.buildTestDefinition({
-          definitionId: normalizeText(recorderDefinitionIdInput?.value, ''),
+          definitionId,
           label: normalizeText(recorderDefinitionLabelInput?.value, ''),
         });
-
-        const primitives = state.workflowRecorder.getPromotedPrimitives();
-        for (const primitive of primitives) {
-          const primitiveResponse = await fetch(buildApiUrl('/api/definitions/primitives'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(primitive),
-          });
-          const raw = await primitiveResponse.text();
-          const body = raw ? JSON.parse(raw) : {};
-          if (!primitiveResponse.ok) {
-            throw new Error(normalizeText(body?.detail, raw || `Unable to save primitive ${primitive.id}.`));
-          }
-          state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || state.definitionsSummary);
-        }
 
         const response = await fetch(buildApiUrl('/api/definitions/tests'), {
           method: 'POST',
@@ -4372,9 +4419,12 @@ let ROBOT_TYPE_BY_ID = new Map();
           throw new Error(normalizeText(body?.detail, raw || 'Unable to publish test definition.'));
         }
         state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
-        await applyRecorderMappings({ checkIds: state.workflowRecorder.getCheckIds(), fixId: '' });
+        await applyRecorderMappings({
+          checkIds: state.workflowRecorder.getCheckIdsForDefinition(definitionId),
+          fixId: '',
+        });
         renderManageDefinitions();
-        state.workflowRecorder.setPublishStatus('Test definition published and mapped.', 'ok');
+        state.workflowRecorder.setPublishStatus('Test definition published and mapped to selected robot types.', 'ok');
         setManageTabStatus('Recorder test published.', 'ok');
       } catch (error) {
         state.workflowRecorder.setPublishStatus(
@@ -4384,53 +4434,50 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
-    async function publishRecorderAsFix() {
+    function saveRecorderOutput() {
       if (!state.workflowRecorder) return;
-      state.workflowRecorder.setPublishStatus('Publishing fix...', 'warn');
       try {
-        const definition = state.workflowRecorder.buildFixDefinition({
-          definitionId: normalizeText(recorderDefinitionIdInput?.value, ''),
-          label: normalizeText(recorderDefinitionLabelInput?.value, ''),
-          postTestIds: normalizeIdList(
-            normalizeText(recorderFixPostTestsInput?.value, '')
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean),
-          ),
+        const output = state.workflowRecorder.addOrUpdateOutput({
+          key: normalizeText(recorderOutputKeyInput?.value, ''),
+          label: normalizeText(recorderOutputLabelInput?.value, ''),
+          icon: normalizeText(recorderOutputIconInput?.value, ''),
+          passDetails: normalizeText(recorderOutputPassDetailsInput?.value, ''),
+          failDetails: normalizeText(recorderOutputFailDetailsInput?.value, ''),
         });
-
-        const primitives = state.workflowRecorder.getPromotedPrimitives();
-        for (const primitive of primitives) {
-          const primitiveResponse = await fetch(buildApiUrl('/api/definitions/primitives'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(primitive),
-          });
-          const raw = await primitiveResponse.text();
-          const body = raw ? JSON.parse(raw) : {};
-          if (!primitiveResponse.ok) {
-            throw new Error(normalizeText(body?.detail, raw || `Unable to save primitive ${primitive.id}.`));
-          }
-          state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || state.definitionsSummary);
-        }
-
-        const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(definition),
-        });
-        const raw = await response.text();
-        const body = raw ? JSON.parse(raw) : {};
-        if (!response.ok) {
-          throw new Error(normalizeText(body?.detail, raw || 'Unable to publish fix definition.'));
-        }
-        state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
-        await applyRecorderMappings({ checkIds: [], fixId: normalizeText(definition.id, '') });
-        renderManageDefinitions();
-        state.workflowRecorder.setPublishStatus('Fix definition published and mapped.', 'ok');
-        setManageTabStatus('Recorder fix published.', 'ok');
+        clearRecorderOutputForm();
+        state.workflowRecorder.clearOutputEdit();
+        state.workflowRecorder.setStatus(
+          output.updated ? `Updated output '${output.key}'.` : `Added output '${output.key}'.`,
+          'ok',
+        );
       } catch (error) {
-        state.workflowRecorder.setPublishStatus(
+        state.workflowRecorder.setStatus(
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
+
+    function saveRecorderReadBlock() {
+      if (!state.workflowRecorder) return;
+      try {
+        const block = state.workflowRecorder.addOrUpdateReadBlock({
+          outputKey: normalizeText(recorderReadOutputKeySelect?.value, ''),
+          inputRef: normalizeText(recorderReadInputRefSelect?.value, ''),
+          kind: normalizeText(recorderReadKindSelect?.value, 'contains_string'),
+          needle: normalizeText(recorderReadNeedleInput?.value, ''),
+          needles: normalizeText(recorderReadNeedlesInput?.value, ''),
+          lines: normalizeText(recorderReadLinesInput?.value, ''),
+          requireAll: Boolean(recorderReadRequireAllInput?.checked),
+        });
+        clearRecorderReadForm();
+        state.workflowRecorder.clearReadEdit();
+        state.workflowRecorder.setStatus(
+          block.updated ? `Updated ${block.id}.` : `Added ${block.id}.`,
+          'ok',
+        );
+      } catch (error) {
+        state.workflowRecorder.setStatus(
           error instanceof Error ? error.message : String(error),
           'error',
         );
@@ -4447,11 +4494,11 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function initWorkflowRecorder() {
       state.workflowRecorder = new WorkflowRecorderComponent({
-        terminalOutputEl: $('#recorderTerminalOutput'),
-        stepsEl: $('#recorderSteps'),
-        sourceStepSelectEl: recorderCheckSourceStep,
-        outputLinesEl: $('#recorderOutputLines'),
-        checksEl: $('#recorderChecks'),
+        terminalOutputEl: recorderTerminalOutput,
+        outputsEl: recorderOutputs,
+        blocksEl: recorderFlowBlocks,
+        outputSelectEl: recorderReadOutputKeySelect,
+        inputRefSelectEl: recorderReadInputRefSelect,
         statusEl: recorderStatus,
         publishStatusEl: recorderPublishStatus,
         onStateChange: () => {
@@ -4460,28 +4507,21 @@ let ROBOT_TYPE_BY_ID = new Map();
       });
       state.workflowRecorder.render();
 
-      recorderCheckSourceStep?.addEventListener('change', () => {
-        state.workflowRecorder.setActiveStep(normalizeText(recorderCheckSourceStep.value, ''));
-      });
-      recorderStartButton?.addEventListener('click', () => {
+      recorderCreateNewTestButton?.addEventListener('click', () => {
         const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
-        const isRecording = Boolean(state.workflowRecorder?.getState?.().recording);
-        if (!isRecording && !robotIdValue) {
+        if (!robotIdValue) {
           state.workflowRecorder.setStatus('Select a robot first.', 'error');
           return;
         }
-        state.workflowRecorder.setRecording(!isRecording);
-      });
-      recorderResetButton?.addEventListener('click', () => {
-        state.workflowRecorder.reset();
-        state.workflowRecorder.setRecording(false);
-        if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = '';
-        if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = '';
-        if (recorderFixPostTestsInput) recorderFixPostTestsInput.value = '';
-        if (recorderCheckIdInput) recorderCheckIdInput.value = '';
-        if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
-        if (recorderCheckIconInput) recorderCheckIconInput.value = '';
-        if (recorderContainsStringInput) recorderContainsStringInput.value = '';
+        state.workflowRecorder.createNewTest();
+        clearRecorderOutputForm();
+        clearRecorderReadForm();
+        if (recorderDefinitionIdInput) {
+          recorderDefinitionIdInput.value = slugifyRecorderValue(`${robotIdValue}_flow`, 'recorded_workflow');
+        }
+        if (recorderDefinitionLabelInput) {
+          recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
+        }
       });
       recorderRunCaptureButton?.addEventListener('click', () => {
         runRecorderCommandAndCapture();
@@ -4491,56 +4531,25 @@ let ROBOT_TYPE_BY_ID = new Map();
         event.preventDefault();
         runRecorderCommandAndCapture();
       });
-      recorderAddLineCheckButton?.addEventListener('click', () => {
-        try {
-          const checkId = normalizeText(recorderCheckIdInput?.value, '');
-          const created = state.workflowRecorder.addLineCheck({
-            stepId: normalizeText(recorderCheckSourceStep?.value, ''),
-            checkId,
-            label: normalizeText(recorderCheckLabelInput?.value, ''),
-            icon: normalizeText(recorderCheckIconInput?.value, ''),
-          });
-          if (recorderCheckIdInput) recorderCheckIdInput.value = '';
-          if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
-          if (recorderCheckIconInput) recorderCheckIconInput.value = '';
-          if (recorderContainsStringInput) recorderContainsStringInput.value = '';
-          state.workflowRecorder.setPublishStatus(`Added check '${created.id}'.`, 'ok');
-          state.workflowRecorder.setStatus('Line check added.', 'ok');
-        } catch (error) {
-          state.workflowRecorder.setStatus(
-            error instanceof Error ? error.message : String(error),
-            'error',
-          );
-        }
+      recorderSaveOutputButton?.addEventListener('click', () => {
+        saveRecorderOutput();
       });
-      recorderAddStringCheckButton?.addEventListener('click', () => {
-        try {
-          const checkId = normalizeText(recorderCheckIdInput?.value, '');
-          const created = state.workflowRecorder.addStringCheck({
-            stepId: normalizeText(recorderCheckSourceStep?.value, ''),
-            checkId,
-            label: normalizeText(recorderCheckLabelInput?.value, ''),
-            icon: normalizeText(recorderCheckIconInput?.value, ''),
-            needle: normalizeText(recorderContainsStringInput?.value, ''),
-          });
-          if (recorderCheckIdInput) recorderCheckIdInput.value = '';
-          if (recorderCheckLabelInput) recorderCheckLabelInput.value = '';
-          if (recorderCheckIconInput) recorderCheckIconInput.value = '';
-          if (recorderContainsStringInput) recorderContainsStringInput.value = '';
-          state.workflowRecorder.setPublishStatus(`Added check '${created.id}'.`, 'ok');
-          state.workflowRecorder.setStatus('String check added.', 'ok');
-        } catch (error) {
-          state.workflowRecorder.setStatus(
-            error instanceof Error ? error.message : String(error),
-            'error',
-          );
-        }
+      recorderClearOutputFormButton?.addEventListener('click', () => {
+        clearRecorderOutputForm();
+        state.workflowRecorder?.clearOutputEdit?.();
+      });
+      recorderSaveReadBlockButton?.addEventListener('click', () => {
+        saveRecorderReadBlock();
+      });
+      recorderClearReadFormButton?.addEventListener('click', () => {
+        clearRecorderReadForm();
+        state.workflowRecorder?.clearReadEdit?.();
+      });
+      recorderReadKindSelect?.addEventListener('change', () => {
+        syncRecorderReadKindFields();
       });
       recorderPublishTestButton?.addEventListener('click', () => {
         publishRecorderAsTest();
-      });
-      recorderPublishFixButton?.addEventListener('click', () => {
-        publishRecorderAsFix();
       });
       recorderRobotSelect?.addEventListener('change', () => {
         syncRecorderUiState();
@@ -4551,9 +4560,8 @@ let ROBOT_TYPE_BY_ID = new Map();
       recorderDefinitionIdInput?.addEventListener('input', () => {
         syncRecorderUiState();
       });
-      recorderPromotePrimitiveInput?.addEventListener('change', () => {
-        syncRecorderUiState();
-      });
+      clearRecorderOutputForm();
+      clearRecorderReadForm();
       syncRecorderUiState();
     }
 

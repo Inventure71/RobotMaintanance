@@ -10,7 +10,8 @@ from .normalization import normalize_status, normalize_text
 
 
 TOKEN_PATTERN = re.compile(r"^\$([A-Za-z0-9_.-]+)\$$")
-VALID_READ_KINDS = {"contains_string", "contains_lines_unordered", "contains_any_string"}
+BASE_READ_KINDS = {"contains_string", "contains_lines_unordered", "contains_any_string"}
+VALID_READ_KINDS = set(BASE_READ_KINDS) | {"all_of"}
 
 
 @dataclass
@@ -121,6 +122,22 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(
                     f"Test definition '{definition_id}' check '{check_id}' has invalid read kind '{kind}'"
                 )
+            if kind == "all_of":
+                rules = read_spec.get("rules")
+                if not isinstance(rules, list) or not rules:
+                    raise ValueError(
+                        f"Test definition '{definition_id}' check '{check_id}' kind 'all_of' must define non-empty rules[]"
+                    )
+                for rule_index, raw_rule in enumerate(rules):
+                    if not isinstance(raw_rule, dict):
+                        raise ValueError(
+                            f"Test definition '{definition_id}' check '{check_id}' has non-object rule at index {rule_index}"
+                        )
+                    nested_kind = normalize_text(raw_rule.get("kind"), "")
+                    if nested_kind not in BASE_READ_KINDS:
+                        raise ValueError(
+                            f"Test definition '{definition_id}' check '{check_id}' has invalid nested read kind '{nested_kind}' in all_of"
+                        )
 
         metadata = raw_check.get("metadata") if isinstance(raw_check.get("metadata"), dict) else {}
         default_status = normalize_status(metadata.get("defaultStatus"))

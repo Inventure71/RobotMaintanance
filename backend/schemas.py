@@ -81,6 +81,7 @@ class DefinitionCheckReadSpec(BaseModel):
     lines: list[str] | None = None
     requireAll: bool | None = None
     caseSensitive: bool | None = None
+    rules: list[dict[str, Any]] | None = None
 
 
 class DefinitionCheckResultSpec(BaseModel):

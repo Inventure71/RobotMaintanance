@@ -110,6 +110,51 @@ class ReadConnector:
             "requireAll": require_all,
         }
 
+    def _evaluate_all_of(self, read_spec: dict[str, Any], vars_payload: dict[str, Any]) -> dict[str, Any]:
+        rules_raw = read_spec.get("rules") if isinstance(read_spec.get("rules"), list) else []
+        normalized_rules = [rule for rule in rules_raw if isinstance(rule, dict)]
+        if not normalized_rules:
+            return {
+                "passed": False,
+                "kind": "all_of",
+                "details": "No nested rules configured.",
+                "rules": [],
+                "passedRules": 0,
+                "failedRules": 0,
+                "totalRules": 0,
+            }
+
+        rule_results: list[dict[str, Any]] = []
+        passed_count = 0
+        for index, rule in enumerate(normalized_rules):
+            result = self.evaluate(rule, vars_payload)
+            passed = bool(result.get("passed"))
+            if passed:
+                passed_count += 1
+            rule_results.append(
+                {
+                    "index": index,
+                    "kind": str(rule.get("kind") or "").strip().lower(),
+                    "passed": passed,
+                    "details": str(result.get("details") or ""),
+                    "result": result,
+                }
+            )
+
+        total_rules = len(rule_results)
+        failed_rules = total_rules - passed_count
+        passed = failed_rules == 0
+        details = "All rules passed." if passed else f"{failed_rules}/{total_rules} rules failed."
+        return {
+            "passed": passed,
+            "kind": "all_of",
+            "details": details,
+            "rules": rule_results,
+            "passedRules": passed_count,
+            "failedRules": failed_rules,
+            "totalRules": total_rules,
+        }
+
     def evaluate(self, read_spec: dict[str, Any], vars_payload: dict[str, Any]) -> dict[str, Any]:
         kind = str(read_spec.get("kind") or "").strip().lower()
         if kind == "contains_string":
@@ -118,4 +163,6 @@ class ReadConnector:
             return self._evaluate_contains_lines_unordered(read_spec, vars_payload)
         if kind == "contains_any_string":
             return self._evaluate_contains_any_string(read_spec, vars_payload)
+        if kind == "all_of":
+            return self._evaluate_all_of(read_spec, vars_payload)
         raise ValueError(f"Unsupported read kind '{kind}'")

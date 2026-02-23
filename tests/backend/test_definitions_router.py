@@ -205,6 +205,57 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
     assert any(item.get("id") == "camera" for item in checks)
 
 
+def test_create_test_definition_accepts_all_of_read_kind(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "topics_multi_output",
+            "label": "Topics Multi Output",
+            "enabled": True,
+            "mode": "orchestrate",
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "topics_multi_output__general",
+                    "label": "General",
+                    "icon": "📡",
+                    "manualOnly": True,
+                    "enabled": True,
+                    "defaultStatus": "warning",
+                    "defaultValue": "unknown",
+                    "defaultDetails": "Not checked yet",
+                    "read": {
+                        "kind": "all_of",
+                        "rules": [
+                            {
+                                "kind": "contains_lines_unordered",
+                                "inputRef": "topics_raw",
+                                "lines": ["/battery"],
+                                "requireAll": True,
+                            },
+                            {
+                                "kind": "contains_string",
+                                "inputRef": "topics_raw",
+                                "needle": "/camera",
+                                "caseSensitive": False,
+                            },
+                        ],
+                    },
+                    "pass": {"status": "ok", "value": "all_present", "details": "All checks passed"},
+                    "fail": {"status": "error", "value": "missing", "details": "One or more checks failed"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    saved = json.loads((tmp_path / "tests" / "topics_multi_output.test.json").read_text(encoding="utf-8"))
+    assert saved["checks"][0]["read"]["kind"] == "all_of"
+    assert isinstance(saved["checks"][0]["read"]["rules"], list)
+    assert len(saved["checks"][0]["read"]["rules"]) == 2
+
+
 def test_create_test_rejects_duplicate_global_check_id(tmp_path: Path):
     client, _ = _build_client(tmp_path)
     response = client.post(

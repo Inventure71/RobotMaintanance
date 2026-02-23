@@ -248,3 +248,51 @@ def test_robot_catalog_load_from_paths_builds_indexes(tmp_path):
     assert "rosbot-2-pro" in catalog.robot_types_by_id
     assert "online" in catalog.test_catalog_by_id
     assert "flash_fix" in catalog.fix_catalog_by_id
+
+
+def test_load_definition_catalog_rejects_all_of_with_invalid_nested_kind(tmp_path):
+    commands_dir = tmp_path / "command-primitives"
+    tests_dir = tmp_path / "tests"
+    fixes_dir = tmp_path / "fixes"
+    commands_dir.mkdir()
+    tests_dir.mkdir()
+    fixes_dir.mkdir()
+
+    (commands_dir / "rostopic.command.json").write_text(
+        json.dumps({"id": "rostopic_list", "command": "timeout 12s rostopic list"}),
+        encoding="utf-8",
+    )
+    (tests_dir / "bad.test.json").write_text(
+        json.dumps(
+            {
+                "id": "bad",
+                "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+                "checks": [
+                    {
+                        "id": "bad_check",
+                        "read": {
+                            "kind": "all_of",
+                            "rules": [
+                                {"kind": "contains_string", "inputRef": "topics_raw", "needle": "/battery"},
+                                {"kind": "all_of", "rules": []},
+                            ],
+                        },
+                        "pass": {"status": "ok", "value": "present", "details": "ok"},
+                        "fail": {"status": "error", "value": "missing", "details": "missing"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (fixes_dir / "flash.fix.json").write_text(
+        json.dumps({"id": "flash_fix", "execute": [{"id": "noop", "command": "echo fix"}]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid nested read kind"):
+        load_definition_catalog(
+            command_primitives_dir=commands_dir,
+            tests_dir=tests_dir,
+            fixes_dir=fixes_dir,
+        )
