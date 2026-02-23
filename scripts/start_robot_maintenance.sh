@@ -103,6 +103,101 @@ detect_ip() {
   echo "127.0.0.1"
 }
 
+attempt_auto_update() {
+  local skip_update
+  local current_branch
+  local upstream_ref
+  local default_remote
+  local default_branch
+  local update_remote
+  local update_branch
+  local remote_ref
+  local local_sha
+  local remote_sha
+
+  skip_update="${SKIP_GIT_UPDATE:-0}"
+  if [[ "${skip_update}" == "1" ]]; then
+    echo "Skipped update: SKIP_GIT_UPDATE=1."
+    return 0
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "Skipped update: git is not installed."
+    return 0
+  fi
+
+  if ! git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Skipped update: ${ROOT_DIR} is not a git repository."
+    return 0
+  fi
+
+  if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null)" ]]; then
+    echo "Skipped update: working tree has local changes."
+    return 0
+  fi
+
+  current_branch="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [[ -z "${current_branch}" || "${current_branch}" == "HEAD" ]]; then
+    echo "Skipped update: unable to determine current branch."
+    return 0
+  fi
+
+  upstream_ref="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  default_remote="origin"
+  default_branch="${current_branch}"
+  if [[ -n "${upstream_ref}" && "${upstream_ref}" == */* ]]; then
+    default_remote="${upstream_ref%%/*}"
+    default_branch="${upstream_ref#*/}"
+  fi
+
+  update_remote="${GIT_UPDATE_REMOTE:-${default_remote}}"
+  update_branch="${GIT_UPDATE_BRANCH:-${default_branch}}"
+  if [[ -z "${update_remote}" || -z "${update_branch}" ]]; then
+    echo "Skipped update: could not resolve update remote/branch."
+    return 0
+  fi
+
+  echo "Checking for updates from ${update_remote}/${update_branch}..."
+  if ! git -C "${ROOT_DIR}" fetch --prune "${update_remote}" >/dev/null 2>&1; then
+    echo "Skipped update: network/fetch error for remote ${update_remote}."
+    return 0
+  fi
+
+  remote_ref="refs/remotes/${update_remote}/${update_branch}"
+  if ! git -C "${ROOT_DIR}" show-ref --verify --quiet "${remote_ref}"; then
+    echo "Skipped update: remote branch ${update_remote}/${update_branch} was not found."
+    return 0
+  fi
+
+  local_sha="$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || true)"
+  remote_sha="$(git -C "${ROOT_DIR}" rev-parse "${remote_ref}" 2>/dev/null || true)"
+  if [[ -z "${local_sha}" || -z "${remote_sha}" ]]; then
+    echo "Skipped update: unable to compare local and remote commit SHAs."
+    return 0
+  fi
+
+  if [[ "${local_sha}" == "${remote_sha}" ]]; then
+    echo "Already up to date."
+    return 0
+  fi
+
+  if git -C "${ROOT_DIR}" merge-base --is-ancestor HEAD "${remote_ref}" >/dev/null 2>&1; then
+    if git -C "${ROOT_DIR}" pull --ff-only "${update_remote}" "${update_branch}" >/dev/null 2>&1; then
+      echo "Updated successfully."
+    else
+      echo "Skipped update: pull failure on ${update_remote}/${update_branch}."
+    fi
+    return 0
+  fi
+
+  if git -C "${ROOT_DIR}" merge-base --is-ancestor "${remote_ref}" HEAD >/dev/null 2>&1; then
+    echo "Skipped update: local branch is ahead of ${update_remote}/${update_branch}."
+  else
+    echo "Skipped update: local branch has diverged from ${update_remote}/${update_branch}."
+  fi
+  return 0
+}
+
 is_port_available() {
   local port="$1"
   "${PYTHON_BIN}" - "$port" <<'PY'
@@ -260,6 +355,7 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP QUIT
 
 select_compatible_python
+attempt_auto_update
 PI_IP="$(detect_ip)"
 ensure_python_requirements
 
