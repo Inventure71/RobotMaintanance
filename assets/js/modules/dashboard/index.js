@@ -758,6 +758,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderOutputs = $('#recorderOutputs');
     const recorderFlowBlocks = $('#recorderFlowBlocks');
     const recorderTerminalDisplay = $('#recorderTerminalDisplay');
+    const recorderTerminalShell = recorderTerminalDisplay?.closest('.terminal-shell') || null;
     const recorderTerminalToolbar = $('#recorderTerminalToolbar');
     const recorderTerminalBadge = $('#recorderTerminalBadge');
     const recorderTerminalHint = $('#recorderTerminalHint');
@@ -3393,11 +3394,23 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function closeRecorderTerminalSession() {
       hideRecorderReadPopover();
+      if (recorderTerminalShell) {
+        recorderTerminalShell.classList.remove('active');
+      }
       if (recorderTerminalActivationOverlay) {
         recorderTerminalActivationOverlay.style.display = '';
       }
       if (state.recorderTerminalComponent) {
         state.recorderTerminalComponent.dispose();
+      }
+    }
+
+    function setRecorderTerminalActive() {
+      if (recorderTerminalShell) {
+        recorderTerminalShell.classList.add('active');
+      }
+      if (recorderTerminalActivationOverlay) {
+        recorderTerminalActivationOverlay.style.display = 'none';
       }
     }
 
@@ -4913,6 +4926,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         return;
       }
 
+      setRecorderTerminalActive();
       if (recorderRunCaptureButton) {
         recorderRunCaptureButton.disabled = true;
       }
@@ -5012,6 +5026,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     function addRecorderReadVisual() {
       if (!state.workflowRecorder || !state.workflowRecorder.started) return;
       try {
+        state.workflowRecorder.clearReadEdit();
         const outputs = state.workflowRecorder.getOutputKeys();
         if (!outputs.length) {
           state.workflowRecorder.setStatus('You must create an Output block first.', 'error');
@@ -5092,6 +5107,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         try {
           const selection = state.recorderTerminalComponent.terminal.getSelection();
           if (selection && selection.trim()) {
+            state.workflowRecorder.clearReadEdit();
             const outputs = state.workflowRecorder.getOutputKeys();
             if (!outputs.length) {
               state.workflowRecorder.setStatus('Create an Output Block first to bind terminal selections to.', 'warn');
@@ -5136,9 +5152,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         }
         const robot = ROBOT_TYPES.length ? { id: rId, name: rId } : { id: rId };
         state.recorderTerminalComponent?.connect(robot);
-        if (recorderTerminalActivationOverlay) {
-          recorderTerminalActivationOverlay.style.display = 'none';
-        }
+        setRecorderTerminalActive();
       });
 
       recorderCreateNewTestButton?.addEventListener('click', () => {

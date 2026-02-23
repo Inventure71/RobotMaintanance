@@ -1,4 +1,5 @@
 import { normalizeText } from '../lib/normalize.js';
+import { createFlowBlockContainer, createFlowBlockPreset, createFlowEmptyState } from './flow-block-presets.js';
 
 function normalizeToken(rawValue, fallback = '') {
   const token = normalizeText(rawValue, '')
@@ -39,6 +40,15 @@ function parseLineSeparated(value) {
     .split('\n')
     .map((item) => normalizeText(item, ''))
     .filter(Boolean);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export class WorkflowRecorderComponent {
@@ -516,116 +526,66 @@ export class WorkflowRecorderComponent {
     if (!this.outputsEl) return;
     this.outputsEl.replaceChildren();
     if (!this.outputs.length) {
-      const empty = document.createElement('div');
-      empty.className = 'manage-list-empty';
-      empty.textContent = 'No outputs yet.';
-      this.outputsEl.appendChild(empty);
+      this.outputsEl.appendChild(createFlowEmptyState('No outputs yet.'));
       return;
     }
-    const container = document.createElement('div');
-    container.className = 'flow-block-container';
+    const container = createFlowBlockContainer();
 
-    this.outputs.forEach((output, index) => {
-      const row = document.createElement('div');
-      row.className = 'flow-block read-block'; // Outputs are read-like
-      row.style.display = 'flex';
-      row.style.flexDirection = 'column';
-      row.style.alignItems = 'stretch';
-      
-      const header = document.createElement('div');
-      header.style.display = 'grid';
-      header.style.gridTemplateColumns = 'auto 1fr auto';
-      header.style.gap = '16px';
-      header.style.alignItems = 'center';
-
-      const iconWrap = document.createElement('div');
-      iconWrap.className = 'flow-block-icon';
-      iconWrap.textContent = output.icon || '💾';
-
-      const content = document.createElement('div');
-      content.className = 'flow-block-content';
-      
-      const title = document.createElement('div');
-      title.className = 'flow-block-title';
-      title.textContent = `OUTPUT ${output.label} (${output.key})`;
-      
+    this.outputs.forEach((output) => {
       const readCount = this._readRulesForOutput(output.key).length;
-      const desc = document.createElement('div');
-      desc.className = 'flow-block-desc';
-      desc.textContent = `${readCount} attached read block${readCount === 1 ? '' : 's'}`;
-      
-      content.append(title, desc);
-
-      const actionWrap = document.createElement('div');
-      actionWrap.className = 'flow-block-actions';
-
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'button button-compact';
-      removeBtn.textContent = 'Remove';
-      removeBtn.type = 'button';
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.removeOutput(output.key);
-      });
-
-      actionWrap.append(removeBtn);
-      header.append(iconWrap, content, actionWrap);
-      
-      // Inline Editor for Outputs
-      const editor = document.createElement('div');
-      editor.className = 'flow-block-editor-modal';
-      editor.style.display = 'none';
-
-      let isEditing = false;
-      header.addEventListener('click', () => {
-        this.outputEditKey = output.key;
-        this._emitState();
-        isEditing = !isEditing;
-        editor.style.display = isEditing ? 'grid' : 'none';
-      });
-
-      editor.innerHTML = `
-        <label class="form-field">Output Key
-          <input type="text" class="form-input key-input" value="${output.key || ''}">
-        </label>
-        <label class="form-field">Label
-          <input type="text" class="form-input label-input" value="${output.label || ''}">
-        </label>
-        <label class="form-field">Icon
-          <input type="text" class="form-input icon-input" value="${output.icon || '💾'}">
-        </label>
-        <label class="form-field">Pass message
-          <input type="text" class="form-input pass-input" value="${output.passDetails || ''}">
-        </label>
-        <label class="form-field">Fail message
-          <input type="text" class="form-input fail-input" value="${output.failDetails || ''}">
-        </label>
-        <div style="display:flex; justify-content:flex-end;">
-          <button type="button" class="button save-btn">Save Output</button>
-        </div>
-      `;
-      const saveBtn = editor.querySelector('.save-btn');
-      saveBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        try {
-          this.outputEditKey = output.key; // ensure we are editing THIS key
-          this.addOrUpdateOutput({
-            key: editor.querySelector('.key-input').value.trim(),
-            label: editor.querySelector('.label-input').value.trim(),
-            icon: editor.querySelector('.icon-input').value.trim(),
-            passDetails: editor.querySelector('.pass-input').value.trim(),
-            failDetails: editor.querySelector('.fail-input').value.trim()
+      const row = createFlowBlockPreset({
+        variant: 'read',
+        icon: output.icon || '💾',
+        title: `OUTPUT ${output.label} (${output.key})`,
+        description: `${readCount} attached read block${readCount === 1 ? '' : 's'}`,
+        onRemove: () => this.removeOutput(output.key),
+        onToggle: (open) => {
+          if (open) {
+            this.setOutputEdit(output.key);
+          } else if (this.outputEditKey === output.key) {
+            this.clearOutputEdit();
+          }
+        },
+        renderEditor: (editor) => {
+          editor.innerHTML = `
+            <label class="form-field">Output Key
+              <input type="text" class="form-input key-input" value="${output.key || ''}">
+            </label>
+            <label class="form-field">Label
+              <input type="text" class="form-input label-input" value="${output.label || ''}">
+            </label>
+            <label class="form-field">Icon
+              <input type="text" class="form-input icon-input" value="${output.icon || '💾'}">
+            </label>
+            <label class="form-field">Pass message
+              <input type="text" class="form-input pass-input" value="${output.passDetails || ''}">
+            </label>
+            <label class="form-field">Fail message
+              <input type="text" class="form-input fail-input" value="${output.failDetails || ''}">
+            </label>
+            <div style="display:flex; justify-content:flex-end;">
+              <button type="button" class="button save-btn">Save Output</button>
+            </div>
+          `;
+          const saveBtn = editor.querySelector('.save-btn');
+          saveBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            try {
+              this.setOutputEdit(output.key);
+              this.addOrUpdateOutput({
+                key: editor.querySelector('.key-input').value.trim(),
+                label: editor.querySelector('.label-input').value.trim(),
+                icon: editor.querySelector('.icon-input').value.trim(),
+                passDetails: editor.querySelector('.pass-input').value.trim(),
+                failDetails: editor.querySelector('.fail-input').value.trim(),
+              });
+              this.setStatus('Output updated.', 'ok');
+            } catch (error) {
+              this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+            }
           });
-          this.outputEditKey = '';
-          this.setStatus('Output updated.', 'ok');
-          this.render();
-        } catch (error) {
-          this.setStatus(error instanceof Error ? error.message : String(error), 'error');
-        }
+        },
       });
-
-      row.appendChild(header);
-      row.appendChild(editor);
       container.appendChild(row);
     });
     this.outputsEl.appendChild(container);
@@ -635,173 +595,144 @@ export class WorkflowRecorderComponent {
     if (!this.blocksEl) return;
     this.blocksEl.replaceChildren();
     if (!this.blocks.length) {
-      const empty = document.createElement('div');
-      empty.className = 'manage-list-empty';
-      empty.textContent = 'No blocks in flow yet.';
-      this.blocksEl.appendChild(empty);
+      this.blocksEl.appendChild(createFlowEmptyState('No blocks in flow yet.'));
       return;
     }
 
-    const container = document.createElement('div');
-    container.className = 'flow-block-container';
+    const container = createFlowBlockContainer();
 
-    this.blocks.forEach((block, index) => {
-      const row = document.createElement('div');
+    this.blocks.forEach((block) => {
       const isWrite = block.type === 'write';
-      row.className = `flow-block ${isWrite ? 'write-block' : 'read-block'}`;
-      row.style.display = 'flex';
-      row.style.flexDirection = 'column';
-      row.style.alignItems = 'stretch';
-      
-      const header = document.createElement('div');
-      header.style.display = 'grid';
-      header.style.gridTemplateColumns = 'auto 1fr auto';
-      header.style.gap = '16px';
-      header.style.alignItems = 'center';
-
-      const iconWrap = document.createElement('div');
-      iconWrap.className = 'flow-block-icon';
-      iconWrap.textContent = isWrite ? '✍️' : '🔍';
-
-      const content = document.createElement('div');
-      content.className = 'flow-block-content';
-      
-      const title = document.createElement('div');
-      title.className = 'flow-block-title';
-      title.textContent = isWrite ? `WRITE ${block.command}` : `READ ${block.outputKey}`;
-      
-      const desc = document.createElement('div');
-      desc.className = 'flow-block-desc';
-      desc.textContent = isWrite 
-        ? `Saves as: ${block.saveAs}` 
+      const description = isWrite
+        ? `Saves as: ${block.saveAs}`
         : `${block.read.kind} from ${block.read.inputRef}`;
-      
-      content.append(title, desc);
-
-      const actionWrap = document.createElement('div');
-      actionWrap.className = 'flow-block-actions';
-
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'button button-compact';
-      removeBtn.textContent = 'Remove';
-      removeBtn.type = 'button';
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.removeBlock(block.id);
-      });
-
-      actionWrap.append(removeBtn);
-      header.append(iconWrap, content, actionWrap);
-
-      const editor = document.createElement('div');
-      editor.className = 'flow-block-editor-modal';
-      editor.style.display = 'none';
-
-      let isEditing = false;
-      header.addEventListener('click', () => {
-        if (!isWrite) {
-          this.readEditBlockId = block.id;
-          this._emitState();
-        }
-        isEditing = !isEditing;
-        editor.style.display = isEditing ? 'grid' : 'none';
-      });
-
-      if (isWrite) {
-        editor.innerHTML = `
-          <label class="form-field">Command
-            <input type="text" class="form-input cmd-input" value="${block.command || ''}" disabled title="Command executed in terminal cannot be modified here. Delete and re-run.">
-          </label>
-          <label class="form-field">Save As
-            <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
-          </label>
-          <div style="display:flex; justify-content:flex-end;">
-            <button type="button" class="button save-btn">Save Block</button>
-          </div>
-        `;
-        const saveBtn = editor.querySelector('.save-btn');
-        saveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const nextValue = editor.querySelector('.save-input').value.trim();
-          try {
-            this.updateWriteSaveAs(block.id, nextValue);
-            this.setStatus(`Updated ${block.id} saveAs.`, 'ok');
-            this.render();
-          } catch (error) {
-            this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+      const row = createFlowBlockPreset({
+        variant: isWrite ? 'write' : 'read',
+        icon: isWrite ? '✍️' : '🔍',
+        title: isWrite ? `WRITE ${block.command}` : `READ ${block.outputKey}`,
+        description,
+        onRemove: () => this.removeBlock(block.id),
+        onToggle: (open) => {
+          if (isWrite) return;
+          if (open) {
+            this.setReadEdit(block.id);
+          } else if (this.readEditBlockId === block.id) {
+            this.clearReadEdit();
           }
-        });
-      } else {
-        const isStr = block.read?.kind === 'contains_string';
-        const isAny = block.read?.kind === 'contains_any_string';
-        const isLines = block.read?.kind === 'contains_lines_unordered';
-        let needleVal = block.read?.needle || '';
-        if (isAny && block.read?.needles) needleVal = block.read.needles.join(', ');
-        if (isLines && block.read?.lines) needleVal = block.read.lines.join('\n');
-
-        editor.innerHTML = `
-          <label class="form-field">Output Key Binding
-            <input type="text" class="form-input id-input" value="${block.outputKey || ''}">
-          </label>
-          <label class="form-field">Read from (Input Ref)
-            <input type="text" class="form-input ref-input" value="${block.read?.inputRef || ''}">
-          </label>
-          <label class="form-field">Matcher Kind
-            <select class="form-input kind-input">
-              <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
-              <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
-              <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
-            </select>
-          </label>
-          <label class="form-field">Matching Value (String / Comma sep / Lines)
-            <textarea class="form-input needle-input" rows="3">${needleVal}</textarea>
-          </label>
-          <div style="display:flex; justify-content:flex-end;">
-            <button type="button" class="button save-btn">Save Read Block</button>
-          </div>
-        `;
-        const saveBtn = editor.querySelector('.save-btn');
-        saveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const outKey = editor.querySelector('.id-input').value.trim();
-          const refVal = editor.querySelector('.ref-input').value.trim();
-          const kindVal = editor.querySelector('.kind-input').value;
-          const needleRaw = editor.querySelector('.needle-input').value;
-
-          let needle = '';
-          let needles = [];
-          let lines = [];
-          
-          if (kindVal === 'contains_lines_unordered') {
-             lines = needleRaw.split('\n').map(s => s.trim()).filter(Boolean);
-          } else if (kindVal === 'contains_any_string') {
-             needles = needleRaw.split(',').map(s => s.trim()).filter(Boolean);
-          } else {
-             needle = needleRaw.trim();
-          }
-
-          try {
-            this.readEditBlockId = block.id; // required for addOrUpdateReadBlock to update rather than add
-            this.addOrUpdateReadBlock({
-              outputKey: outKey,
-              inputRef: refVal,
-              kind: kindVal,
-              needle: needle,
-              needles: needles.join(','),
-              lines: lines.join('\n'),
-              requireAll: true
+        },
+        renderEditor: (editor) => {
+          if (isWrite) {
+            editor.innerHTML = `
+              <label class="form-field">Command
+                <input type="text" class="form-input cmd-input" value="${block.command || ''}" disabled title="Command executed in terminal cannot be modified here. Delete and re-run.">
+              </label>
+              <label class="form-field">Save As
+                <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
+              </label>
+              <div style="display:flex; justify-content:flex-end;">
+                <button type="button" class="button save-btn">Save Block</button>
+              </div>
+            `;
+            const saveBtn = editor.querySelector('.save-btn');
+            saveBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              const nextValue = editor.querySelector('.save-input').value.trim();
+              try {
+                this.updateWriteSaveAs(block.id, nextValue);
+                this.setStatus(`Updated ${block.id} saveAs.`, 'ok');
+              } catch (error) {
+                this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+              }
             });
-            this.readEditBlockId = '';
-            this.setStatus('Read block updated.', 'ok');
-            this.render();
-          } catch (error) {
-            this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+            return;
           }
-        });
-      }
 
-      row.appendChild(header);
-      row.appendChild(editor);
+          const isStr = block.read?.kind === 'contains_string';
+          const isAny = block.read?.kind === 'contains_any_string';
+          const isLines = block.read?.kind === 'contains_lines_unordered';
+          let needleVal = block.read?.needle || '';
+          if (isAny && block.read?.needles) needleVal = block.read.needles.join(', ');
+          if (isLines && block.read?.lines) needleVal = block.read.lines.join('\n');
+          const currentOutputKey = normalizeToken(block.outputKey, '');
+          const currentInputRef = normalizeText(block.read?.inputRef, '');
+          const outputOptions = this.outputs
+            .map((output) => {
+              const selected = output.key === currentOutputKey ? ' selected' : '';
+              const label = `${normalizeText(output.label, output.key)} (${output.key})`;
+              return `<option value="${escapeHtml(output.key)}"${selected}>${escapeHtml(label)}</option>`;
+            })
+            .join('');
+          const writeRefOptions = this.getWriteRefs()
+            .map((writeRef) => {
+              const selected = normalizeText(writeRef.saveAs, '') === currentInputRef ? ' selected' : '';
+              const label = `${writeRef.saveAs} (${writeRef.command})`;
+              return `<option value="${escapeHtml(writeRef.saveAs)}"${selected}>${escapeHtml(label)}</option>`;
+            })
+            .join('');
+
+          editor.innerHTML = `
+            <label class="form-field">Output Key Binding
+              <select class="form-input id-input">
+                ${outputOptions}
+              </select>
+            </label>
+            <label class="form-field">Read from (Input Ref)
+              <select class="form-input ref-input">
+                ${writeRefOptions}
+              </select>
+            </label>
+            <label class="form-field">Matcher Kind
+              <select class="form-input kind-input">
+                <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
+                <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
+                <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
+              </select>
+            </label>
+            <label class="form-field">Matching Value (String / Comma sep / Lines)
+              <textarea class="form-input needle-input" rows="3">${needleVal}</textarea>
+            </label>
+            <div style="display:flex; justify-content:flex-end;">
+              <button type="button" class="button save-btn">Save Read Block</button>
+            </div>
+          `;
+          const saveBtn = editor.querySelector('.save-btn');
+          saveBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const outKey = normalizeText(editor.querySelector('.id-input').value, '');
+            const refVal = normalizeText(editor.querySelector('.ref-input').value, '');
+            const kindVal = editor.querySelector('.kind-input').value;
+            const needleRaw = editor.querySelector('.needle-input').value;
+
+            let needle = '';
+            let needles = [];
+            let lines = [];
+
+            if (kindVal === 'contains_lines_unordered') {
+              lines = needleRaw.split('\n').map((s) => s.trim()).filter(Boolean);
+            } else if (kindVal === 'contains_any_string') {
+              needles = needleRaw.split(',').map((s) => s.trim()).filter(Boolean);
+            } else {
+              needle = needleRaw.trim();
+            }
+
+            try {
+              this.setReadEdit(block.id);
+              this.addOrUpdateReadBlock({
+                outputKey: outKey,
+                inputRef: refVal,
+                kind: kindVal,
+                needle,
+                needles: needles.join(','),
+                lines: lines.join('\n'),
+                requireAll: true,
+              });
+              this.setStatus('Read block updated.', 'ok');
+            } catch (error) {
+              this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+            }
+          });
+        },
+      });
       container.appendChild(row);
     });
     this.blocksEl.appendChild(container);
