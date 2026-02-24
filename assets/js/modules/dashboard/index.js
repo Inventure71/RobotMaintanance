@@ -105,6 +105,15 @@ let ROBOT_TYPE_BY_ID = new Map();
       camera: 'CAM',
     });
     const LOW_BATTERY_WARNING_PERCENT = 30;
+    const ONLINE_SORT_BATTERY = 'battery';
+    const ONLINE_SORT_NAME = 'name';
+    const ONLINE_SORT_STATUS = 'status';
+    const ONLINE_SORT_ORDER = [ONLINE_SORT_BATTERY, ONLINE_SORT_NAME, ONLINE_SORT_STATUS];
+    const ONLINE_SORT_LABELS = {
+      [ONLINE_SORT_BATTERY]: 'Battery',
+      [ONLINE_SORT_NAME]: 'Name',
+      [ONLINE_SORT_STATUS]: 'Status',
+    };
 
     function clampOnlineCountdownMs(valueMs) {
       const numeric = Number.isFinite(valueMs) ? valueMs : ONLINE_CHECK_TIMEOUT_MS;
@@ -630,15 +639,6 @@ let ROBOT_TYPE_BY_ID = new Map();
       return buildTestPreviewText(result?.value, result?.details, { prefix });
     }
 
-    function getIssueLabel(testId, testResult, definitions) {
-      const id = normalizeText(testId, '');
-      if (id.toLowerCase() === 'battery') {
-        const batteryReasonLabel = batteryReasonText(testResult, { short: true });
-        if (batteryReasonLabel) return batteryReasonLabel;
-      }
-      return getDefinitionLabel(definitions, id);
-    }
-
     function syncModalScrollLock() {
       if (!document?.body) return;
       const shouldLock = state.testDebugModalOpen || state.isBugReportModalOpen;
@@ -659,6 +659,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         type: 'all',
         error: 'all',
       },
+      onlineSortMode: ONLINE_SORT_BATTERY,
       testingRobotIds: new Set(),
       searchingRobotIds: new Set(),
       fixingRobotIds: new Set(),
@@ -737,6 +738,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const emptyState = $('#emptyState');
     const filterType = $('#filterType');
     const filterError = $('#filterError');
+    const cycleOnlineSortButton = $('#cycleOnlineSort');
     const terminal = $('#terminal');
     const detailTerminalShell = terminal?.closest('.terminal-shell') || null;
     const terminalToolbar = $('#terminalToolbar');
@@ -835,13 +837,72 @@ let ROBOT_TYPE_BY_ID = new Map();
     const cancelBugReportButton = $('#cancelBugReport');
     const submitBugReportButton = $('#submitBugReport');
 
+    function normalizeBatteryPercentForSort(rawValue) {
+      const text = normalizeText(rawValue, '');
+      if (!text) return Number.POSITIVE_INFINITY;
+      const explicitPercent = text.match(/(-?\d+(?:\.\d+)?)\s*%/);
+      if (explicitPercent) {
+        const parsed = Number.parseFloat(explicitPercent[1]);
+        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+      }
+      const numeric = Number.parseFloat(text);
+      return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
+    }
+
+    function nonBatteryTestEntries(robot) {
+      return Object.entries(robot?.tests || {}).filter(([testId]) => normalizeText(testId, '').toLowerCase() !== 'battery');
+    }
+
     function statusFromScore(robot) {
-      const statuses = Object.values(robot.tests || {}).map((test) => test.status);
+      const statuses = nonBatteryTestEntries(robot).map(([, test]) => test.status);
       const critical = statuses.some((x) => x === 'error');
       const warning = statuses.some((x) => x === 'warning');
       if (critical) return 'critical';
       if (warning) return 'warning';
       return 'ok';
+    }
+
+    function statusSortRank(robot) {
+      const status = statusFromScore(robot);
+      if (status === 'critical') return 0;
+      if (status === 'warning') return 1;
+      return 2;
+    }
+
+    function onlineRobotComparator(a, b) {
+      const mode = normalizeText(state.onlineSortMode, ONLINE_SORT_BATTERY);
+      if (mode === ONLINE_SORT_NAME) {
+        return normalizeText(a?.name, '').localeCompare(normalizeText(b?.name, ''), undefined, { sensitivity: 'base' });
+      }
+      if (mode === ONLINE_SORT_STATUS) {
+        const byStatus = statusSortRank(a) - statusSortRank(b);
+        if (byStatus !== 0) return byStatus;
+        return normalizeText(a?.name, '').localeCompare(normalizeText(b?.name, ''), undefined, { sensitivity: 'base' });
+      }
+      const aBattery = normalizeBatteryPercentForSort(a?.tests?.battery?.value);
+      const bBattery = normalizeBatteryPercentForSort(b?.tests?.battery?.value);
+      if (aBattery !== bBattery) return aBattery - bBattery;
+      return normalizeText(a?.name, '').localeCompare(normalizeText(b?.name, ''), undefined, { sensitivity: 'base' });
+    }
+
+    function sortOnlineRobots(robots) {
+      const list = Array.isArray(robots) ? [...robots] : [];
+      list.sort(onlineRobotComparator);
+      return list;
+    }
+
+    function syncOnlineSortButton() {
+      if (!cycleOnlineSortButton) return;
+      const mode = ONLINE_SORT_ORDER.includes(state.onlineSortMode) ? state.onlineSortMode : ONLINE_SORT_BATTERY;
+      cycleOnlineSortButton.textContent = `Sort robots: ${ONLINE_SORT_LABELS[mode] || ONLINE_SORT_LABELS[ONLINE_SORT_BATTERY]}`;
+    }
+
+    function cycleOnlineSortMode() {
+      const currentIndex = ONLINE_SORT_ORDER.indexOf(state.onlineSortMode);
+      const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % ONLINE_SORT_ORDER.length : 0;
+      state.onlineSortMode = ONLINE_SORT_ORDER[nextIndex];
+      syncOnlineSortButton();
+      renderDashboard();
     }
 
     function resolveRobotModelUrl(candidate) {
@@ -1612,10 +1673,10 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function issueSummary(robot) {
       const testDefinitions = robot?.testDefinitions || TEST_DEFINITIONS;
-      return Object.entries(robot.tests)
+      return nonBatteryTestEntries(robot)
         .filter(([, test]) => test.status !== 'ok')
         .slice(0, 3)
-        .map(([id, test]) => getIssueLabel(id, test, testDefinitions));
+        .map(([id]) => getDefinitionLabel(testDefinitions, id));
     }
 
     function renderCard(robot) {
@@ -1645,7 +1706,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const issues = issueSummary(robot);
       const list = issues.map((i) => `<span class="error-badge">${i}</span>`).join('');
 
-      const failureClasses = Object.entries(robot.tests)
+      const failureClasses = nonBatteryTestEntries(robot)
         .filter(([, test]) => test.status !== 'ok')
         .map(([id]) => `fault-${id}`)
         .join(' ');
@@ -1747,7 +1808,9 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function renderDashboard() {
       const visible = applyFilters();
-      const onlineRobots = visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) === 'ok');
+      const onlineRobots = sortOnlineRobots(
+        visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) === 'ok'),
+      );
       const offlineRobots = visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) !== 'ok');
 
       if (onlineSectionTitle) {
@@ -1812,7 +1875,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function setModelContainerFaultClasses(modelContainer, robot, isOffline, includeDetailClass = false) {
       if (!modelContainer) return;
-      const failureClasses = Object.entries(robot.tests || {})
+      const failureClasses = nonBatteryTestEntries(robot)
         .filter(([, test]) => normalizeStatus(test?.status) !== 'ok')
         .map(([id]) => `fault-${id}`)
         .join(' ');
@@ -1935,7 +1998,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const modelHost = $('#detailModel');
       const stateKey = statusFromScore(robot);
       const batteryState = robot?.tests?.battery || {};
-      const errorCount = Object.entries(robot.tests || {}).filter(([, t]) => normalizeStatus(t?.status) !== 'ok').length;
+      const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => normalizeStatus(t?.status) !== 'ok').length;
       const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
       const normalizedRobotId = robotId(robot);
       const isTesting = isRobotTesting(normalizedRobotId);
@@ -2056,6 +2119,20 @@ let ROBOT_TYPE_BY_ID = new Map();
           targetGrid.appendChild(card);
         }
       });
+
+      if (onlineGrid) {
+        const sortedOnlineIds = sortOnlineRobots(
+          visibleList.filter((robot) => normalizeStatus(robot?.tests?.online?.status) === 'ok'),
+        )
+          .map((robot) => robotId(robot))
+          .filter(Boolean);
+        sortedOnlineIds.forEach((id) => {
+          const card = queryCardByRobotId(id);
+          if (card && card.parentElement === onlineGrid) {
+            onlineGrid.appendChild(card);
+          }
+        });
+      }
 
       applyDashboardMetaFromVisible(visibleList);
       if (state.detailRobotId) {
@@ -3031,7 +3108,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
       const stateKey = statusFromScore(robot);
       const normalizedRobotId = robotId(robot);
-      const errorCount = Object.entries(robot.tests).filter(([, t]) => t.status !== 'ok').length;
+      const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => t.status !== 'ok').length;
       const batteryState = robot?.tests?.battery || {};
       const isTesting = isRobotTesting(normalizedRobotId);
       const isSearching = isRobotSearching(normalizedRobotId);
@@ -3061,7 +3138,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
       const modelMarkup = buildRobotModelContainer(
         robot,
-        `detail-model ${Object.entries(robot.tests)
+        `detail-model ${nonBatteryTestEntries(robot)
           .filter(([, test]) => test.status !== 'ok')
           .map(([id]) => `fault-${id}`)
           .join(' ')}`,
@@ -5586,6 +5663,10 @@ let ROBOT_TYPE_BY_ID = new Map();
       $('#searchName').addEventListener('input', onFilterChange);
       filterType.addEventListener('change', onFilterChange);
       filterError.addEventListener('change', onFilterChange);
+      syncOnlineSortButton();
+      cycleOnlineSortButton?.addEventListener('click', () => {
+        cycleOnlineSortMode();
+      });
       $('#backToFleet').addEventListener('click', showDashboard);
       $('#openAddRobot')?.addEventListener('click', showAddRobotPage);
       $('#openBugReport')?.addEventListener('click', openBugReportModal);
