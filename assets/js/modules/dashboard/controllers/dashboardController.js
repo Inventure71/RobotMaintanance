@@ -15,7 +15,6 @@ import {
   ROBOTS_CONFIG_URL,
   ROBOT_TYPES_CONFIG_URL,
   DEFAULT_ROBOT_MODEL_URL,
-  backendData,
 } from '../../../config/app-defaults.js';
 import { normalizeStatus, normalizeText, normalizeTypeId } from '../../../lib/normalize.js';
 import { $, $$ } from '../../../lib/dom.js';
@@ -386,7 +385,6 @@ const runtimeEnv = {
   addRobotSection,
   addRobotTypeSelect,
   applyActionButton,
-  backendData,
   bugReportMessageInput,
   bugReportModal,
   bugReportStatus,

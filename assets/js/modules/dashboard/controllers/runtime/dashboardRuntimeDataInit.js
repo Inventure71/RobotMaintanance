@@ -71,7 +71,6 @@ export function registerDataInitRuntime(runtime, env) {
     addRobotSection,
     addRobotTypeSelect,
     applyActionButton,
-    backendData,
     bugReportMessageInput,
     bugReportModal,
     bugReportStatus,
@@ -659,13 +658,11 @@ export function registerDataInitRuntime(runtime, env) {
       }
 
   async function loadRobotsFromBackend() {
-        const [fleetStatic, _robotTypes] = await Promise.all([
+        const [fleetStatic] = await Promise.all([
           loadFleetStaticState().catch(() => loadRobotConfig()),
           loadRobotTypeConfig(),
         ]);
-        const normalizedStatic = normalizeRobotData(
-          Array.isArray(fleetStatic) && fleetStatic.length ? fleetStatic : backendData,
-        );
+        const normalizedStatic = normalizeRobotData(Array.isArray(fleetStatic) ? fleetStatic : []);
         try {
           const delta = await loadFleetRuntimeDelta(0);
           state.runtimeVersion = resolveRuntimeVersion(delta.version, 0);
@@ -761,7 +758,7 @@ export function registerDataInitRuntime(runtime, env) {
             syncFixModePanels();
           })
           .catch(() => {
-            setRobots(normalizeRobotData(backendData));
+            setRobots([]);
             syncAutomatedRobotActivityFromState();
             syncAutoMonitorRefreshState();
             populateFilters();

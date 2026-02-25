@@ -71,7 +71,6 @@ export function registerMonitorConfigRuntime(runtime, env) {
     addRobotSection,
     addRobotTypeSelect,
     applyActionButton,
-    backendData,
     bugReportMessageInput,
     bugReportModal,
     bugReportStatus,
