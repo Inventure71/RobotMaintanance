@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from queue import Queue
 
-from backend.ssh_api_v2 import InteractiveShell
+from backend.ssh_client import InteractiveShell
 
 
 class FakeChannel:

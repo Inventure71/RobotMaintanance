@@ -31,6 +31,10 @@ class DefinitionService:
         self._command_primitives_dir = Path(command_primitives_dir)
         self._tests_dir = Path(tests_dir)
         self._fixes_dir = Path(fixes_dir)
+        self._summary_cache: dict[str, Any] | None = None
+
+    def _invalidate_summary_cache(self) -> None:
+        self._summary_cache = None
 
     @staticmethod
     def _ensure_valid_id(raw_id: str, kind: str) -> str:
@@ -125,6 +129,7 @@ class DefinitionService:
             check_definitions_by_id=catalog.check_definitions_by_id,
             fix_definitions_by_id=catalog.fix_definitions_by_id,
         )
+        self._invalidate_summary_cache()
         return catalog
 
     def _safe_write_with_reload(self, path: Path, payload: Any) -> RobotCatalog:
@@ -145,6 +150,9 @@ class DefinitionService:
         return self.get_summary()
 
     def get_summary(self) -> dict[str, Any]:
+        if self._summary_cache is not None:
+            return self._summary_cache
+
         command_primitives_by_id = getattr(self._terminal_manager, "_command_primitives_by_id", {}) or {}
         test_definitions_by_id = getattr(self._terminal_manager, "_test_definitions_by_id", {}) or {}
         check_definitions_by_id = getattr(self._terminal_manager, "_check_definitions_by_id", {}) or {}
@@ -244,7 +252,7 @@ class DefinitionService:
             if isinstance(check, dict)
         ]
 
-        return {
+        summary = {
             "ok": True,
             "commandPrimitives": primitives,
             "tests": tests,
@@ -252,6 +260,8 @@ class DefinitionService:
             "fixes": fixes,
             "robotTypes": robot_types,
         }
+        self._summary_cache = summary
+        return summary
 
     def upsert_primitive(self, payload: dict[str, Any]) -> dict[str, Any]:
         primitive_id = self._ensure_valid_id(payload.get("id"), "Primitive")

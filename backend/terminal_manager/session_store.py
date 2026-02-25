@@ -6,7 +6,13 @@ from typing import Any
 from fastapi import HTTPException
 
 from ..models import ShellHandle
+
+
 class SessionStoreMixin:
+    def _idle_sweep_interval_sec(self) -> float:
+        configured = float(getattr(self, "IDLE_SWEEP_INTERVAL_SEC", 2.0))
+        return max(0.5, configured)
+
     def _resolve_credentials(self, robot_id: str) -> tuple[str, str, str, int]:
         robot = self.robots_by_id.get(robot_id)
         if not robot:
@@ -37,20 +43,29 @@ class SessionStoreMixin:
         except RuntimeError:
             pass
 
-    def _evict_idle_locked(self) -> None:
-        now = time.time()
+    def _evict_idle_locked(self, now: float | None = None) -> None:
+        sweep_now = now if now is not None else time.time()
         for key, handle in list(self._handles.items()):
-            if now - handle.last_used > self.idle_timeout_sec:
+            if sweep_now - handle.last_used > self.idle_timeout_sec:
                 self._close_handle(key)
+
+    def _maybe_evict_idle_locked(self, now: float | None = None) -> None:
+        sweep_now = now if now is not None else time.time()
+        next_sweep_at = float(getattr(self, "_next_idle_sweep_at", 0.0))
+        if sweep_now < next_sweep_at:
+            return
+        self._evict_idle_locked(now=sweep_now)
+        self._next_idle_sweep_at = sweep_now + self._idle_sweep_interval_sec()
 
     def get_or_connect(self, page_session_id: str, robot_id: str):
         self._mark_manual_activity(robot_id=robot_id, page_session_id=page_session_id)
         key = (page_session_id, robot_id)
         with self._lock:
-            self._evict_idle_locked()
+            now = time.time()
+            self._maybe_evict_idle_locked(now=now)
             existing = self._handles.get(key)
             if existing:
-                existing.last_used = time.time()
+                existing.last_used = now
                 return existing.shell
 
         host, username, password, port = self._resolve_credentials(robot_id)

@@ -86,6 +86,7 @@ def create_app() -> FastAPI:
             config_path,
             runtime_tests_provider=terminal_manager.get_runtime_tests,
             runtime_activity_provider=terminal_manager.get_runtime_activity,
+            runtime_snapshot_provider=terminal_manager.get_runtime_snapshot_since,
         )
     )
     app.include_router(create_monitor_router(terminal_manager))

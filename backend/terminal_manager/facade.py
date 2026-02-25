@@ -74,6 +74,7 @@ class TerminalManager(
     MONITOR_PARALLELISM_MAX = 100
     MANUAL_ACTIVITY_DEFER_SEC = 5.0
     MANUAL_AUTO_FIX_DEFER_SEC = 90.0
+    IDLE_SWEEP_INTERVAL_SEC = 2.0
     COMMAND_DEFAULT_TIMEOUT_SEC = 20.0
     COMMAND_MIN_TIMEOUT_SEC = 0.5
     COMMAND_MAX_TIMEOUT_SEC = 3600.0
@@ -115,6 +116,8 @@ class TerminalManager(
         self._online_cache = {}
         self._runtime_tests = {}
         self._runtime_activity = {}
+        self._runtime_version = 0
+        self._runtime_robot_versions = {}
         self._monitor_mode = self.MONITOR_MODE_ONLINE_BATTERY
         self._topics_interval_sec = self.TOPICS_INTERVAL_DEFAULT_SEC
         self._online_interval_sec = self.ONLINE_INTERVAL_DEFAULT_SEC
@@ -131,6 +134,9 @@ class TerminalManager(
         self._last_auto_monitor_online_state = {}
         self._auto_recovery_test_inflight = set()
         self._fix_runs: dict[tuple[str, str], dict[str, Any]] = {}
+        self._next_idle_sweep_at = 0.0
+        self._auto_monitor_executor = None
+        self._auto_monitor_executor_workers = 0
         self._command_primitives_by_id = command_primitives_by_id or {}
         self._test_definitions_by_id = test_definitions_by_id or {}
         self._check_definitions_by_id = check_definitions_by_id or {}
@@ -236,9 +242,11 @@ class TerminalManager(
                 normalized_runtime_robot_id = normalize_text(runtime_robot_id, "")
                 valid_test_ids = valid_test_ids_by_robot.get(normalized_runtime_robot_id)
                 if not valid_test_ids:
-                    self._runtime_tests.pop(runtime_robot_id, None)
-                    self._runtime_activity.pop(runtime_robot_id, None)
-                    self._online_cache.pop(runtime_robot_id, None)
+                    removed_tests = self._runtime_tests.pop(runtime_robot_id, None)
+                    removed_activity = self._runtime_activity.pop(runtime_robot_id, None)
+                    removed_online = self._online_cache.pop(runtime_robot_id, None)
+                    if removed_tests is not None or removed_activity is not None or removed_online is not None:
+                        self._mark_runtime_robot_dirty_locked(runtime_robot_id)
                     continue
 
                 existing_tests = self._runtime_tests.get(runtime_robot_id, {})
@@ -247,17 +255,22 @@ class TerminalManager(
                     for test_id, payload in existing_tests.items()
                     if isinstance(payload, dict) and normalize_text(test_id, "") in valid_test_ids
                 }
+                tests_changed = pruned_tests != existing_tests
                 if pruned_tests:
                     self._runtime_tests[runtime_robot_id] = pruned_tests
                 else:
                     self._runtime_tests.pop(runtime_robot_id, None)
                 if "online" not in pruned_tests:
-                    self._online_cache.pop(runtime_robot_id, None)
+                    if self._online_cache.pop(runtime_robot_id, None) is not None:
+                        tests_changed = True
+                if tests_changed:
+                    self._mark_runtime_robot_dirty_locked(runtime_robot_id)
 
             for runtime_robot_id in list(self._runtime_activity.keys()):
                 normalized_runtime_robot_id = normalize_text(runtime_robot_id, "")
                 if normalized_runtime_robot_id not in valid_test_ids_by_robot:
-                    self._runtime_activity.pop(runtime_robot_id, None)
+                    if self._runtime_activity.pop(runtime_robot_id, None) is not None:
+                        self._mark_runtime_robot_dirty_locked(runtime_robot_id)
 
         return {
             "robotCount": len(self.robots_by_id),

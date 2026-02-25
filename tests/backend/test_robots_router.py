@@ -57,3 +57,88 @@ def test_get_robots_merges_runtime_tests():
     assert payload[0]["tests"]["battery"]["value"] == "93%"
     assert payload[0]["activity"]["searching"] is True
     assert payload[0]["activity"]["phase"] == "online_probe"
+
+
+def test_fleet_static_endpoint_returns_default_test_payloads():
+    robots_by_id = {
+        "r1": {
+            "id": "r1",
+            "name": "Robot One",
+            "type": "rosbot-2-pro",
+            "ip": "10.0.0.1",
+            "ssh": {"username": "u", "password": "p"},
+        }
+    }
+    robot_types_by_id = {
+        "rosbot-2-pro": {
+            "typeId": "rosbot-2-pro",
+            "tests": [
+                {"id": "online", "defaultStatus": "warning", "defaultValue": "unknown"},
+                {"id": "battery", "defaultStatus": "warning", "defaultValue": "unknown"},
+            ],
+        }
+    }
+
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id=robots_by_id,
+            robot_types_by_id=robot_types_by_id,
+            robots_config_path=Path("/tmp/robots.config.json"),
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/fleet/static")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["robots"]) == 1
+    assert payload["robots"][0]["id"] == "r1"
+    assert payload["robots"][0]["tests"]["online"]["status"] == "warning"
+    assert payload["robots"][0]["tests"]["battery"]["value"] == "unknown"
+
+
+def test_fleet_runtime_endpoint_uses_versioned_snapshot_provider():
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id={"r1": {"id": "r1", "name": "Robot One", "type": "rosbot-2-pro"}},
+            robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+            robots_config_path=Path("/tmp/robots.config.json"),
+            runtime_snapshot_provider=lambda since: {
+                "version": 12,
+                "full": since <= 0,
+                "robots": [
+                    {
+                        "id": "r1",
+                        "version": 12,
+                        "tests": {
+                            "online": {
+                                "status": "ok",
+                                "value": "reachable",
+                                "details": "ok",
+                                "source": "auto-monitor",
+                                "checkedAt": 10.0,
+                            }
+                        },
+                        "activity": {
+                            "searching": False,
+                            "testing": False,
+                            "phase": None,
+                            "updatedAt": 10.0,
+                        },
+                    }
+                ],
+            },
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/fleet/runtime?since=7")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["version"] == 12
+    assert payload["full"] is False
+    assert payload["robots"][0]["id"] == "r1"
+    assert payload["robots"][0]["version"] == 12
+    assert payload["robots"][0]["tests"]["online"]["status"] == "ok"

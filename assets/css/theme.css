@@ -1,114 +1,200 @@
 :root {
+  /* Semantic tokens: Graphite + Orange command deck */
+  --bg-canvas: #090b11;
+  --bg-ambient-1: #2a1a10;
+  --bg-ambient-2: #102334;
+  --bg-grid: rgba(255, 168, 92, 0.1);
+  --bg-noise-opacity: 0.075;
+
+  --surface-panel: rgba(20, 24, 34, 0.82);
+  --surface-panel-strong: rgba(28, 34, 48, 0.88);
+  --surface-panel-glass: rgba(17, 22, 31, 0.7);
+  --surface-border: rgba(255, 178, 120, 0.26);
+  --surface-border-strong: rgba(255, 178, 120, 0.44);
+
+  --text-primary: #fdeede;
+  --text-secondary: #dbbb9d;
+  --text-dim: #987d67;
+
+  --accent-primary: #ff9a4b;
+  --accent-primary-strong: #ffb873;
+  --accent-secondary: #66d4ff;
+  --accent-secondary-strong: #8ce8ff;
+
+  --state-ok: #48d59b;
+  --state-warn: #ffbe62;
+  --state-err: #ff6f78;
+
+  --ring-focus: #ffab62;
+  --ring-hover: rgba(255, 167, 93, 0.5);
+  --ring-active: rgba(255, 167, 93, 0.78);
+
+  --elevation-1: 0 10px 24px rgba(1, 3, 8, 0.45);
+  --elevation-2: 0 18px 34px rgba(1, 3, 8, 0.55);
+  --elevation-3: 0 28px 54px rgba(1, 3, 8, 0.65);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
   --theme-overlay-pattern:
-    linear-gradient(90deg, rgba(126, 168, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(126, 168, 255, 0.04) 1px, transparent 1px);
-  --theme-overlay-opacity: 0.34;
+    linear-gradient(90deg, rgba(255, 155, 88, 0.07) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(102, 212, 255, 0.055) 1px, transparent 1px);
+  --theme-overlay-opacity: 0.33;
 
-  --button-intent-run-bg: linear-gradient(150deg, rgba(22, 84, 64, 0.95), rgba(17, 62, 50, 0.95));
-  --button-intent-run-border: rgba(56, 217, 169, 0.65);
-  --button-intent-run-text: #e8fff6;
-  --button-intent-monitor-bg: linear-gradient(150deg, rgba(27, 58, 115, 0.95), rgba(22, 48, 96, 0.95));
-  --button-intent-monitor-border: rgba(138, 198, 255, 0.7);
-  --button-intent-monitor-text: #eef7ff;
-  --button-intent-selection-bg: linear-gradient(150deg, rgba(104, 78, 30, 0.95), rgba(82, 61, 22, 0.95));
-  --button-intent-selection-border: rgba(255, 209, 102, 0.75);
-  --button-intent-selection-text: #fff4d7;
-  --button-intent-navigation-bg: linear-gradient(150deg, rgba(50, 61, 87, 0.95), rgba(35, 44, 66, 0.95));
-  --button-intent-navigation-border: rgba(179, 196, 230, 0.52);
-  --button-intent-navigation-text: #ebf1ff;
-  --button-intent-create-bg: linear-gradient(150deg, rgba(28, 90, 103, 0.95), rgba(21, 70, 80, 0.95));
-  --button-intent-create-border: rgba(93, 229, 255, 0.62);
-  --button-intent-create-text: #eaffff;
-  --button-intent-terminal-bg: linear-gradient(150deg, rgba(38, 57, 114, 0.95), rgba(29, 43, 91, 0.95));
-  --button-intent-terminal-border: rgba(144, 168, 255, 0.66);
-  --button-intent-terminal-text: #eef2ff;
-  --button-intent-danger-bg: linear-gradient(150deg, rgba(116, 31, 50, 0.95), rgba(87, 24, 39, 0.95));
-  --button-intent-danger-border: rgba(255, 110, 138, 0.75);
-  --button-intent-danger-text: #ffe8ef;
-  --button-intent-fix-bg: linear-gradient(150deg, rgba(102, 64, 20, 0.95), rgba(82, 50, 17, 0.95));
-  --button-intent-fix-border: rgba(255, 177, 92, 0.75);
-  --button-intent-fix-text: #fff1dd;
-  --button-intent-utility-bg: linear-gradient(150deg, rgba(28, 40, 76, 0.95), rgba(22, 34, 65, 0.95));
-  --button-intent-utility-border: rgba(138, 198, 255, 0.44);
-  --button-intent-utility-text: var(--text);
+  --button-intent-run-bg: linear-gradient(160deg, rgba(15, 74, 57, 0.94), rgba(10, 48, 37, 0.94));
+  --button-intent-run-border: rgba(72, 213, 155, 0.62);
+  --button-intent-run-text: #dcffee;
+  --button-intent-monitor-bg: linear-gradient(160deg, rgba(22, 56, 88, 0.95), rgba(15, 36, 60, 0.95));
+  --button-intent-monitor-border: rgba(102, 212, 255, 0.62);
+  --button-intent-monitor-text: #e6f8ff;
+  --button-intent-selection-bg: linear-gradient(160deg, rgba(94, 66, 26, 0.96), rgba(65, 45, 18, 0.96));
+  --button-intent-selection-border: rgba(255, 190, 98, 0.76);
+  --button-intent-selection-text: #fff4df;
+  --button-intent-navigation-bg: linear-gradient(160deg, rgba(57, 53, 48, 0.96), rgba(38, 34, 31, 0.96));
+  --button-intent-navigation-border: rgba(227, 188, 155, 0.38);
+  --button-intent-navigation-text: #f5e3d1;
+  --button-intent-create-bg: linear-gradient(160deg, rgba(95, 53, 22, 0.96), rgba(63, 35, 15, 0.96));
+  --button-intent-create-border: rgba(255, 169, 100, 0.7);
+  --button-intent-create-text: #fff1e2;
+  --button-intent-terminal-bg: linear-gradient(160deg, rgba(29, 64, 98, 0.96), rgba(18, 42, 65, 0.96));
+  --button-intent-terminal-border: rgba(112, 216, 255, 0.62);
+  --button-intent-terminal-text: #e8f8ff;
+  --button-intent-danger-bg: linear-gradient(160deg, rgba(102, 30, 37, 0.96), rgba(71, 20, 27, 0.96));
+  --button-intent-danger-border: rgba(255, 116, 132, 0.72);
+  --button-intent-danger-text: #ffe7e9;
+  --button-intent-fix-bg: linear-gradient(160deg, rgba(106, 59, 19, 0.96), rgba(77, 42, 13, 0.96));
+  --button-intent-fix-border: rgba(255, 171, 94, 0.78);
+  --button-intent-fix-text: #fff0dd;
+  --button-intent-utility-bg: linear-gradient(160deg, rgba(46, 51, 66, 0.96), rgba(29, 33, 45, 0.96));
+  --button-intent-utility-border: rgba(125, 200, 224, 0.44);
+  --button-intent-utility-text: var(--text-primary);
 
-  --pill-height: 2.05rem;
-  --pill-padding-x: 0.72rem;
-  --pill-font-size: 0.82rem;
-  --pill-surface-strong: rgba(8, 15, 29, 0.5);
+  --pill-height: 2rem;
+  --pill-padding-x: 0.74rem;
+  --pill-font-size: 0.8rem;
+  --pill-surface-strong: rgba(10, 12, 18, 0.52);
 
-  --status-chip-bg: rgba(0, 0, 0, 0.2);
-  --status-chip-ok-border: rgba(56, 217, 169, 0.6);
-  --status-chip-warn-border: rgba(255, 209, 102, 0.7);
-  --status-chip-err-border: rgba(255, 90, 121, 0.7);
+  --status-chip-bg: rgba(3, 4, 7, 0.36);
+  --status-chip-ok-border: rgba(72, 213, 155, 0.6);
+  --status-chip-warn-border: rgba(255, 190, 98, 0.72);
+  --status-chip-err-border: rgba(255, 111, 120, 0.72);
 
-  --terminal-shell-bg: #060912;
-  --terminal-shell-border: #203c63;
-  --terminal-toolbar-bg: rgba(13, 22, 43, 0.95);
-  --terminal-toolbar-border: rgba(138, 198, 255, 0.22);
+  --terminal-shell-bg: #0a0e15;
+  --terminal-shell-border: rgba(102, 212, 255, 0.28);
+  --terminal-toolbar-bg: rgba(14, 18, 28, 0.92);
+  --terminal-toolbar-border: rgba(255, 169, 100, 0.22);
 
-  --control-panel-bg: rgba(13, 23, 50, 0.68);
+  --control-panel-bg: rgba(22, 26, 38, 0.72);
+
+  --modal-overlay: rgba(5, 7, 12, 0.74);
+  --modal-panel-bg: rgba(16, 20, 30, 0.96);
+  --modal-panel-border: rgba(255, 178, 120, 0.34);
+
+  --floating-bug-bg: linear-gradient(170deg, rgba(88, 49, 23, 0.96), rgba(55, 30, 14, 0.96));
+  --floating-bug-border: rgba(255, 173, 105, 0.62);
+  --floating-bug-text: #fff0de;
+
+  /* Backward-compatible aliases used across existing styles */
+  --bg-a: var(--bg-canvas);
+  --bg-b: var(--bg-ambient-2);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-panel-strong);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --ok: var(--state-ok);
+  --warn: var(--state-warn);
+  --err: var(--state-err);
+  --focus: var(--ring-focus);
+  --line: var(--surface-border);
 }
 
 [data-theme='arctic-grid'] {
-  --bg-a: #03161d;
-  --bg-b: #0d3440;
-  --panel: rgba(7, 22, 28, 0.82);
-  --panel-2: rgba(11, 35, 43, 0.88);
-  --text: #e8fdff;
-  --muted: #a7d9df;
-  --ok: #44dfbe;
-  --warn: #f3d37a;
-  --err: #ff7387;
-  --focus: #7de2ff;
-  --line: rgba(125, 226, 255, 0.24);
+  --bg-canvas: #05161b;
+  --bg-ambient-1: #0f393f;
+  --bg-ambient-2: #143a42;
+  --bg-grid: rgba(94, 226, 255, 0.11);
+
+  --surface-panel: rgba(7, 24, 29, 0.84);
+  --surface-panel-strong: rgba(10, 33, 40, 0.9);
+  --surface-panel-glass: rgba(7, 27, 33, 0.72);
+  --surface-border: rgba(109, 231, 255, 0.3);
+  --surface-border-strong: rgba(109, 231, 255, 0.48);
+
+  --text-primary: #e9feff;
+  --text-secondary: #9fd9df;
+  --text-dim: #70a0a6;
+
+  --accent-primary: #67e0bf;
+  --accent-primary-strong: #8deed6;
+  --accent-secondary: #72ddff;
+  --accent-secondary-strong: #b2f4ff;
+
+  --ring-focus: #7de2ff;
+  --ring-hover: rgba(125, 226, 255, 0.5);
+  --ring-active: rgba(125, 226, 255, 0.75);
+
   --theme-overlay-pattern:
-    linear-gradient(90deg, rgba(91, 224, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(95, 224, 201, 0.06) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(91, 224, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(95, 224, 201, 0.07) 1px, transparent 1px);
 
-  --button-intent-run-bg: linear-gradient(150deg, rgba(16, 94, 74, 0.95), rgba(12, 68, 54, 0.95));
-  --button-intent-monitor-bg: linear-gradient(150deg, rgba(20, 83, 114, 0.95), rgba(17, 64, 89, 0.95));
-  --button-intent-selection-bg: linear-gradient(150deg, rgba(86, 90, 28, 0.95), rgba(68, 71, 22, 0.95));
-  --button-intent-fix-bg: linear-gradient(150deg, rgba(127, 76, 22, 0.95), rgba(97, 57, 15, 0.95));
+  --control-panel-bg: rgba(10, 30, 38, 0.78);
+  --modal-panel-border: rgba(125, 226, 255, 0.36);
+  --floating-bug-bg: linear-gradient(170deg, rgba(13, 61, 73, 0.96), rgba(9, 40, 49, 0.96));
+  --floating-bug-border: rgba(125, 226, 255, 0.62);
+  --floating-bug-text: #e9fdff;
 
-  --pill-surface-strong: rgba(5, 24, 28, 0.56);
-  --terminal-shell-bg: #04131a;
-  --terminal-shell-border: #226378;
-  --terminal-toolbar-bg: rgba(9, 34, 43, 0.94);
-  --terminal-toolbar-border: rgba(125, 226, 255, 0.26);
-  --control-panel-bg: rgba(10, 30, 38, 0.75);
+  --bg-a: var(--bg-canvas);
+  --bg-b: var(--bg-ambient-2);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-panel-strong);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --focus: var(--ring-focus);
+  --line: var(--surface-border);
 }
 
 [data-theme='ember-signal'] {
-  --bg-a: #170b07;
-  --bg-b: #4d220e;
-  --panel: rgba(35, 17, 12, 0.83);
-  --panel-2: rgba(56, 27, 19, 0.86);
-  --text: #fff2e6;
-  --muted: #f0c8ac;
-  --ok: #50deac;
-  --warn: #ffd47f;
-  --err: #ff6e75;
-  --focus: #ffa665;
-  --line: rgba(255, 166, 101, 0.24);
+  --bg-canvas: #170b07;
+  --bg-ambient-1: #5c2a10;
+  --bg-ambient-2: #452010;
+  --bg-grid: rgba(255, 174, 95, 0.12);
+
+  --surface-panel: rgba(34, 16, 12, 0.84);
+  --surface-panel-strong: rgba(53, 26, 18, 0.9);
+  --surface-panel-glass: rgba(45, 21, 14, 0.74);
+  --surface-border: rgba(255, 167, 100, 0.3);
+  --surface-border-strong: rgba(255, 167, 100, 0.5);
+
+  --text-primary: #fff1e5;
+  --text-secondary: #efc4a3;
+  --text-dim: #b58d72;
+
+  --accent-primary: #ffac63;
+  --accent-primary-strong: #ffbe82;
+  --accent-secondary: #ffd27e;
+  --accent-secondary-strong: #ffe1a8;
+
+  --ring-focus: #ffa665;
+  --ring-hover: rgba(255, 166, 101, 0.5);
+  --ring-active: rgba(255, 166, 101, 0.76);
+
   --theme-overlay-pattern:
-    linear-gradient(90deg, rgba(255, 166, 101, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255, 205, 109, 0.07) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(255, 166, 101, 0.09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 205, 109, 0.08) 1px, transparent 1px);
 
-  --button-intent-run-bg: linear-gradient(150deg, rgba(20, 94, 70, 0.96), rgba(14, 67, 51, 0.96));
-  --button-intent-monitor-bg: linear-gradient(150deg, rgba(98, 62, 17, 0.95), rgba(75, 46, 13, 0.95));
-  --button-intent-selection-bg: linear-gradient(150deg, rgba(110, 83, 24, 0.95), rgba(84, 61, 18, 0.95));
-  --button-intent-navigation-bg: linear-gradient(150deg, rgba(89, 48, 22, 0.95), rgba(64, 34, 16, 0.95));
-  --button-intent-create-bg: linear-gradient(150deg, rgba(92, 57, 20, 0.95), rgba(68, 41, 14, 0.95));
-  --button-intent-terminal-bg: linear-gradient(150deg, rgba(102, 55, 18, 0.95), rgba(75, 40, 12, 0.95));
-  --button-intent-danger-bg: linear-gradient(150deg, rgba(126, 35, 32, 0.95), rgba(94, 24, 22, 0.95));
-  --button-intent-fix-bg: linear-gradient(150deg, rgba(132, 78, 18, 0.95), rgba(100, 56, 13, 0.95));
-  --button-intent-utility-bg: linear-gradient(150deg, rgba(79, 46, 23, 0.95), rgba(57, 31, 16, 0.95));
-
-  --pill-surface-strong: rgba(45, 20, 14, 0.56);
-  --terminal-shell-bg: #120905;
-  --terminal-shell-border: #82411d;
-  --terminal-toolbar-bg: rgba(52, 27, 16, 0.94);
-  --terminal-toolbar-border: rgba(255, 166, 101, 0.28);
   --control-panel-bg: rgba(48, 24, 14, 0.78);
+  --modal-panel-border: rgba(255, 166, 101, 0.36);
+  --floating-bug-bg: linear-gradient(170deg, rgba(110, 61, 22, 0.96), rgba(76, 42, 14, 0.96));
+  --floating-bug-border: rgba(255, 166, 101, 0.62);
+  --floating-bug-text: #fff0e1;
+
+  --bg-a: var(--bg-canvas);
+  --bg-b: var(--bg-ambient-2);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-panel-strong);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --focus: var(--ring-focus);
+  --line: var(--surface-border);
 }

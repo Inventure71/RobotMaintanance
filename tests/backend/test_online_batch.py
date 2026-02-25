@@ -133,13 +133,18 @@ def test_terminal_manager_stream_helpers_use_existing_shell_handle():
             self.sent = []
             self.resize_calls = []
             self.read_calls = []
+            self.run_calls = []
 
         def send(self, text):
             self.sent.append(text)
 
-        def read(self, max_chunks=100):
-            self.read_calls.append(max_chunks)
+        def read(self, max_chunks=100, wait_timeout=0.0):
+            self.read_calls.append((max_chunks, wait_timeout))
             return "stream output"
+
+        def run_command(self, command, timeout=0.0):
+            self.run_calls.append((command, timeout))
+            return "ok"
 
         def resize_pty(self, width, height):
             self.resize_calls.append((width, height))
@@ -163,11 +168,15 @@ def test_terminal_manager_stream_helpers_use_existing_shell_handle():
     manager._handles[("p1", "r1")] = ShellHandle(shell=shell, last_used=time.time())
 
     manager.send_input("p1", "r1", "echo test\n")
-    output = manager.read_output("p1", "r1", max_chunks=12)
+    output = manager.read_output("p1", "r1", max_chunks=12, wait_timeout_sec=0.4)
     manager.resize_terminal("p1", "r1", width=120, height=40)
+    manager.run_command("p1", "r1", "echo hi", timeout_sec=9999.0)
+    manager.run_command("p1", "r1", "echo low", timeout_sec=0.01)
 
     assert shell.sent == ["echo test\n"]
     assert output == "stream output"
-    assert shell.read_calls == [12]
+    assert shell.read_calls == [(12, 0.4)]
     assert shell.resize_calls == [(120, 40)]
+    assert shell.run_calls[0][1] == manager.COMMAND_MAX_TIMEOUT_SEC
+    assert shell.run_calls[1][1] == manager.COMMAND_MIN_TIMEOUT_SEC
     assert manager._handles[("p1", "r1")].last_used > 0.0
