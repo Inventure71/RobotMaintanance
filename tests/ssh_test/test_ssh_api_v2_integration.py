@@ -5,7 +5,7 @@ import shlex
 import uuid
 import pytest
 
-from backend.ssh_api_v2 import InteractiveShell
+from backend.ssh_client import InteractiveShell
 
 
 def _is_configured() -> bool:
