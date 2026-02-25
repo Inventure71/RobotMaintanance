@@ -542,9 +542,16 @@ export function registerDataInitRuntime(runtime, env) {
         });
       }
 
+  function resolveRuntimeVersion(rawVersion, fallbackVersion = 0) {
+        const fallback = Number.isFinite(Number(fallbackVersion)) ? Math.trunc(Number(fallbackVersion)) : 0;
+        const resolved = Number.isFinite(Number(rawVersion)) ? Math.trunc(Number(rawVersion)) : fallback;
+        return Math.max(0, resolved);
+      }
+
   function mergeRuntimeRobotsIntoList(currentRobots, runtimeEntries, options = {}) {
         const robots = Array.isArray(currentRobots) ? currentRobots : [];
         const respectLocalPriority = options?.respectLocalPriority !== false;
+        const fullSnapshot = options?.fullSnapshot === true;
         const runtimeById = new Map(
           (Array.isArray(runtimeEntries) ? runtimeEntries : [])
             .map((entry) => normalizeRuntimeRobotEntry(entry))
@@ -555,7 +562,14 @@ export function registerDataInitRuntime(runtime, env) {
         const merged = robots.map((currentRobot) => {
           const id = robotId(currentRobot);
           if (!id) return currentRobot;
-          const runtimeEntry = runtimeById.get(id);
+          const runtimeEntry = runtimeById.get(id) || (fullSnapshot
+            ? {
+                id,
+                tests: {},
+                activity: normalizeRobotActivity({}),
+                hasRuntimeData: false,
+              }
+            : null);
           if (!runtimeEntry) return currentRobot;
   
           const hasLocalPriorityActivity =
@@ -611,9 +625,10 @@ export function registerDataInitRuntime(runtime, env) {
         state.isRuntimeSyncInFlight = true;
         try {
           const delta = await loadFleetRuntimeDelta(state.runtimeVersion);
-          state.runtimeVersion = Math.max(0, Number(delta.version || state.runtimeVersion));
+          state.runtimeVersion = resolveRuntimeVersion(delta.version, state.runtimeVersion);
           const mergedRuntime = mergeRuntimeRobotsIntoList(state.robots, delta.robots, {
             respectLocalPriority: true,
+            fullSnapshot: delta.full,
           });
           if (mergedRuntime.changedRobotIds.size > 0) {
             setRobots(mergedRuntime.merged);
@@ -653,9 +668,10 @@ export function registerDataInitRuntime(runtime, env) {
         );
         try {
           const delta = await loadFleetRuntimeDelta(0);
-          state.runtimeVersion = Math.max(0, Number(delta.version || 0));
+          state.runtimeVersion = resolveRuntimeVersion(delta.version, 0);
           const mergedRuntime = mergeRuntimeRobotsIntoList(normalizedStatic, delta.robots, {
             respectLocalPriority: false,
+            fullSnapshot: delta.full,
           });
           return mergedRuntime.merged;
         } catch (_e) {
