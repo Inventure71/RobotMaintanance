@@ -1,0 +1,12 @@
+export { initDashboardController, initDashboardApp } from './dashboardController.js';
+export { createRoutingController } from './routingController.js';
+export { createDetailController } from './detailController.js';
+export { createManageController } from './manageController.js';
+export { createRecorderController } from './recorderController.js';
+export { createTerminalController } from './terminalController.js';
+export { createMonitorController } from './monitorController.js';
+export { createFixModeController } from './fixModeController.js';
+export { createTestRunController } from './testRunController.js';
+export { createOnlineCheckController } from './onlineCheckController.js';
+export { createModalController } from './modalController.js';
+export { createThemeController } from './themeController.js';
