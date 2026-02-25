@@ -51,8 +51,10 @@ function makeRuntime(env) {
   const runtime = {
     applyRuntimeRobotPatches: () => {},
     normalizeRobotActivity,
+    normalizeRobotData: (robots) => (Array.isArray(robots) ? robots : []),
     normalizeRobotTests,
     robotId: (robot) => normalizeText(robot?.id, ''),
+    setRobotTypeDefinitions: () => [],
     setRobots: (robots) => {
       env.state.robots = robots;
     },
@@ -74,11 +76,9 @@ function makeEnv(state) {
     ROBOTS_CONFIG_URL: '/robots.config.json',
     ROBOT_TYPES_CONFIG_URL: '/robot-types.config.json',
     RUNTIME_ALLOWED_SOURCES: new Set(['live', 'manual', 'auto-monitor', 'auto-monitor-topics']),
-    backendData: [],
     buildApiUrl: (route) => `http://localhost${route}`,
     normalizeStatus,
     normalizeText,
-    setRobotTypeDefinitions: () => [],
     state,
   };
 }
@@ -191,4 +191,44 @@ test('mergeRuntimeRobotsIntoList clears omitted robots in full snapshots', async
 
   assert.equal(deltaResult.changedRobotIds.size, 0);
   assert.equal(deltaResult.merged[0], existingRobot);
+});
+
+test('loadRobotsFromBackend preserves empty fleet snapshots', async () => {
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    if (text.includes('/api/fleet/static')) {
+      return {
+        ok: true,
+        json: async () => ({ robots: [] }),
+      };
+    }
+    if (text.includes('/api/robot-types')) {
+      return {
+        ok: true,
+        json: async () => [],
+      };
+    }
+    if (text.includes('/api/fleet/runtime')) {
+      return {
+        ok: false,
+        json: async () => ({}),
+      };
+    }
+    throw new Error(`Unexpected fetch URL: ${text}`);
+  };
+
+  const registerDataInitRuntime = await loadApi(fetchImpl);
+  const state = {
+    fixingRobotIds: new Set(),
+    robots: [],
+    runtimeVersion: 0,
+    searchingRobotIds: new Set(),
+    testingRobotIds: new Set(),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(env);
+  const api = registerDataInitRuntime(runtime, env);
+
+  const robots = await api.loadRobotsFromBackend();
+  assert.deepEqual(robots, []);
 });
