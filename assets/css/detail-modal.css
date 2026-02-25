@@ -200,3 +200,59 @@
         max-height: 92vh;
       }
     }
+
+/* Graphite + Orange modal overrides */
+.test-debug-modal {
+  background: var(--modal-overlay);
+  backdrop-filter: blur(3px);
+}
+
+.test-debug-panel {
+  border-color: var(--modal-panel-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(170deg, color-mix(in srgb, var(--modal-panel-bg) 98%, transparent), color-mix(in srgb, var(--surface-panel-strong) 86%, transparent));
+  box-shadow: var(--elevation-3);
+}
+
+.test-debug-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 58%, transparent);
+  padding-bottom: 0.48rem;
+}
+
+.test-debug-header h3 {
+  color: color-mix(in srgb, var(--text-primary) 92%, var(--accent-primary-strong));
+}
+
+.test-debug-summary {
+  color: var(--text-secondary);
+}
+
+.test-debug-step {
+  border-color: color-mix(in srgb, var(--surface-border) 66%, transparent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--surface-panel-strong) 88%, transparent), color-mix(in srgb, var(--surface-panel) 93%, transparent));
+}
+
+.test-debug-step-title {
+  color: var(--text-primary);
+}
+
+.test-debug-pre {
+  border-color: color-mix(in srgb, var(--surface-border) 62%, transparent);
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 92%, #ffffff);
+}
+
+.empty-state {
+  border-color: color-mix(in srgb, var(--surface-border) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--surface-panel-glass) 92%, transparent), color-mix(in srgb, var(--surface-panel) 92%, transparent));
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fault-general .body-core {
+    animation: none !important;
+  }
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -40,6 +41,7 @@ def create_robots_router(
     robots_config_path: Path,
     runtime_tests_provider: Callable[[str], dict[str, dict[str, Any]]] | None = None,
     runtime_activity_provider: Callable[[str], dict[str, Any]] | None = None,
+    runtime_snapshot_provider: Callable[[int], dict[str, Any]] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -71,31 +73,115 @@ def create_robots_router(
     def get_robot_types() -> list[dict[str, Any]]:
         return list(robot_types_by_id.values())
 
-    @router.get("/api/robots")
-    def get_robots() -> list[dict[str, Any]]:
-        out = []
+    def _default_tests_for_robot(robot: dict[str, Any]) -> dict[str, dict[str, str]]:
+        robot_type = robot_types_by_id.get(normalize_type_key(robot.get("type")), {})
+        test_entries = robot_type.get("tests") if isinstance(robot_type, dict) else []
+        return _default_tests(test_entries if isinstance(test_entries, list) else [])
+
+    def _build_static_robot_payload(robot: dict[str, Any]) -> dict[str, Any]:
+        robot_id = normalize_text(robot.get("id"), "")
+        return {
+            "id": robot_id,
+            "name": robot.get("name"),
+            "type": robot.get("type"),
+            "ip": robot.get("ip"),
+            "ssh": robot.get("ssh") or {},
+            "modelUrl": robot.get("modelUrl"),
+            "tests": _default_tests_for_robot(robot),
+        }
+
+    @router.get("/api/fleet/static")
+    def get_fleet_static() -> dict[str, Any]:
+        return {"robots": [_build_static_robot_payload(robot) for robot in robots_by_id.values()]}
+
+    @router.get("/api/fleet/runtime")
+    def get_fleet_runtime(since: int = 0) -> dict[str, Any]:
+        safe_since = max(0, int(since or 0))
+        if runtime_snapshot_provider:
+            snapshot = runtime_snapshot_provider(safe_since)
+            if isinstance(snapshot, dict):
+                version = int(snapshot.get("version") or 0)
+                robots_payload = snapshot.get("robots") if isinstance(snapshot.get("robots"), list) else []
+                return {
+                    "version": version,
+                    "full": bool(snapshot.get("full", safe_since <= 0)),
+                    "robots": [
+                        {
+                            "id": normalize_text(robot_payload.get("id"), ""),
+                            "version": int(robot_payload.get("version") or 0),
+                            "tests": robot_payload.get("tests")
+                            if isinstance(robot_payload.get("tests"), dict)
+                            else {},
+                            "activity": robot_payload.get("activity")
+                            if isinstance(robot_payload.get("activity"), dict)
+                            else {},
+                        }
+                        for robot_payload in robots_payload
+                        if isinstance(robot_payload, dict) and normalize_text(robot_payload.get("id"), "")
+                    ],
+                }
+
+        # Fallback for non-versioned providers.
+        out: list[dict[str, Any]] = []
         for robot in robots_by_id.values():
             robot_id = normalize_text(robot.get("id"), "")
-            robot_type = robot_types_by_id.get(normalize_type_key(robot.get("type")), {})
-            test_entries = robot_type.get("tests") if isinstance(robot_type, dict) else []
-            tests = _default_tests(test_entries if isinstance(test_entries, list) else [])
-            if runtime_tests_provider and robot_id:
-                runtime_tests = runtime_tests_provider(robot_id)
-                if isinstance(runtime_tests, dict):
-                    tests = {**tests, **runtime_tests}
+            if not robot_id:
+                continue
+            runtime_tests = runtime_tests_provider(robot_id) if runtime_tests_provider else {}
+            runtime_activity = runtime_activity_provider(robot_id) if runtime_activity_provider else {}
+            if isinstance(runtime_tests, dict) or isinstance(runtime_activity, dict):
+                out.append(
+                    {
+                        "id": robot_id,
+                        "version": 0,
+                        "tests": runtime_tests if isinstance(runtime_tests, dict) else {},
+                        "activity": runtime_activity if isinstance(runtime_activity, dict) else {},
+                    }
+                )
+        return {
+            "version": int(time.time() * 1000),
+            "full": True,
+            "robots": out,
+        }
+
+    @router.get("/api/robots")
+    def get_robots() -> list[dict[str, Any]]:
+        runtime_by_robot_id: dict[str, dict[str, Any]] = {}
+        if runtime_snapshot_provider:
+            snapshot = runtime_snapshot_provider(0)
+            if isinstance(snapshot, dict):
+                for payload in snapshot.get("robots") if isinstance(snapshot.get("robots"), list) else []:
+                    if not isinstance(payload, dict):
+                        continue
+                    robot_id = normalize_text(payload.get("id"), "")
+                    if not robot_id:
+                        continue
+                    runtime_by_robot_id[robot_id] = payload
+
+        out = []
+        for robot in robots_by_id.values():
+            base_payload = _build_static_robot_payload(robot)
+            robot_id = normalize_text(base_payload.get("id"), "")
+
+            tests = dict(base_payload.get("tests") or {})
             activity = None
-            if runtime_activity_provider and robot_id:
+            runtime_payload = runtime_by_robot_id.get(robot_id, {})
+            runtime_tests = runtime_payload.get("tests") if isinstance(runtime_payload, dict) else {}
+            runtime_activity = runtime_payload.get("activity") if isinstance(runtime_payload, dict) else {}
+
+            if not isinstance(runtime_tests, dict) and runtime_tests_provider and robot_id:
+                runtime_tests = runtime_tests_provider(robot_id)
+            if not isinstance(runtime_activity, dict) and runtime_activity_provider and robot_id:
                 runtime_activity = runtime_activity_provider(robot_id)
-                if isinstance(runtime_activity, dict):
-                    activity = runtime_activity
+
+            if isinstance(runtime_tests, dict):
+                tests.update(runtime_tests)
+            if isinstance(runtime_activity, dict):
+                activity = runtime_activity
+
             out.append(
                 {
-                    "id": robot_id,
-                    "name": robot.get("name"),
-                    "type": robot.get("type"),
-                    "ip": robot.get("ip"),
-                    "ssh": robot.get("ssh") or {},
-                    "modelUrl": robot.get("modelUrl"),
+                    **base_payload,
                     "tests": tests,
                     "activity": activity,
                 }

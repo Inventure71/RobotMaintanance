@@ -44,7 +44,9 @@ let ROBOT_TYPE_BY_ID = new Map();
     const FLEET_PARALLELISM_MAX = 100;
     const FLEET_PARALLELISM_DEFAULT = 8;
     const FLEET_PARALLELISM_STORAGE_KEY = 'fleetParallelism';
-    const RUNTIME_SYNC_INTERVAL_MS = 1000;
+    const RUNTIME_SYNC_INTERVAL_MS = 1500;
+    const FLEET_STATIC_ENDPOINT = '/api/fleet/static';
+    const FLEET_RUNTIME_ENDPOINT = '/api/fleet/runtime';
     const RUNTIME_ALLOWED_SOURCES = new Set(['manual', 'live', 'auto-monitor', 'auto-monitor-topics']);
     const MONITOR_TOPICS_SOURCE = 'auto-monitor-topics';
     const MONITOR_SOURCE = 'auto-monitor';
@@ -726,6 +728,9 @@ let ROBOT_TYPE_BY_ID = new Map();
       recorderTerminalComponent: null,
       ignoreNextHashChange: false,
       recorderSelectionMouseupHandler: null,
+      robotsById: new Map(),
+      runtimeVersion: 0,
+      countdownNodeCache: null,
     };
 
     const dashboard = $('#dashboard');
@@ -949,6 +954,26 @@ let ROBOT_TYPE_BY_ID = new Map();
       });
     }
 
+    function rebuildRobotIndex() {
+      const index = new Map();
+      state.robots.forEach((robot) => {
+        const id = robotId(robot);
+        if (!id) return;
+        index.set(id, robot);
+      });
+      state.robotsById = index;
+    }
+
+    function setRobots(nextRobots) {
+      state.robots = Array.isArray(nextRobots) ? nextRobots : [];
+      rebuildRobotIndex();
+    }
+
+    function mapRobots(mapper) {
+      if (typeof mapper !== 'function') return;
+      setRobots(state.robots.map(mapper));
+    }
+
     function robotId(robotOrId) {
       if (typeof robotOrId === 'string' || typeof robotOrId === 'number') {
         return normalizeText(robotOrId, '');
@@ -958,7 +983,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
     function getRobotById(robotIdValue) {
       const normalized = normalizeText(robotIdValue, '');
-      return state.robots.find((robot) => robotId(robot) === normalized) || null;
+      return state.robotsById.get(normalized) || null;
     }
 
     function getSelectedRobotIds() {
@@ -1362,9 +1387,23 @@ let ROBOT_TYPE_BY_ID = new Map();
       updateFleetOnlineRefreshStatus();
     }
 
+    function invalidateCountdownNodeCache() {
+      state.countdownNodeCache = null;
+    }
+
+    function getCountdownNodes() {
+      if (
+        !Array.isArray(state.countdownNodeCache) ||
+        state.countdownNodeCache.some((node) => !node?.isConnected)
+      ) {
+        state.countdownNodeCache = Array.from(document.querySelectorAll('.scan-countdown'));
+      }
+      return state.countdownNodeCache;
+    }
+
     function refreshTestingCountdowns() {
       const now = Date.now();
-      const nodes = document.querySelectorAll('.scan-countdown');
+      const nodes = getCountdownNodes();
       let hasActive = false;
       nodes.forEach((node) => {
         const id = normalizeText(node.getAttribute('data-robot-id'), '');
@@ -1830,6 +1869,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           offlineGrid.appendChild(renderCard(robot));
         });
       }
+      invalidateCountdownNodeCache();
 
       emptyState.classList.toggle('hidden', visible.length > 0);
       updateSelectionSummary();
@@ -1987,6 +2027,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           existingOverlay.remove();
         }
       }
+      invalidateCountdownNodeCache();
     }
 
     function patchDetailRuntimeContent(robot) {
@@ -2061,6 +2102,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         }
         modelHost.insertAdjacentHTML('afterbegin', buildConnectionCornerIconMarkup(isOffline, compactAutoSearch));
       }
+      invalidateCountdownNodeCache();
 
       if (testList) {
         Object.entries(robot.tests || {}).forEach(([testId, result]) => {
@@ -2090,6 +2132,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           }
         });
       }
+      invalidateCountdownNodeCache();
     }
 
     function applyRuntimeRobotPatches(changedRobotIds) {
@@ -2134,6 +2177,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         });
       }
 
+      invalidateCountdownNodeCache();
       applyDashboardMetaFromVisible(visibleList);
       if (state.detailRobotId) {
         const activeRobot = getRobotById(state.detailRobotId);
@@ -2368,7 +2412,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         const onlineStatus = await runOneRobotOnlineCheck(robot);
         setRobotSearching(normalizedRobotId, false);
         updateOnlineCheckEstimateFromResults([onlineStatus]);
-        state.robots = state.robots.map((item) =>
+        mapRobots((item) =>
           robotId(item) === normalizedRobotId
             ? {
                 ...item,
@@ -2717,7 +2761,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             });
           }
 
-          state.robots = state.robots.map((robot) => {
+          mapRobots((robot) => {
             const normalizedRobotId = robotId(robot);
             if (!normalizedRobotId) return robot;
             const label = normalizeText(robot.name, normalizedRobotId);
@@ -2761,7 +2805,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             }
           });
 
-          state.robots = state.robots.map((robot) => {
+          mapRobots((robot) => {
             const normalizedRobotId = robotId(robot);
             if (!normalizedRobotId) return robot;
             const label = normalizeText(robot.name, normalizedRobotId);
@@ -3069,7 +3113,7 @@ let ROBOT_TYPE_BY_ID = new Map();
 
       if (!Object.keys(updates).length) return;
 
-      state.robots = state.robots.map((item) =>
+      mapRobots((item) =>
         robotId(item) === id
           ? {
               ...item,
@@ -3155,6 +3199,7 @@ let ROBOT_TYPE_BY_ID = new Map();
         : '';
       const connectionIconMarkup = buildConnectionCornerIconMarkup(isOffline, compactAutoSearch);
       model.innerHTML = `${modelMarkup}${scanningMarkup}${countdownMarkup}${connectionIconMarkup}`;
+      invalidateCountdownNodeCache();
       syncModelViewerRotationForContainer(model, isOffline);
 
       testList.replaceChildren();
@@ -3304,7 +3349,7 @@ let ROBOT_TYPE_BY_ID = new Map();
             const onlineStatus = await runOneRobotOnlineCheck(robot);
             setRobotSearching(normalizedRobotId, false);
             updateOnlineCheckEstimateFromResults([onlineStatus]);
-            state.robots = state.robots.map((item) =>
+            mapRobots((item) =>
               robotId(item) === normalizedRobotId
                 ? {
                     ...item,
@@ -4197,7 +4242,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       const previousDetailRobotId = normalizeText(state.detailRobotId, '');
       try {
         const refreshed = await loadRobotsFromBackend();
-        state.robots = refreshed;
+        setRobots(refreshed);
       } catch (_error) {
         return false;
       }
@@ -5358,6 +5403,31 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
+    async function loadFleetStaticState() {
+      const response = await fetch(buildApiUrl(FLEET_STATIC_ENDPOINT));
+      if (!response.ok) throw new Error('fleet static unavailable');
+      const payload = await response.json();
+      if (!Array.isArray(payload?.robots)) throw new Error('fleet static payload invalid');
+      return payload.robots;
+    }
+
+    async function loadFleetRuntimeDelta(sinceVersion = 0) {
+      const cursor = Math.max(0, Number.isFinite(Number(sinceVersion)) ? Math.trunc(Number(sinceVersion)) : 0);
+      const response = await fetch(
+        buildApiUrl(`${FLEET_RUNTIME_ENDPOINT}?since=${encodeURIComponent(String(cursor))}`),
+      );
+      if (!response.ok) throw new Error('fleet runtime unavailable');
+      const payload = await response.json();
+      const runtimeVersion = Number.isFinite(Number(payload?.version))
+        ? Math.max(0, Math.trunc(Number(payload.version)))
+        : cursor;
+      return {
+        version: runtimeVersion,
+        full: Boolean(payload?.full),
+        robots: Array.isArray(payload?.robots) ? payload.robots : [],
+      };
+    }
+
     async function loadRobotTypeConfig() {
       try {
         const response = await fetch(buildApiUrl('/api/robot-types'));
@@ -5377,40 +5447,6 @@ let ROBOT_TYPE_BY_ID = new Map();
       }
     }
 
-    function mergeRobotPayload(staticList, liveList) {
-      const liveMap = new Map((liveList || []).map((robot) => [robot.id, robot]));
-      const mergedRaw = [];
-      const seen = new Set();
-
-      (staticList || []).forEach((staticRobot) => {
-        const raw = { ...staticRobot };
-        if (!raw.id) return;
-        seen.add(raw.id);
-        const live = liveMap.get(raw.id);
-        const mergedRobot = live ? { ...raw, ...live } : raw;
-        mergedRobot.tests = {
-          ...(raw.tests || {}),
-          ...(live?.tests || {}),
-        };
-        mergedRaw.push(mergedRobot);
-      });
-
-      (liveList || []).forEach((liveRobot) => {
-        if (!liveRobot.id || seen.has(liveRobot.id)) return;
-        mergedRaw.push(liveRobot);
-      });
-
-      return normalizeRobotData(mergedRaw);
-    }
-
-    async function loadRobotRuntimeState() {
-      const response = await fetch(buildApiUrl('/api/robots'));
-      if (!response.ok) throw new Error('backend response not ok');
-      const payload = await response.json();
-      if (!Array.isArray(payload)) throw new Error('backend payload not array');
-      return payload;
-    }
-
     function normalizeRuntimeTestUpdate(testId, raw) {
       if (!raw || typeof raw !== 'object') return null;
       const source = normalizeText(raw.source, '');
@@ -5428,56 +5464,94 @@ let ROBOT_TYPE_BY_ID = new Map();
       };
     }
 
-    function mergeRuntimeRobotsIntoState(liveList) {
-      const rawLiveList = Array.isArray(liveList) ? liveList : [];
-      const rawLiveById = new Map(rawLiveList.map((robot) => [robotId(robot), robot]));
-      const normalizedLive = normalizeRobotData(rawLiveList);
-      const liveById = new Map(normalizedLive.map((robot) => [robotId(robot), robot]));
-      const merged = [];
-      const seen = new Set();
+    function runtimeActivityHasSignal(activity) {
+      const normalized = normalizeRobotActivity(activity);
+      return Boolean(
+        normalized.searching ||
+          normalized.testing ||
+          normalizeText(normalized.phase, '') ||
+          Number(normalized.lastFullTestAt) > 0 ||
+          normalizeText(normalized.lastFullTestSource, '') ||
+          Number(normalized.updatedAt) > 0,
+      );
+    }
+
+    function normalizeRuntimeRobotEntry(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const id = normalizeText(raw.id, '');
+      if (!id) return null;
+      const tests = {};
+      Object.entries(raw.tests || {}).forEach(([testId, payload]) => {
+        const update = normalizeRuntimeTestUpdate(testId, payload);
+        if (!update) return;
+        tests[testId] = update;
+      });
+      const activity = normalizeRobotActivity(raw.activity);
+      return {
+        id,
+        tests,
+        activity,
+        hasRuntimeData: Object.keys(tests).length > 0 || runtimeActivityHasSignal(activity),
+      };
+    }
+
+    function haveRuntimeTestsChanged(previousTests, nextTests) {
+      const prev = previousTests && typeof previousTests === 'object' ? previousTests : {};
+      const next = nextTests && typeof nextTests === 'object' ? nextTests : {};
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length !== nextKeys.length) return true;
+      return nextKeys.some((testId) => {
+        const prior = prev[testId] || {};
+        const nextValue = next[testId] || {};
+        return (
+          normalizeStatus(prior.status) !== normalizeStatus(nextValue.status) ||
+          normalizeText(prior.value, '') !== normalizeText(nextValue.value, '') ||
+          normalizeText(prior.details, '') !== normalizeText(nextValue.details, '') ||
+          normalizeText(prior.reason, '') !== normalizeText(nextValue.reason, '') ||
+          normalizeText(prior.source, '') !== normalizeText(nextValue.source, '') ||
+          Number(prior.checkedAt || 0) !== Number(nextValue.checkedAt || 0)
+        );
+      });
+    }
+
+    function mergeRuntimeRobotsIntoList(currentRobots, runtimeEntries, options = {}) {
+      const robots = Array.isArray(currentRobots) ? currentRobots : [];
+      const respectLocalPriority = options?.respectLocalPriority !== false;
+      const runtimeById = new Map(
+        (Array.isArray(runtimeEntries) ? runtimeEntries : [])
+          .map((entry) => normalizeRuntimeRobotEntry(entry))
+          .filter(Boolean)
+          .map((entry) => [entry.id, entry]),
+      );
       const changedRobotIds = new Set();
-
-      state.robots.forEach((currentRobot) => {
+      const merged = robots.map((currentRobot) => {
         const id = robotId(currentRobot);
-        if (!id) return;
-        seen.add(id);
-        const liveRobot = liveById.get(id);
-        if (!liveRobot) {
-          merged.push(currentRobot);
-          return;
-        }
+        if (!id) return currentRobot;
+        const runtimeEntry = runtimeById.get(id);
+        if (!runtimeEntry) return currentRobot;
+
         const hasLocalPriorityActivity =
-          state.testingRobotIds.has(id) ||
-          state.searchingRobotIds.has(id) ||
-          state.fixingRobotIds.has(id);
-        const rawLiveRobot = rawLiveById.get(id) || {};
+          respectLocalPriority &&
+          (state.testingRobotIds.has(id) || state.searchingRobotIds.has(id) || state.fixingRobotIds.has(id));
 
-        const runtimeUpdates = {};
-        if (!hasLocalPriorityActivity) {
-          Object.entries(rawLiveRobot.tests || {}).forEach(([testId, raw]) => {
-            const update = normalizeRuntimeTestUpdate(testId, raw);
-            if (!update) return;
-            runtimeUpdates[testId] = update;
-          });
-        }
-
-        const nextTests = {
-          ...(currentRobot.tests || {}),
-          ...runtimeUpdates,
-        };
-        const runtimeChanged = Object.entries(runtimeUpdates).some(([testId, update]) => {
-          const prior = currentRobot?.tests?.[testId] || {};
-          return (
-            normalizeStatus(prior.status) !== update.status ||
-            normalizeText(prior.value, '') !== update.value ||
-            normalizeText(prior.details, '') !== update.details ||
-            normalizeText(prior.reason, '') !== update.reason
-          );
-        });
         const previousActivity = normalizeRobotActivity(currentRobot?.activity);
+        const shouldClearRuntime = !hasLocalPriorityActivity && !runtimeEntry.hasRuntimeData;
+        const baseTests = shouldClearRuntime
+          ? normalizeRobotTests({}, currentRobot?.typeId).tests
+          : currentRobot?.tests || {};
+        const nextTests = hasLocalPriorityActivity
+          ? currentRobot?.tests || {}
+          : {
+              ...baseTests,
+              ...(runtimeEntry.tests || {}),
+            };
         const nextActivity = hasLocalPriorityActivity
           ? previousActivity
-          : normalizeRobotActivity(liveRobot?.activity);
+          : shouldClearRuntime
+            ? normalizeRobotActivity({})
+            : runtimeEntry.activity;
+
         const activityChanged =
           previousActivity.searching !== nextActivity.searching ||
           previousActivity.testing !== nextActivity.testing ||
@@ -5485,33 +5559,18 @@ let ROBOT_TYPE_BY_ID = new Map();
           Number(previousActivity.lastFullTestAt) !== Number(nextActivity.lastFullTestAt) ||
           normalizeText(previousActivity.lastFullTestSource, '') !== normalizeText(nextActivity.lastFullTestSource, '') ||
           Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt);
+        const testsChanged = haveRuntimeTestsChanged(currentRobot?.tests || {}, nextTests);
 
-        const mergedTestDebug = {
-          ...normalizeTestDebugCollection(currentRobot?.testDebug),
-          ...normalizeTestDebugCollection(rawLiveRobot?.testDebug || liveRobot?.testDebug),
-        };
-        const nextRobot = {
+        if (!activityChanged && !testsChanged) {
+          return currentRobot;
+        }
+
+        changedRobotIds.add(id);
+        return {
           ...currentRobot,
-          ...liveRobot,
           tests: nextTests,
           activity: nextActivity,
-          testDebug: mergedTestDebug,
-          testDefinitions:
-            Array.isArray(currentRobot.testDefinitions) && currentRobot.testDefinitions.length
-              ? currentRobot.testDefinitions
-              : liveRobot.testDefinitions,
         };
-        if (runtimeChanged || activityChanged) {
-          changedRobotIds.add(id);
-        }
-        merged.push(nextRobot);
-      });
-
-      normalizedLive.forEach((liveRobot) => {
-        const id = robotId(liveRobot);
-        if (!id || seen.has(id)) return;
-        merged.push(liveRobot);
-        changedRobotIds.add(id);
       });
 
       return {
@@ -5524,9 +5583,14 @@ let ROBOT_TYPE_BY_ID = new Map();
       if (state.isRuntimeSyncInFlight) return;
       state.isRuntimeSyncInFlight = true;
       try {
-        const live = await loadRobotRuntimeState();
-        const mergedRuntime = mergeRuntimeRobotsIntoState(live);
-        state.robots = mergedRuntime.merged;
+        const delta = await loadFleetRuntimeDelta(state.runtimeVersion);
+        state.runtimeVersion = Math.max(0, Number(delta.version || state.runtimeVersion));
+        const mergedRuntime = mergeRuntimeRobotsIntoList(state.robots, delta.robots, {
+          respectLocalPriority: true,
+        });
+        if (mergedRuntime.changedRobotIds.size > 0) {
+          setRobots(mergedRuntime.merged);
+        }
         syncAutomatedRobotActivityFromState();
         syncAutoMonitorRefreshState();
         if (mergedRuntime.changedRobotIds.size > 0) {
@@ -5553,18 +5617,23 @@ let ROBOT_TYPE_BY_ID = new Map();
     }
 
     async function loadRobotsFromBackend() {
-      const [config, _robotTypes] = await Promise.all([loadRobotConfig(), loadRobotTypeConfig()]);
+      const [fleetStatic, _robotTypes] = await Promise.all([
+        loadFleetStaticState().catch(() => loadRobotConfig()),
+        loadRobotTypeConfig(),
+      ]);
+      const normalizedStatic = normalizeRobotData(
+        Array.isArray(fleetStatic) && fleetStatic.length ? fleetStatic : backendData,
+      );
       try {
-        const live = await loadRobotRuntimeState();
-        if (config.length) {
-          return mergeRobotPayload(config, live);
-        }
-        return normalizeRobotData(live);
+        const delta = await loadFleetRuntimeDelta(0);
+        state.runtimeVersion = Math.max(0, Number(delta.version || 0));
+        const mergedRuntime = mergeRuntimeRobotsIntoList(normalizedStatic, delta.robots, {
+          respectLocalPriority: false,
+        });
+        return mergedRuntime.merged;
       } catch (_e) {
-        if (config.length) {
-          return normalizeRobotData(config);
-        }
-        return normalizeRobotData(backendData);
+        state.runtimeVersion = 0;
+        return normalizedStatic;
       }
     }
 
@@ -5638,7 +5707,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       Promise.resolve()
         .then(loadRobotsFromBackend)
         .then((robots) => {
-          state.robots = robots;
+          setRobots(robots);
           syncAutomatedRobotActivityFromState();
           syncAutoMonitorRefreshState();
           populateFilters();
@@ -5649,7 +5718,7 @@ let ROBOT_TYPE_BY_ID = new Map();
           syncFixModePanels();
         })
         .catch(() => {
-          state.robots = normalizeRobotData(backendData);
+          setRobots(normalizeRobotData(backendData));
           syncAutomatedRobotActivityFromState();
           syncAutoMonitorRefreshState();
           populateFilters();

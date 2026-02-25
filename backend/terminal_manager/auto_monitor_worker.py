@@ -8,6 +8,36 @@ from ..normalization import normalize_status
 
 
 class AutoMonitorWorkerMixin:
+    def _shutdown_auto_monitor_executor(self) -> None:
+        executor = getattr(self, "_auto_monitor_executor", None)
+        self._auto_monitor_executor = None
+        self._auto_monitor_executor_workers = 0
+        if executor is None:
+            return
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+
+    def _ensure_auto_monitor_executor(self, worker_count: int) -> ThreadPoolExecutor:
+        with self._lock:
+            existing = getattr(self, "_auto_monitor_executor", None)
+            existing_workers = int(getattr(self, "_auto_monitor_executor_workers", 0))
+            if existing is not None and existing_workers == worker_count:
+                return existing
+            if existing is not None:
+                try:
+                    existing.shutdown(wait=False, cancel_futures=True)
+                except Exception:
+                    pass
+            next_executor = ThreadPoolExecutor(
+                max_workers=worker_count,
+                thread_name_prefix="auto-monitor",
+            )
+            self._auto_monitor_executor = next_executor
+            self._auto_monitor_executor_workers = worker_count
+            return next_executor
+
     def _start_auto_monitor(self) -> None:
         if self._auto_monitor_thread is not None:
             return
@@ -19,9 +49,11 @@ class AutoMonitorWorkerMixin:
         self._auto_monitor_stop.set()
         thread = self._auto_monitor_thread
         if thread is None:
+            self._shutdown_auto_monitor_executor()
             return
         thread.join(timeout=2.0)
         self._auto_monitor_thread = None
+        self._shutdown_auto_monitor_executor()
 
     def _auto_monitor_loop(self) -> None:
         while not self._auto_monitor_stop.is_set():
@@ -51,11 +83,9 @@ class AutoMonitorWorkerMixin:
             battery_interval_sec = float(self._battery_interval_sec)
             topics_interval_sec = float(self._topics_interval_sec)
 
-        runtime_tests = self.get_runtime_tests(robot_id)
-        runtime_activity = self.get_runtime_activity(robot_id)
-        online_payload = runtime_tests.get("online", {})
-        is_online = normalize_status(online_payload.get("status")) == "ok"
-        if bool(runtime_activity.get("testing")):
+        probe_state = self.get_runtime_probe_state(robot_id)
+        is_online = bool(probe_state.get("isOnline"))
+        if bool(probe_state.get("isTesting")):
             with self._lock:
                 self._last_auto_monitor_online_state[robot_id] = is_online
             return
@@ -110,8 +140,7 @@ class AutoMonitorWorkerMixin:
             with self._lock:
                 self._topics_next_check_at[robot_id] = now + topics_interval_sec
 
-        latest_runtime = self.get_runtime_tests(robot_id)
-        latest_online = normalize_status((latest_runtime.get("online") or {}).get("status")) == "ok"
+        latest_online = bool(self.get_runtime_probe_state(robot_id).get("isOnline"))
         with self._lock:
             self._last_auto_monitor_online_state[robot_id] = latest_online
 
@@ -126,6 +155,7 @@ class AutoMonitorWorkerMixin:
         worker_count = max(1, min(configured_parallelism, len(robot_ids)))
 
         if worker_count == 1:
+            self._shutdown_auto_monitor_executor()
             for robot_id in robot_ids:
                 if self._auto_monitor_stop.is_set():
                     return
@@ -135,7 +165,8 @@ class AutoMonitorWorkerMixin:
                     continue
             return
 
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        executor = self._ensure_auto_monitor_executor(worker_count)
+        try:
             futures = [executor.submit(self._run_auto_monitor_for_robot, robot_id, now) for robot_id in robot_ids]
             for future in as_completed(futures):
                 if self._auto_monitor_stop.is_set():
@@ -144,3 +175,6 @@ class AutoMonitorWorkerMixin:
                     future.result()
                 except Exception:
                     continue
+        finally:
+            if not bool(getattr(self, "_auto_monitor_enabled", False)):
+                self._shutdown_auto_monitor_executor()

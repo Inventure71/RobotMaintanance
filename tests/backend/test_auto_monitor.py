@@ -559,6 +559,66 @@ def test_monitor_config_defaults_and_update():
     assert updated["parallelism"] == 12
 
 
+def test_monitor_config_clamps_interval_and_parallelism_bounds():
+    manager = _manager()
+    updated = manager.update_monitor_config(
+        topics_interval_sec=999.0,
+        online_interval_sec=0.01,
+        battery_interval_sec=999.0,
+        parallelism=999,
+    )
+    assert updated["topicsIntervalSec"] == manager.TOPICS_INTERVAL_MAX_SEC
+    assert updated["onlineIntervalSec"] == manager.ONLINE_INTERVAL_MIN_SEC
+    assert updated["batteryIntervalSec"] == manager.BATTERY_INTERVAL_MAX_SEC
+    assert updated["parallelism"] == manager.MONITOR_PARALLELISM_MAX
+
+
+def test_runtime_snapshot_since_tracks_versioned_updates_and_clears():
+    manager = _manager()
+    initial = manager.get_runtime_snapshot_since(0)
+    assert initial["version"] == 0
+    assert initial["robots"] == []
+
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "ok",
+                "value": "reachable",
+                "details": "first",
+                "source": "manual",
+                "checkedAt": 10.0,
+            }
+        },
+    )
+    after_update = manager.get_runtime_snapshot_since(0)
+    assert after_update["version"] > 0
+    assert after_update["robots"][0]["id"] == "r1"
+    assert after_update["robots"][0]["tests"]["online"]["status"] == "ok"
+
+    since_current = manager.get_runtime_snapshot_since(after_update["version"])
+    assert since_current["full"] is False
+    assert since_current["robots"] == []
+
+    manager.reload_definitions(
+        robots_by_id={},
+        robot_types_by_id={},
+        command_primitives_by_id={},
+        test_definitions_by_id={},
+        check_definitions_by_id={},
+        fix_definitions_by_id={},
+    )
+    cleared = manager.get_runtime_snapshot_since(after_update["version"])
+    assert cleared["version"] > after_update["version"]
+    assert any(
+        robot["id"] == "r1"
+        and robot["tests"] == {}
+        and robot["activity"]["searching"] is False
+        and robot["activity"]["testing"] is False
+        for robot in cleared["robots"]
+    )
+
+
 def test_auto_monitor_topics_mode_runs_topic_snapshot_on_interval(monkeypatch):
     observed = {"commands": []}
 

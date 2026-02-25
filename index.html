@@ -54,9 +54,6 @@
             <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
             <select id="filterType" class="filter-item"></select>
             <select id="filterError" class="filter-item"></select>
-            <button class="button button-compact" id="cycleOnlineSort" type="button" data-button-intent="selection">
-              Sort robots: Battery
-            </button>
           </div>
 
           <div class="status-bar dashboard-bulk-actions">
@@ -111,8 +108,13 @@
         <section class="fleet-section" id="onlineSection">
           <div class="fleet-section-head">
             <h2 class="fleet-section-title" id="onlineSectionTitle">Online (0)</h2>
-            <button class="button button-compact" id="selectAllOnlineRobots" type="button"
-              data-button-intent="selection">Select all online</button>
+            <div class="fleet-section-actions">
+              <button class="button button-compact" id="cycleOnlineSort" type="button" data-button-intent="selection">
+                Sort robots: Battery
+              </button>
+              <button class="button button-compact" id="selectAllOnlineRobots" type="button"
+                data-button-intent="selection">Select all online</button>
+            </div>
           </div>
           <div id="onlineRobotGrid" class="grid"></div>
         </section>

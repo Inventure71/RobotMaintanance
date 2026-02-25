@@ -350,3 +350,98 @@
     .terminal-status.warn {
       color: var(--warn);
     }
+
+/* Graphite + Orange terminal overrides */
+.matrix-panel .test-list {
+  scrollbar-color: color-mix(in srgb, var(--accent-primary) 52%, transparent) color-mix(in srgb, var(--bg-canvas) 62%, transparent);
+}
+
+.matrix-panel .test-list::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--bg-canvas) 70%, transparent);
+}
+
+.matrix-panel .test-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 72%, transparent), color-mix(in srgb, var(--accent-secondary) 50%, transparent));
+  border-color: color-mix(in srgb, var(--surface-border-strong) 70%, transparent);
+}
+
+.terminal-shell {
+  border-color: var(--terminal-shell-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--terminal-shell-bg) 96%, transparent), color-mix(in srgb, #05070d 88%, transparent));
+  box-shadow: var(--elevation-2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.terminal-shell.terminal-shell-expanded {
+  box-shadow: var(--elevation-3);
+  border-color: color-mix(in srgb, var(--surface-border-strong) 82%, transparent);
+}
+
+.terminal-activation-overlay {
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  border-color: color-mix(in srgb, var(--surface-border-strong) 64%, transparent);
+}
+
+.terminal-toolbar {
+  background:
+    linear-gradient(170deg, color-mix(in srgb, var(--terminal-toolbar-bg) 96%, transparent), color-mix(in srgb, var(--surface-panel-strong) 90%, transparent));
+  border-color: color-mix(in srgb, var(--terminal-toolbar-border) 96%, transparent);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 -1px 0 rgba(255, 173, 105, 0.14);
+}
+
+.terminal-toolbar-main {
+  border-bottom-color: color-mix(in srgb, var(--surface-border) 64%, transparent);
+}
+
+.terminal-connection-wrap {
+  border-color: color-mix(in srgb, var(--surface-border) 72%, transparent);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--surface-panel-strong) 90%, transparent), color-mix(in srgb, var(--surface-panel) 94%, transparent));
+}
+
+.terminal-connection-text {
+  color: var(--text-secondary);
+}
+
+.terminal-connection-wrap.connected {
+  border-color: color-mix(in srgb, var(--state-ok) 82%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--state-ok) 28%, transparent);
+}
+
+.terminal-connection-wrap.connecting,
+.terminal-connection-wrap.error,
+.terminal-connection-wrap.disconnected {
+  border-color: color-mix(in srgb, var(--state-err) 82%, transparent);
+}
+
+.terminal-toolbar .terminal-mode {
+  color: color-mix(in srgb, var(--text-secondary) 84%, var(--accent-secondary));
+  border-color: color-mix(in srgb, var(--surface-border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-panel-strong) 70%, transparent);
+}
+
+#terminal.fallback {
+  border-color: color-mix(in srgb, var(--surface-border) 58%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-canvas) 85%, transparent), #05070f);
+  color: var(--text-primary);
+}
+
+#terminal.fallback .terminal-legacy-prompt {
+  color: color-mix(in srgb, var(--accent-secondary) 74%, var(--text-primary));
+}
+
+#terminal.fallback .terminal-legacy-input {
+  border-color: color-mix(in srgb, var(--surface-border-strong) 85%, transparent);
+  background: color-mix(in srgb, var(--bg-canvas) 78%, transparent);
+  color: var(--text-primary);
+}
+
+#terminal.fallback .terminal-legacy-input:focus {
+  border-color: var(--ring-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring-focus) 22%, transparent);
+}
+
+.terminal-status {
+  color: var(--text-secondary);
+}

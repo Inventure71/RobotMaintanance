@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -44,6 +45,8 @@ class InteractiveShell:
     - read() returns accumulated output (non-blocking)
     - run_command() sends a command and waits for prompt (best-effort)
     """
+
+    READ_BLOCK_TIMEOUT_SEC = 0.2
 
     def __init__(
         self,
@@ -108,7 +111,7 @@ class InteractiveShell:
             width=self.width,
             height=self.height,
         )
-        self.chan.settimeout(0.0)  # non-blocking reads
+        self.chan.settimeout(self.READ_BLOCK_TIMEOUT_SEC)
 
         self._stop.clear()
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
@@ -142,14 +145,15 @@ class InteractiveShell:
         assert self.chan is not None
         while not self._stop.is_set():
             try:
-                if self.chan.recv_ready():
-                    data = self.chan.recv(4096)
-                    if not data:
-                        break
-                    self._out_queue.put(data.decode(errors="replace"))
-                else:
-                    self._sleep(0.02)
+                data = self.chan.recv(4096)
+                if not data:
+                    break
+                self._out_queue.put(data.decode(errors="replace"))
+            except socket.timeout:
+                continue
             except Exception:
+                if self._stop.is_set():
+                    break
                 self._sleep(0.05)
 
     def _is_prompt(self, buf: str) -> bool:
@@ -169,10 +173,17 @@ class InteractiveShell:
         """Send a line and press Enter."""
         self.send(line + "\n")
 
-    def read(self, max_chunks: int = 100) -> str:
+    def read(self, max_chunks: int = 100, wait_timeout: float = 0.0) -> str:
         """Non-blocking: drain output accumulated so far."""
+        chunk_limit = max(1, int(max_chunks))
         chunks = []
-        for _ in range(max_chunks):
+        blocking_timeout = max(0.0, float(wait_timeout))
+        if blocking_timeout > 0:
+            try:
+                chunks.append(self._out_queue.get(timeout=blocking_timeout))
+            except Empty:
+                return ""
+        for _ in range(max(0, chunk_limit - len(chunks))):
             try:
                 chunks.append(self._out_queue.get_nowait())
             except Empty:
@@ -195,10 +206,13 @@ class InteractiveShell:
         buf = ""
         start = self._time()
         while True:
-            buf += self.read()
+            chunk = self.read(wait_timeout=0.05)
+            if chunk:
+                buf += chunk
+            else:
+                self._sleep(0.01)
             # Heuristic: if prompt appears at end, command likely finished.
             if self._is_prompt(buf):
                 return buf
             if (self._time() - start) > timeout:
                 return buf  # return what we got so far (don't hang forever)
-            self._sleep(0.05)

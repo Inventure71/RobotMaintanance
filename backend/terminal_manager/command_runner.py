@@ -50,10 +50,20 @@ class CommandRunnerMixin:
             if handle:
                 handle.last_used = time.time()
 
-    def read_output(self, page_session_id: str, robot_id: str, max_chunks: int = 100) -> str:
+    def read_output(
+        self,
+        page_session_id: str,
+        robot_id: str,
+        max_chunks: int = 100,
+        wait_timeout_sec: float | None = None,
+    ) -> str:
         self._mark_manual_activity(robot_id=robot_id, page_session_id=page_session_id)
         shell = self.get_or_connect(page_session_id=page_session_id, robot_id=robot_id)
-        output = shell.read(max_chunks=max_chunks)
+        wait_timeout = max(0.0, float(wait_timeout_sec or 0.0))
+        try:
+            output = shell.read(max_chunks=max_chunks, wait_timeout=wait_timeout)
+        except TypeError:
+            output = shell.read(max_chunks=max_chunks)
         with self._lock:
             key = (page_session_id, robot_id)
             handle = self._handles.get(key)
