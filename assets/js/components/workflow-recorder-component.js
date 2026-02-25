@@ -61,6 +61,10 @@ export class WorkflowRecorderComponent {
     this.statusEl = options.statusEl;
     this.publishStatusEl = options.publishStatusEl;
     this.onStateChange = typeof options.onStateChange === 'function' ? options.onStateChange : null;
+    this.onStatusChange = typeof options.onStatusChange === 'function' ? options.onStatusChange : null;
+    this.onPublishStatusChange = typeof options.onPublishStatusChange === 'function'
+      ? options.onPublishStatusChange
+      : null;
 
     this.started = false;
     this.outputs = [];
@@ -122,6 +126,9 @@ export class WorkflowRecorderComponent {
     this.statusEl.textContent = message;
     this.statusEl.classList.remove('ok', 'warn', 'error');
     if (tone) this.statusEl.classList.add(tone);
+    if (typeof this.onStatusChange === 'function') {
+      this.onStatusChange(message, tone);
+    }
   }
 
   setPublishStatus(message = '', tone = '') {
@@ -129,6 +136,9 @@ export class WorkflowRecorderComponent {
     this.publishStatusEl.textContent = message;
     this.publishStatusEl.classList.remove('ok', 'warn', 'error');
     if (tone) this.publishStatusEl.classList.add(tone);
+    if (typeof this.onPublishStatusChange === 'function') {
+      this.onPublishStatusChange(message, tone);
+    }
   }
 
   appendTerminal(text, tone = 'plain') {

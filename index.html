@@ -59,6 +59,29 @@
           <div class="status-bar dashboard-bulk-actions">
             <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
           </div>
+          <div class="panel monitor-config-control">
+            <div class="monitor-config-head">
+              <label class="fleet-parallelism-label" for="monitorMode">Auto monitor mode:</label>
+            </div>
+            <div class="monitor-config-row">
+              <select id="monitorMode" class="filter-item monitor-config-select">
+                <option value="online_battery">Online + Battery</option>
+                <option value="online_battery_topics">Online + Battery + Topics</option>
+              </select>
+              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval (seconds):</label>
+              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5"
+                max="300" step="1" value="30" />
+              <button class="button button-compact" id="applyMonitorConfig" type="button"
+                data-button-intent="monitor">Apply</button>
+            </div>
+            <div class="monitor-config-hint-row">
+              <p class="fleet-parallelism-hint monitor-config-hint">Global backend setting. Topics mode runs a shared
+                snapshot command once
+                per robot interval.</p>
+              <span id="monitorConfigStatus" class="monitor-config-status" aria-live="polite"></span>
+            </div>
+          </div>
+
           <div class="panel fleet-parallelism-control">
             <label class="fleet-parallelism-label" for="fleetParallelism">
               Fleet parallelism:
@@ -67,29 +90,6 @@
             <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
             <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected"
               and "Refresh online" increases speed at the cost of overhead.</p>
-          </div>
-
-          <div class="panel monitor-config-control">
-            <div class="monitor-config-head">
-              <label class="fleet-parallelism-label" for="monitorMode">
-                Auto monitor mode:
-              </label>
-              <select id="monitorMode" class="filter-item">
-                <option value="online_battery">Online + Battery</option>
-                <option value="online_battery_topics">Online + Battery + Topics</option>
-              </select>
-            </div>
-            <div class="monitor-config-row">
-              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval
-                (seconds)</label>
-              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5"
-                max="300" step="1" value="30" />
-              <button class="button button-compact" id="applyMonitorConfig" type="button"
-                data-button-intent="monitor">Apply</button>
-            </div>
-            <p class="fleet-parallelism-hint">Global backend setting. Topics mode runs a shared snapshot command once
-              per robot interval.</p>
-            <div id="monitorConfigStatus" class="monitor-config-status"></div>
           </div>
           <div class="panel theme-switcher-control">
             <label class="fleet-parallelism-label" for="themeSelect">
@@ -140,17 +140,19 @@
       </div>
       <div class="manage-robots-shell">
         <div class="panel manage-tabs-panel">
-          <div class="manage-tabs" role="tablist" aria-label="Manage robots tabs">
-            <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
-              data-button-intent="navigation">Robots</button>
-            <button id="manageTabButtonTests" class="button button-compact" type="button" data-tab="tests"
-              data-button-intent="navigation">Tests</button>
-            <button id="manageTabButtonFixes" class="button button-compact" type="button" data-tab="fixes"
-              data-button-intent="navigation">Fixes</button>
-            <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
-              data-button-intent="navigation">Recorder</button>
+          <div class="manage-tabs-row">
+            <div class="manage-tabs" role="tablist" aria-label="Robot management sections">
+              <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
+                data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
+              <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
+                data-button-intent="navigation" title="Record terminal sessions into reusable test flows">Flow Recorder</button>
+              <button id="manageTabButtonTests" class="button button-compact" type="button" data-tab="tests"
+                data-button-intent="navigation" title="Create and edit test definitions">Test Definitions</button>
+              <button id="manageTabButtonFixes" class="button button-compact" type="button" data-tab="fixes"
+                data-button-intent="navigation" title="Create and edit automated repair actions">Fix Definitions</button>
+            </div>
+            <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
           </div>
-          <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
 
           <div id="manageTabPanelRobots" class="manage-tab-panel active" data-tab-panel="robots">
             <div class="add-robot-shell">

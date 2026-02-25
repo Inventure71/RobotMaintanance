@@ -1021,6 +1021,14 @@
       padding: 0.85rem;
     }
 
+    .manage-tabs-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.9rem;
+      flex-wrap: wrap;
+    }
+
     .manage-tabs {
       display: flex;
       gap: 0.5rem;
@@ -1129,9 +1137,21 @@
     }
 
     .manage-editor-status {
-      min-height: 1rem;
+      min-height: 0;
+      display: none;
       color: var(--muted);
       font-size: 0.84rem;
+    }
+
+    .manage-editor-status:not(:empty) {
+      display: block;
+      min-height: 1rem;
+    }
+
+    #recorderStatus,
+    #recorderPublishStatus {
+      display: none;
+      min-height: 0;
     }
 
     .manage-editor-status.ok {
@@ -1512,7 +1532,7 @@
       }
     }
 
-    @media (max-width: 640px) {
+  @media (max-width: 640px) {
       .form-grid {
         grid-template-columns: 1fr;
       }
@@ -1935,6 +1955,10 @@
 
   .manage-tabs {
     gap: 0.4rem;
+  }
+
+  .manage-tabs-row {
+    align-items: flex-start;
   }
 
   .floating-bug-button {
