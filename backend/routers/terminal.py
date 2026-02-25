@@ -82,13 +82,13 @@ def create_terminal_router(terminal_manager: TerminalManager) -> APIRouter:
         if initial_output:
             await websocket.send_json({"type": "output", "data": initial_output})
 
-        def _read_chunk() -> str:
+        def _read_chunk_non_blocking() -> str:
             try:
                 return terminal_manager.read_output(
                     page_session_id=page_session_id,
                     robot_id=robot_id,
                     max_chunks=200,
-                    wait_timeout_sec=0.5,
+                    wait_timeout_sec=0.0,
                 )
             except TypeError:
                 return terminal_manager.read_output(
@@ -99,9 +99,11 @@ def create_terminal_router(terminal_manager: TerminalManager) -> APIRouter:
 
         async def sender_loop() -> None:
             while True:
-                chunk = await asyncio.to_thread(_read_chunk)
+                chunk = _read_chunk_non_blocking()
                 if chunk:
                     await websocket.send_json({"type": "output", "data": chunk})
+                    continue
+                await asyncio.sleep(0.05)
 
         async def receiver_loop() -> None:
             while True:

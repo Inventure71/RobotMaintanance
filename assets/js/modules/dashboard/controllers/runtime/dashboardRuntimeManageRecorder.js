@@ -138,8 +138,8 @@ export function registerManageRecorderRuntime(runtime, env) {
     recorderDefinitionIdInput,
     recorderDefinitionLabelInput,
     recorderFlowBlocks,
-    recorderLastEditingOutputKey,
-    recorderLastEditingReadBlockId,
+    recorderLastEditingOutputKey: initialRecorderLastEditingOutputKey,
+    recorderLastEditingReadBlockId: initialRecorderLastEditingReadBlockId,
     recorderOutputCountBadge,
     recorderOutputFailDetailsInput,
     recorderOutputIconInput,
@@ -185,6 +185,8 @@ export function registerManageRecorderRuntime(runtime, env) {
     toggleDashboardFixModeButton,
     toggleDetailFixModeButton,
   } = env;
+  let recorderLastEditingOutputKey = normalizeText(initialRecorderLastEditingOutputKey, '');
+  let recorderLastEditingReadBlockId = normalizeText(initialRecorderLastEditingReadBlockId, '');
 
   const addRobotIdsToSelection = (...args) => runtime.addRobotIdsToSelection(...args);
   const appendTerminalLine = (...args) => runtime.appendTerminalLine(...args);
@@ -1146,6 +1148,7 @@ export function registerManageRecorderRuntime(runtime, env) {
   
         if (recorderState.editingOutputKey !== recorderLastEditingOutputKey) {
           recorderLastEditingOutputKey = recorderState.editingOutputKey || '';
+          env.recorderLastEditingOutputKey = recorderLastEditingOutputKey;
           if (recorderLastEditingOutputKey) {
             const output = state.workflowRecorder?.getOutput?.(recorderLastEditingOutputKey);
             if (output) {
@@ -1160,6 +1163,7 @@ export function registerManageRecorderRuntime(runtime, env) {
   
         if (recorderState.editingReadBlockId !== recorderLastEditingReadBlockId) {
           recorderLastEditingReadBlockId = recorderState.editingReadBlockId || '';
+          env.recorderLastEditingReadBlockId = recorderLastEditingReadBlockId;
           if (recorderLastEditingReadBlockId) {
             const block = state.workflowRecorder?.getReadBlock?.(recorderLastEditingReadBlockId);
             if (block) {
