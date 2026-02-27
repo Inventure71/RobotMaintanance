@@ -2,6 +2,7 @@
   "id": "flash_fix",
   "label": "Flash fix",
   "enabled": true,
+  "runAtConnection": false,
   "description": "Reflash firmware and restart docker stack, then rerun diagnostics.",
   "params": {
     "flashTimeoutSec": 900

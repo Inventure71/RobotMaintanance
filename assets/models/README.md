@@ -6,7 +6,9 @@ Drop all robot models in this folder.
 - Keep model file names stable and versioned, for example:
   - `rosbot-2p-pro.glb`
   - `rosbot-mini-pro-v2.glb`
-- Reference models from `config/robots.config.json` using the `modelUrl` field.
+- Reference models from:
+  - `config/robot-types.config.json` with `robotTypes[].model.file_name` (default path is `assets/models`)
+  - optional per-robot overrides in `config/robots.config.json` using `model.file_name` and `model.path_to_quality_folders`
 
 Examples:
 - `/assets/models/rosbot-2p-pro.glb`

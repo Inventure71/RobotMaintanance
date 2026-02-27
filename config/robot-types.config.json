@@ -4,6 +4,9 @@
     {
       "id": "rosbot-2-pro",
       "name": "Rosbot 2 Pro",
+      "model": {
+        "file_name": "rosbot-2-pro.glb"
+      },
       "autoMonitor": {
         "batteryCommand": "source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery"
       },

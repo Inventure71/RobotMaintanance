@@ -46,12 +46,14 @@ def test_definition_load_failure_is_isolated_to_its_test():
                 "id": "good",
                 "definitionId": "good_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             },
             {
                 "id": "broken",
                 "definitionId": "missing_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             },
         ],
@@ -91,6 +93,7 @@ def test_missing_output_is_reported_as_definition_output_missing():
                 "id": "missing-output",
                 "definitionId": "bad_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             }
         ],
@@ -126,6 +129,7 @@ def test_mixed_valid_and_invalid_test_ids_return_partial_results():
                 "id": "good",
                 "definitionId": "good_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             }
         ],
@@ -165,6 +169,7 @@ def test_all_invalid_test_ids_keep_http_400_behavior():
                 "id": "good",
                 "definitionId": "good_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             }
         ],
@@ -200,6 +205,7 @@ def test_contains_string_fail_is_stable_and_explicit():
                 "id": "string-check",
                 "definitionId": "string_def",
                 "manualOnly": True,
+                        "runAtConnection": True,
                 "enabled": True,
             }
         ],

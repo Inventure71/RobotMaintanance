@@ -26,6 +26,7 @@ def _manager() -> TerminalManager:
                         "definitionId": "general_def",
                         "enabled": True,
                         "manualOnly": True,
+                        "runAtConnection": True,
                     }
                 ],
                 "autoFixes": [

@@ -332,6 +332,7 @@ def test_manual_run_persists_runtime_results(monkeypatch):
                         "definitionId": "general_def",
                         "enabled": True,
                         "manualOnly": True,
+                        "runAtConnection": True,
                     },
                 ],
             }
@@ -436,12 +437,14 @@ def test_partial_manual_run_does_not_update_last_full_test_activity(monkeypatch)
                         "definitionId": "general_def",
                         "enabled": True,
                         "manualOnly": True,
+                        "runAtConnection": True,
                     },
                     {
                         "id": "battery",
                         "definitionId": "battery_def",
                         "enabled": True,
                         "manualOnly": True,
+                        "runAtConnection": True,
                     },
                 ],
             }
@@ -788,7 +791,7 @@ def test_auto_monitor_defers_when_recent_manual_activity(monkeypatch):
     assert observed["commands"] == []
 
 
-def test_auto_monitor_triggers_recovery_tests_only_on_offline_to_online_transition():
+def test_auto_monitor_emits_connected_event_only_on_offline_to_online_transition():
     manager = _manager()
     manager._refresh_battery_state = lambda _robot_id: None
 
@@ -815,17 +818,19 @@ def test_auto_monitor_triggers_recovery_tests_only_on_offline_to_online_transiti
 
     manager.check_online = lambda *_args, **_kwargs: next(probes)
     calls = []
-    manager._run_auto_recovery_tests = lambda robot_id: calls.append(robot_id)
+    manager._emit_connection_event_connected = lambda robot_id, connected_at=None: calls.append((robot_id, connected_at))
 
     manager._run_auto_monitor_tick()  # First observed state: offline (no transition yet)
     manager._online_next_check_at["r1"] = 0.0
     manager._run_auto_monitor_tick()  # Offline -> online transition
     manager._run_auto_monitor_tick()  # Already online, no additional trigger
 
-    assert calls == ["r1"]
+    assert len(calls) == 1
+    assert calls[0][0] == "r1"
+    assert isinstance(calls[0][1], float)
 
 
-def test_auto_monitor_triggers_recovery_tests_on_unknown_to_online_transition():
+def test_auto_monitor_emits_connected_event_on_unknown_to_online_transition():
     manager = _manager()
     manager._refresh_battery_state = lambda _robot_id: None
 
@@ -838,11 +843,13 @@ def test_auto_monitor_triggers_recovery_tests_on_unknown_to_online_transition():
         "source": "live",
     }
     calls = []
-    manager._run_auto_recovery_tests = lambda robot_id: calls.append(robot_id)
+    manager._emit_connection_event_connected = lambda robot_id, connected_at=None: calls.append((robot_id, connected_at))
 
     manager._run_auto_monitor_tick()
 
-    assert calls == ["r1"]
+    assert len(calls) == 1
+    assert calls[0][0] == "r1"
+    assert isinstance(calls[0][1], float)
 
 
 def test_auto_recovery_tests_hold_testing_state_for_min_visibility(monkeypatch):
@@ -1018,3 +1025,133 @@ def test_auto_monitor_skips_checks_while_fix_run_active():
     manager.finish_fix_run("r1")
 
     assert observed["check_calls"] == 0
+
+
+def _connection_retry_manager() -> TerminalManager:
+    return TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True, "runAtConnection": False},
+                    {"id": "general", "enabled": True, "runAtConnection": True},
+                ],
+            }
+        },
+        auto_monitor=False,
+    )
+
+
+def test_connection_event_runner_retries_until_selected_tests_pass():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.01
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.2
+
+    attempts: list[int] = []
+    results = [
+        [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}],
+        [{"id": "general", "status": "ok", "value": "present", "details": "ok", "ms": 1}],
+    ]
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
+        _ = robot_id, test_ids, source
+        attempts.append(len(attempts) + 1)
+        return results.pop(0) if results else [{"id": "general", "status": "ok"}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with manager._lock:
+            inflight = "r1" in manager._connection_retry_inflight
+        if not inflight:
+            break
+        time.sleep(0.01)
+
+    assert attempts == [1, 2]
+    with manager._lock:
+        assert "r1" not in manager._connection_retry_inflight
+
+
+def test_connection_event_runner_cancels_on_manual_activity():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.05
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.5
+
+    attempts: list[int] = []
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
+        _ = robot_id, test_ids, source
+        attempts.append(len(attempts) + 1)
+        return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline and not attempts:
+        time.sleep(0.01)
+
+    manager._emit_connection_event_manual_activity("r1")
+    attempts_after_cancel = len(attempts)
+    time.sleep(0.2)
+    assert len(attempts) == attempts_after_cancel
+
+
+def test_connection_event_runner_cancels_on_disconnect():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.05
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.5
+
+    attempts: list[int] = []
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
+        _ = robot_id, test_ids, source
+        attempts.append(len(attempts) + 1)
+        return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline and not attempts:
+        time.sleep(0.01)
+
+    manager._emit_connection_event_disconnected("r1")
+    attempts_after_cancel = len(attempts)
+    time.sleep(0.2)
+    assert len(attempts) == attempts_after_cancel
+
+
+def test_connection_event_runner_reconnect_replaces_prior_token():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.05
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.5
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
+        _ = robot_id, test_ids, source
+        time.sleep(0.05)
+        return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+    with manager._lock:
+        first_token = int((manager._connection_retry_sessions.get("r1") or {}).get("token", 0))
+
+    time.sleep(0.01)
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+    with manager._lock:
+        second_token = int((manager._connection_retry_sessions.get("r1") or {}).get("token", 0))
+        inflight_token = int(manager._connection_retry_inflight.get("r1", 0))
+
+    assert second_token > first_token
+    assert inflight_token == second_token

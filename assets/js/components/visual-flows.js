@@ -6,6 +6,7 @@ export function initVisualFlows() {
   const tFlowDiv = document.getElementById('manageTestVisualFlow');
   const tAddW = document.getElementById('manageTestAddWriteBtn');
   const tAddR = document.getElementById('manageTestAddReadBtn');
+  const tRunAtConnectionInput = document.getElementById('manageTestRunAtConnectionInput');
 
   const fExecInput = document.getElementById('manageFixExecuteJson');
   const fFlowDiv = document.getElementById('manageFixVisualFlow');
@@ -158,6 +159,7 @@ export function initVisualFlows() {
             ...data,
             id: idVal,
             label: idVal.replace(/_/g, ' '),
+            runAtConnection: data.runAtConnection !== false,
             read: newRead,
             pass: { ...data.pass, details: passDetail, status: 'ok', value: 'present' },
             fail: { ...data.fail, details: failDetail, status: 'error', value: 'missing' },
@@ -218,9 +220,11 @@ export function initVisualFlows() {
 
        const defRef = execute.length ? execute[execute.length - 1].saveAs : 'unknown';
        const id = 'read_' + (checks.length + 1);
+       const runAtConnectionDefault = Boolean(tRunAtConnectionInput?.checked);
        checks.push({
          id: id,
          label: id.replace(/_/g, ' '),
+         runAtConnection: runAtConnectionDefault,
          read: {
            kind: 'contains_string',
            inputRef: defRef,

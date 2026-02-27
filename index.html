@@ -154,7 +154,59 @@
             <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
           </div>
 
-          <div id="manageTabPanelRobots" class="manage-tab-panel active" data-tab-panel="robots">
+          <div id="manageTabPanelRobots" class="manage-tab-panel active robot-registry-panel" data-tab-panel="robots">
+            <div class="manage-grid two-cols">
+              <div class="panel manage-list-panel">
+                <h2>Robot Catalog</h2>
+                <p class="muted-copy">Select a robot to inspect and modify connection details.</p>
+                <label class="form-field">
+                  Select robot
+                  <select id="editRobotSelect" class="form-input">
+                    <option value="">No robots available</option>
+                  </select>
+                </label>
+                <div id="editRobotSummary" class="muted-copy" style="margin-top: 8px;">Select a robot to view details.</div>
+                <div id="editRobotList" class="manage-entity-list" aria-label="Robot catalog list"></div>
+              </div>
+              <div class="panel manage-editor-panel">
+                <h2>Modify selected robot</h2>
+                <div id="editRobotStatus" class="add-robot-message" aria-live="polite"></div>
+                <form id="editRobotForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Robot name
+                    <input id="editRobotName" class="form-input" name="name" type="text" autocomplete="off" required />
+                  </label>
+                  <label class="form-field">
+                    Robot type
+                    <select id="editRobotType" class="form-input" name="type" required></select>
+                  </label>
+                  <label class="form-field">
+                    IP / Host
+                    <input id="editRobotIp" class="form-input" name="ip" type="text" autocomplete="off" required />
+                  </label>
+                  <label class="form-field">
+                    Model file name (optional override)
+                    <input id="editRobotModelFileName" class="form-input" name="modelFileName" type="text" autocomplete="off" placeholder="e.g. rosbot-2-pro.glb" />
+                  </label>
+                  <label class="form-field">
+                    Quality folder base path (optional override)
+                    <input id="editRobotModelQualityBasePath" class="form-input" name="modelQualityBasePath" type="text" autocomplete="off" placeholder="assets/models" />
+                  </label>
+                  <label class="form-field">
+                    SSH username
+                    <input id="editRobotUsername" class="form-input" name="username" type="text" autocomplete="off" required />
+                  </label>
+                  <label class="form-field">
+                    SSH password
+                    <input id="editRobotPassword" class="form-input" name="password" type="password" autocomplete="off" required />
+                  </label>
+                  <div class="add-robot-actions">
+                    <button id="editRobotSaveButton" class="button" type="submit" data-button-intent="create">Save changes</button>
+                    <button id="editRobotDeleteButton" class="button button-danger" type="button" data-button-intent="danger">Delete robot</button>
+                  </div>
+                </form>
+              </div>
+            </div>
             <div class="add-robot-shell">
               <div class="panel add-robot-panel">
                 <div class="add-robot-head">
@@ -181,9 +233,14 @@
                         placeholder="e.g. 192.168.0.42 or robot-host" required />
                     </label>
                     <label class="form-field">
-                      Model URL (optional)
-                      <input id="addRobotModelUrl" name="modelUrl" type="text" autocomplete="off" class="form-input"
-                        placeholder="assets/models/rosbot-2-pro.glb" />
+                      Model file name (optional override)
+                      <input id="addRobotModelFileName" name="modelFileName" type="text" autocomplete="off" class="form-input"
+                        placeholder="e.g. rosbot-2-pro.glb" />
+                    </label>
+                    <label class="form-field">
+                      Quality folder base path (optional override)
+                      <input id="addRobotModelQualityBasePath" name="modelQualityBasePath" type="text" autocomplete="off" class="form-input"
+                        placeholder="assets/models" />
                     </label>
                     <label class="form-field">
                       SSH username
@@ -206,13 +263,20 @@
                   </div>
                 </form>
               </div>
-              <aside class="panel add-robot-side-panel" aria-label="Add robot guidance">
-                <h3 class="add-robot-side-title">Before you save</h3>
-                <ul class="add-robot-checklist">
-                  <li>Use a reachable host/IP for diagnostics and terminal access.</li>
-                  <li>Select a known type so tests map correctly.</li>
-                  <li>SSH credentials are stored in the config file.</li>
-                </ul>
+              <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
+                <h3 class="add-robot-side-title">Create a new robot type</h3>
+                <div id="addRobotTypeMessage" class="add-robot-message" aria-live="polite"></div>
+                <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
+                  <label class="form-field">
+                    Display name
+                    <input id="addRobotTypeName" class="form-input" name="name" type="text" placeholder="Rosbot 2 Pro V2" required />
+                  </label>
+                  <label class="form-field">
+                    Topics (comma separated, optional)
+                    <input id="addRobotTypeTopics" class="form-input" name="topics" type="text" placeholder="/battery,/scan,/imu" />
+                  </label>
+                  <button id="addRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Create robot type</button>
+                </form>
               </aside>
             </div>
           </div>
@@ -247,6 +311,7 @@
                   </div>
                   <div class="form-field">
                     Test Flow Blocks
+                    <p class="muted-copy" style="margin: 0 0 8px 0;">Each read block includes a <strong>Run at connection</strong> toggle used by the auto connection retry system.</p>
                     <div id="manageTestVisualFlow" class="flow-block-container"
                       style="min-height: 80px; background: rgba(9, 15, 34, 0.4); border-radius: 12px; padding: 10px;">
                     </div>
@@ -257,10 +322,22 @@
                         data-button-intent="utility">Add Read Block</button>
                     </div>
                   </div>
-                  <div class="form-field">
-                    <h3>Map to robot types</h3>
-                    <div id="manageTestRobotTypeTargets" class="recorder-type-targets"></div>
-                  </div>
+                  <section class="definition-assignment" aria-label="Assignment">
+                    <div class="definition-assignment-header">
+                      <h3>Assignment</h3>
+                      <p class="muted-copy">Map this definition to robot types and choose connection behavior.</p>
+                    </div>
+                    <div class="definition-assignment-grid">
+                      <label class="recorder-primitive-toggle">
+                        <input id="manageTestRunAtConnectionInput" type="checkbox" checked />
+                        Run test at connection
+                      </label>
+                    </div>
+                    <div class="form-field">
+                      <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                      <div id="manageTestRobotTypeTargets" class="recorder-type-targets"></div>
+                    </div>
+                  </section>
                   <div class="manage-editor-actions">
                     <button id="manageSaveTestButton" class="button" type="submit" data-button-intent="create">Save test
                       definition</button>
@@ -315,10 +392,20 @@
                     <input id="manageFixPostTests" class="form-input" type="text"
                       placeholder="general,movement,battery" />
                   </label>
-                  <div class="form-field">
-                    <h3>Map to robot types</h3>
-                    <div id="manageFixRobotTypeTargets" class="recorder-type-targets"></div>
-                  </div>
+                  <section class="definition-assignment" aria-label="Assignment">
+                    <div class="definition-assignment-header">
+                      <h3>Assignment</h3>
+                      <p class="muted-copy">Map this definition to robot types and configure connection behavior.</p>
+                    </div>
+                    <label class="recorder-primitive-toggle">
+                      <input id="manageFixRunAtConnectionInput" type="checkbox" />
+                      Run at connection
+                    </label>
+                    <div class="form-field">
+                      <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                      <div id="manageFixRobotTypeTargets" class="recorder-type-targets"></div>
+                    </div>
+                  </section>
                   <div class="manage-editor-actions">
                     <button id="manageSaveFixButton" class="button" type="submit" data-button-intent="create">Save fix
                       definition</button>
@@ -474,8 +561,20 @@
                     style="height: calc(100% - 40px); background:#060912; overflow-y:auto; padding: 0.5rem;"></div>
                 </div>
 
-                <h3>Map to robot types</h3>
-                <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                <section class="definition-assignment" aria-label="Assignment">
+                  <div class="definition-assignment-header">
+                    <h3>Assignment</h3>
+                    <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
+                  </div>
+                  <div class="definition-assignment-grid">
+                    <label class="recorder-primitive-toggle">
+                      <input id="recorderRunAtConnectionInput" type="checkbox" checked />
+                      Run test at connection
+                    </label>
+                  </div>
+                  <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                  <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                </section>
                 <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
               </div>
             </div>

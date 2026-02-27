@@ -121,6 +121,7 @@ Recommended workflow (file-based, version-controlled):
    - `mode` (`orchestrate` or `online_probe`)
    - `execute[]` steps
    - `checks[]` definitions
+   - each `checks[].metadata` must include boolean `runAtConnection`
 2. Add any referenced primitives under `config/command-primitives/`.
 3. Add new check IDs to `testRefs` in `config/robot-types.config.json`.
 4. Reload definitions: `POST /api/definitions/reload`.
@@ -133,6 +134,11 @@ curl -X POST "http://localhost:8010/api/robots/<robot_id>/tests/run" \
 ```
 
 UI workflow is also supported through the Manage/Recorder flow builder for creating and mapping generated checks.
+
+Auto connection retry behavior:
+- On `offline -> online`, the backend runs checks flagged `runAtConnection=true`.
+- If any selected check fails, it retries every `5` seconds for up to `60` seconds from reconnect.
+- Retries stop immediately on manual activity or disconnect.
 
 ## Adding New Fixes
 

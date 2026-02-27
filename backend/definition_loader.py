@@ -140,6 +140,14 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
                         )
 
         metadata = raw_check.get("metadata") if isinstance(raw_check.get("metadata"), dict) else {}
+        if "runAtConnection" not in metadata:
+            raise ValueError(
+                f"Test definition '{definition_id}' check '{check_id}' must define metadata.runAtConnection"
+            )
+        if not isinstance(metadata.get("runAtConnection"), bool):
+            raise ValueError(
+                f"Test definition '{definition_id}' check '{check_id}' metadata.runAtConnection must be boolean"
+            )
         default_status = normalize_status(metadata.get("defaultStatus"))
         normalized_checks.append(
             {
@@ -149,6 +157,7 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
                 "icon": normalize_text(metadata.get("icon"), normalize_text(raw_check.get("icon"), "⚙️")),
                 "manualOnly": bool(metadata.get("manualOnly", True)),
                 "enabled": bool(metadata.get("enabled", True)),
+                "runAtConnection": bool(metadata.get("runAtConnection")),
                 "defaultStatus": default_status,
                 "defaultValue": normalize_text(metadata.get("defaultValue"), "unknown"),
                 "defaultDetails": normalize_text(metadata.get("defaultDetails"), "Not checked yet"),
@@ -158,6 +167,11 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
                 "pass": raw_check.get("pass") if isinstance(raw_check.get("pass"), dict) else {},
                 "fail": raw_check.get("fail") if isinstance(raw_check.get("fail"), dict) else {},
             }
+        )
+    run_at_connection_values = {check.get("runAtConnection") for check in normalized_checks}
+    if len(run_at_connection_values) > 1:
+        raise ValueError(
+            f"Test definition '{definition_id}' must use a single metadata.runAtConnection value for all checks"
         )
 
     normalized_execute: list[dict[str, Any]] = []
@@ -217,12 +231,16 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
 
     post_test_ids = raw.get("postTestIds") if isinstance(raw.get("postTestIds"), list) else []
     post_test_ids = [normalize_text(item, "") for item in post_test_ids if normalize_text(item, "")]
+    run_at_connection = raw.get("runAtConnection", False)
+    if not isinstance(run_at_connection, bool):
+        raise ValueError(f"Fix definition '{fix_id}' must define boolean runAtConnection")
 
     return {
         "id": fix_id,
         "label": normalize_text(raw.get("label"), fix_id),
         "description": normalize_text(raw.get("description"), ""),
         "enabled": bool(raw.get("enabled", True)),
+        "runAtConnection": run_at_connection,
         "execute": normalized_execute,
         "postTestIds": post_test_ids,
         "params": raw.get("params") if isinstance(raw.get("params"), dict) else {},

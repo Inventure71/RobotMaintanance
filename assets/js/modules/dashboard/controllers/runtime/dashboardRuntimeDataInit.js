@@ -68,6 +68,7 @@ export function registerDataInitRuntime(runtime, env) {
     addRobotPasswordInput,
     addRobotPasswordToggle,
     addRobotSavingHint,
+    addRobotTypeForm,
     addRobotSection,
     addRobotTypeSelect,
     applyActionButton,
@@ -85,6 +86,9 @@ export function registerDataInitRuntime(runtime, env) {
     dashboardFixModeStatus,
     dashboardFixModeSummary,
     detail,
+    editRobotDeleteButton,
+    editRobotForm,
+    editRobotSelect,
     detailFixModeActions,
     detailFixModePanel,
     detailFixModeStatus,
@@ -220,6 +224,7 @@ export function registerDataInitRuntime(runtime, env) {
   const closeTerminalSession = (...args) => runtime.closeTerminalSession(...args);
   const closeTestDebugModal = (...args) => runtime.closeTestDebugModal(...args);
   const createRobotFromForm = (...args) => runtime.createRobotFromForm(...args);
+  const createRobotTypeFromForm = (...args) => runtime.createRobotTypeFromForm(...args);
   const cycleOnlineSortMode = (...args) => runtime.cycleOnlineSortMode(...args);
   const deleteManageFixDefinition = (...args) => runtime.deleteManageFixDefinition(...args);
   const deleteManageTestDefinition = (...args) => runtime.deleteManageTestDefinition(...args);
@@ -311,6 +316,7 @@ export function registerDataInitRuntime(runtime, env) {
   const patchRobotTypeMapping = (...args) => runtime.patchRobotTypeMapping(...args);
   const persistManageTab = (...args) => runtime.persistManageTab(...args);
   const populateAddRobotTypeOptions = (...args) => runtime.populateAddRobotTypeOptions(...args);
+  const populateEditRobotSelectOptions = (...args) => runtime.populateEditRobotSelectOptions(...args);
   const populateFilters = (...args) => runtime.populateFilters(...args);
   const publishRecorderAsTest = (...args) => runtime.publishRecorderAsTest(...args);
   const queryCardByRobotId = (...args) => runtime.queryCardByRobotId(...args);
@@ -345,6 +351,7 @@ export function registerDataInitRuntime(runtime, env) {
   const runRobotTestsForRobot = (...args) => runtime.runRobotTestsForRobot(...args);
   const saveManageFixDefinition = (...args) => runtime.saveManageFixDefinition(...args);
   const saveManageTestDefinition = (...args) => runtime.saveManageTestDefinition(...args);
+  const saveRobotEditsFromForm = (...args) => runtime.saveRobotEditsFromForm(...args);
   const scheduleMonitorParallelismSync = (...args) => runtime.scheduleMonitorParallelismSync(...args);
   const selectAllOfflineRobots = (...args) => runtime.selectAllOfflineRobots(...args);
   const selectAllOnlineRobots = (...args) => runtime.selectAllOnlineRobots(...args);
@@ -352,6 +359,7 @@ export function registerDataInitRuntime(runtime, env) {
   const selectRobotIds = (...args) => runtime.selectRobotIds(...args);
   const setActiveManageTab = (...args) => runtime.setActiveManageTab(...args);
   const setAddRobotMessage = (...args) => runtime.setAddRobotMessage(...args);
+  const setEditRobotMessage = (...args) => runtime.setEditRobotMessage(...args);
   const setAddRobotPasswordVisibility = (...args) => runtime.setAddRobotPasswordVisibility(...args);
   const setBugReportStatus = (...args) => runtime.setBugReportStatus(...args);
   const setFixModeStatus = (...args) => runtime.setFixModeStatus(...args);
@@ -414,6 +422,8 @@ export function registerDataInitRuntime(runtime, env) {
   const updateRobotTestState = (...args) => runtime.updateRobotTestState(...args);
   const updateSelectionSummary = (...args) => runtime.updateSelectionSummary(...args);
   const updateTestMappings = (...args) => runtime.updateTestMappings(...args);
+  const deleteSelectedRobotFromForm = (...args) => runtime.deleteSelectedRobotFromForm(...args);
+  const fillEditRobotForm = (...args) => runtime.fillEditRobotForm(...args);
 
   async function loadRobotConfig() {
         try {
@@ -752,6 +762,7 @@ export function registerDataInitRuntime(runtime, env) {
             syncAutoMonitorRefreshState();
             populateFilters();
             populateAddRobotTypeOptions();
+            populateEditRobotSelectOptions();
             renderRecorderRobotOptions();
             renderDashboard();
             routeFromHash();
@@ -763,6 +774,7 @@ export function registerDataInitRuntime(runtime, env) {
             syncAutoMonitorRefreshState();
             populateFilters();
             populateAddRobotTypeOptions();
+            populateEditRobotSelectOptions();
             renderRecorderRobotOptions();
             renderDashboard();
             routeFromHash();
@@ -788,6 +800,31 @@ export function registerDataInitRuntime(runtime, env) {
           addRobotForm.addEventListener('submit', (event) => {
             event.preventDefault();
             createRobotFromForm();
+          });
+        }
+        if (editRobotSelect) {
+          editRobotSelect.addEventListener('change', () => {
+            const selectedId = normalizeText(editRobotSelect.value, '');
+            state.selectedManageRobotId = selectedId;
+            populateEditRobotSelectOptions(selectedId);
+            setEditRobotMessage('', '');
+          });
+        }
+        if (editRobotForm) {
+          editRobotForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            saveRobotEditsFromForm();
+          });
+        }
+        if (editRobotDeleteButton) {
+          editRobotDeleteButton.addEventListener('click', () => {
+            deleteSelectedRobotFromForm();
+          });
+        }
+        if (addRobotTypeForm) {
+          addRobotTypeForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            createRobotTypeFromForm();
           });
         }
         if (manageTestEditorForm) {

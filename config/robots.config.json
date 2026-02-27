@@ -6,7 +6,6 @@
       "name": "agamemnon",
       "type": "rosbot-2-pro",
       "ip": "agamemnon",
-      "modelUrl": "assets/models/rosbot-2-pro.glb",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -17,7 +16,6 @@
       "name": "alexander",
       "type": "rosbot-2-pro",
       "ip": "alexander",
-      "modelUrl": "assets/models/rosbot-2-pro.glb",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -28,7 +26,6 @@
       "name": "leonidas",
       "type": "rosbot-2-pro",
       "ip": "leonidas",
-      "modelUrl": "assets/models/rosbot-2-pro.glb",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -39,7 +36,6 @@
       "name": "menelao",
       "type": "rosbot-2-pro",
       "ip": "menelao",
-      "modelUrl": "assets/models/rosbot-2-pro.glb",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -50,7 +46,6 @@
       "name": "odysseus",
       "type": "rosbot-2-pro",
       "ip": "odysseus",
-      "modelUrl": "assets/models/rosbot-2-pro.glb",
       "ssh": {
         "username": "husarion",
         "password": "husarion"

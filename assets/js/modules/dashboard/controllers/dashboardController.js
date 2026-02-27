@@ -146,6 +146,10 @@ let ROBOT_TYPE_BY_ID = new Map();
       isBugReportModalOpen: false,
       isBugReportSubmitInProgress: false,
       isCreateRobotInProgress: false,
+      isEditRobotInProgress: false,
+      isDeleteRobotInProgress: false,
+      isCreateRobotTypeInProgress: false,
+      selectedManageRobotId: '',
       activeManageTab: 'robots',
       definitionsSummary: {
         commandPrimitives: [],
@@ -224,6 +228,25 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotSavingHint = $('#addRobotSavingHint');
     const addRobotPasswordInput = $('#addRobotPassword');
     const addRobotPasswordToggle = $('#toggleAddRobotPassword');
+    const editRobotForm = $('#editRobotForm');
+    const editRobotList = $('#editRobotList');
+    const editRobotSelect = $('#editRobotSelect');
+    const editRobotSummary = $('#editRobotSummary');
+    const editRobotStatus = $('#editRobotStatus');
+    const editRobotNameInput = $('#editRobotName');
+    const editRobotTypeSelect = $('#editRobotType');
+    const editRobotIpInput = $('#editRobotIp');
+    const editRobotModelFileNameInput = $('#editRobotModelFileName');
+    const editRobotModelQualityBasePathInput = $('#editRobotModelQualityBasePath');
+    const editRobotUsernameInput = $('#editRobotUsername');
+    const editRobotPasswordInput = $('#editRobotPassword');
+    const editRobotSaveButton = $('#editRobotSaveButton');
+    const editRobotDeleteButton = $('#editRobotDeleteButton');
+    const addRobotTypeForm = $('#addRobotTypeForm');
+    const addRobotTypeMessage = $('#addRobotTypeMessage');
+    const addRobotTypeNameInput = $('#addRobotTypeName');
+    const addRobotTypeTopicsInput = $('#addRobotTypeTopics');
+    const addRobotTypeSaveButton = $('#addRobotTypeSaveButton');
     const manageTabStatus = $('#manageTabStatus');
     const manageTabButtons = $$('[data-tab]');
     const manageTabPanels = $$('[data-tab-panel]');
@@ -234,6 +257,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageTestLabelInput = $('#manageTestLabel');
     const manageTestExecuteJsonInput = $('#manageTestExecuteJson');
     const manageTestChecksJsonInput = $('#manageTestChecksJson');
+    const manageTestRunAtConnectionInput = $('#manageTestRunAtConnectionInput');
     const manageTestEditorStatus = $('#manageTestEditorStatus');
     const manageFixEditorForm = $('#manageFixEditorForm');
     const manageFixIdInput = $('#manageFixId');
@@ -241,6 +265,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageFixDescriptionInput = $('#manageFixDescription');
     const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
     const manageFixPostTestsInput = $('#manageFixPostTests');
+    const manageFixRunAtConnectionInput = $('#manageFixRunAtConnectionInput');
     const manageFixEditorStatus = $('#manageFixEditorStatus');
     const manageDeleteTestButton = $('#manageDeleteTestButton');
     const manageDeleteFixButton = $('#manageDeleteFixButton');
@@ -250,6 +275,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderRobotSelect = $('#recorderRobotSelect');
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
     const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
+    const recorderRunAtConnectionInput = $('#recorderRunAtConnectionInput');
     const recorderPublishTestButton = $('#recorderPublishTest');
     const recorderStatus = $('#recorderStatus');
     const recorderPublishStatus = $('#recorderPublishStatus');
@@ -382,6 +408,11 @@ const runtimeEnv = {
   addRobotPasswordInput,
   addRobotPasswordToggle,
   addRobotSavingHint,
+  addRobotTypeForm,
+  addRobotTypeMessage,
+  addRobotTypeNameInput,
+  addRobotTypeSaveButton,
+  addRobotTypeTopicsInput,
   addRobotSection,
   addRobotTypeSelect,
   applyActionButton,
@@ -399,6 +430,20 @@ const runtimeEnv = {
   dashboardFixModeStatus,
   dashboardFixModeSummary,
   detail,
+  editRobotDeleteButton,
+  editRobotForm,
+  editRobotList,
+  editRobotIpInput,
+  editRobotModelFileNameInput,
+  editRobotModelQualityBasePathInput,
+  editRobotNameInput,
+  editRobotPasswordInput,
+  editRobotSaveButton,
+  editRobotSelect,
+  editRobotStatus,
+  editRobotSummary,
+  editRobotTypeSelect,
+  editRobotUsernameInput,
   detailFixModeActions,
   detailFixModePanel,
   detailFixModeStatus,
@@ -419,6 +464,7 @@ const runtimeEnv = {
   manageFixIdInput,
   manageFixLabelInput,
   manageFixPostTestsInput,
+  manageFixRunAtConnectionInput,
   manageFixRobotTypeTargets,
   manageFixesList,
   manageTabButtons,
@@ -430,6 +476,7 @@ const runtimeEnv = {
   manageTestExecuteJsonInput,
   manageTestIdInput,
   manageTestLabelInput,
+  manageTestRunAtConnectionInput,
   manageTestRobotTypeTargets,
   manageTestsList,
   monitorApplyButton,
@@ -450,6 +497,7 @@ const runtimeEnv = {
   recorderCreateNewTestButton,
   recorderDefinitionIdInput,
   recorderDefinitionLabelInput,
+  recorderRunAtConnectionInput,
   recorderFlowBlocks,
   recorderLastEditingOutputKey,
   recorderLastEditingReadBlockId,

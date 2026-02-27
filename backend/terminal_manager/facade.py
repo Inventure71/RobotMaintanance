@@ -13,6 +13,7 @@ from .activity_guard import ActivityGuardMixin
 from .auto_monitor_worker import AutoMonitorWorkerMixin
 from .battery_parser import BatteryParserMixin
 from .command_runner import CommandRunnerMixin
+from .connection_event_runner import ConnectionEventRunnerMixin
 from .fix_runner import FixRunnerMixin
 from .monitor_config import MonitorConfigMixin
 from .online_checker import OnlineCheckerMixin
@@ -24,6 +25,7 @@ from .topics_parser import TopicsParserMixin
 
 class TerminalManager(
     ActivityGuardMixin,
+    ConnectionEventRunnerMixin,
     RuntimeStateMixin,
     SessionStoreMixin,
     CommandRunnerMixin,
@@ -74,11 +76,14 @@ class TerminalManager(
     MONITOR_PARALLELISM_MAX = 100
     MANUAL_ACTIVITY_DEFER_SEC = 5.0
     MANUAL_AUTO_FIX_DEFER_SEC = 90.0
+    CONNECTION_RETRY_INTERVAL_SEC = 5.0
+    CONNECTION_RETRY_WINDOW_SEC = 60.0
     IDLE_SWEEP_INTERVAL_SEC = 2.0
     COMMAND_DEFAULT_TIMEOUT_SEC = 20.0
     COMMAND_MIN_TIMEOUT_SEC = 0.5
     COMMAND_MAX_TIMEOUT_SEC = 3600.0
     ACTIVITY_PHASE_ONLINE_PROBE = "online_probe"
+    ACTIVITY_PHASE_CONNECTION_RETRY = "connection_retry"
     ACTIVITY_PHASE_FULL_TEST_AFTER_RECOVERY = "full_test_after_recovery"
     ACTIVITY_PHASE_POST_FLASH_RETEST = "post_flash_retest"
     _ACTIVITY_UNSET = object()
@@ -133,6 +138,8 @@ class TerminalManager(
         self._active_fix_runs = set()
         self._last_auto_monitor_online_state = {}
         self._auto_recovery_test_inflight = set()
+        self._connection_retry_sessions: dict[str, dict[str, Any]] = {}
+        self._connection_retry_inflight: dict[str, int] = {}
         self._fix_runs: dict[tuple[str, str], dict[str, Any]] = {}
         self._next_idle_sweep_at = 0.0
         self._auto_monitor_executor = None
