@@ -1,3 +1,5 @@
+import { createModelAssetResolver } from '../../primitives/model-viewer/modelAssetResolver.js';
+
 export function registerFleetViewRuntime(runtime, env) {
   const {
     $,
@@ -184,6 +186,15 @@ export function registerFleetViewRuntime(runtime, env) {
     toggleDashboardFixModeButton,
     toggleDetailFixModeButton,
   } = env;
+
+  const MODEL_RESOLUTION_LOW = 'low';
+  const MODEL_RESOLUTION_HIGH = 'high';
+  const modelAssetResolver = createModelAssetResolver({
+    qualityLevels: [
+      { id: MODEL_RESOLUTION_LOW, folder: 'LowRes' },
+      { id: MODEL_RESOLUTION_HIGH, folder: 'HighRes' },
+    ],
+  });
 
   const addRecorderOutputVisual = (...args) => runtime.addRecorderOutputVisual(...args);
   const addRecorderReadVisual = (...args) => runtime.addRecorderReadVisual(...args);
@@ -423,7 +434,7 @@ export function registerFleetViewRuntime(runtime, env) {
         renderDashboard();
       }
 
-  function resolveRobotModelUrl(candidate) {
+  function normalizeRobotModelBaseUrl(candidate) {
         if (typeof candidate === 'string' && candidate.trim()) {
           const clean = candidate.trim().replace(/^\.\//, '');
           const hasModelExtension = /\.(gltf|glb)(?:\?|#|$)/i.test(clean);
@@ -438,6 +449,11 @@ export function registerFleetViewRuntime(runtime, env) {
         return DEFAULT_ROBOT_MODEL_URL;
       }
 
+  function resolveRobotModelUrl(candidate, preferredResolution = MODEL_RESOLUTION_LOW) {
+        const baseUrl = normalizeRobotModelBaseUrl(candidate);
+        return modelAssetResolver.getInitialModelUrl(baseUrl, preferredResolution);
+      }
+
   function normalizeRobotData(raw) {
         const entries = Array.isArray(raw) ? raw : [];
         return entries.map((bot) => {
@@ -445,7 +461,7 @@ export function registerFleetViewRuntime(runtime, env) {
           const modelUrlCandidate = bot?.modelUrl || bot?.modelUrlPath || bot?.model?.url || bot?.model?.file || bot?.model?.path;
           const typeConfig = getRobotTypeConfig(botType);
           const { tests, definitions } = normalizeRobotTests(bot?.tests, botType);
-          const modelUrl = resolveRobotModelUrl(modelUrlCandidate);
+          const modelUrl = normalizeRobotModelBaseUrl(modelUrlCandidate);
           const activity = normalizeRobotActivity(bot?.activity);
           return {
             id: bot?.id || `robot-${Math.random().toString(16).slice(2, 7)}`,
@@ -692,6 +708,15 @@ export function registerFleetViewRuntime(runtime, env) {
         if (!container) return;
         const modelViewer = container.querySelector('model-viewer');
         if (!modelViewer) return;
+        const baseModelUrl = normalizeText(
+          modelViewer.dataset.modelResolutionBaseUrl,
+          modelViewer.getAttribute('src'),
+        );
+        const preferredResolution = normalizeText(
+          modelViewer.dataset.modelResolutionQuality,
+          MODEL_RESOLUTION_LOW,
+        );
+        modelAssetResolver.bindModelViewerSource(modelViewer, baseModelUrl, preferredResolution);
         if (isOffline) {
           modelViewer.removeAttribute('auto-rotate');
           modelViewer.removeAttribute('auto-rotate-delay');
@@ -1194,13 +1219,20 @@ export function registerFleetViewRuntime(runtime, env) {
           <div class="skull"><span></span></div>`;
       }
 
-  function buildRobotModelMarkup(robot, isOffline = false) {
-        const modelUrl = resolveRobotModelUrl(robot?.modelUrl);
+  function buildRobotModelMarkup(
+        robot,
+        isOffline = false,
+        preferredResolution = MODEL_RESOLUTION_LOW,
+      ) {
+        const baseModelUrl = normalizeRobotModelBaseUrl(robot?.modelUrl);
+        const modelUrl = modelAssetResolver.getInitialModelUrl(baseModelUrl, preferredResolution);
         if (modelUrl && CAN_USE_MODEL_VIEWER) {
           return `
             <div class="robot-viewer">
               <model-viewer
                 src="${modelUrl}"
+                data-model-resolution-base-url="${baseModelUrl}"
+                data-model-resolution-quality="${preferredResolution}"
                 alt="${robot.name || 'Robot model'}"
                 ${isOffline ? '' : 'auto-rotate'}
                 ${isOffline ? '' : 'auto-rotate-delay="0"'}
@@ -1215,8 +1247,13 @@ export function registerFleetViewRuntime(runtime, env) {
         return robotModelMarkup();
       }
 
-  function buildRobotModelContainer(robot, failureClasses, isOffline = false) {
-        const modelMarkup = buildRobotModelMarkup(robot, isOffline);
+  function buildRobotModelContainer(
+        robot,
+        failureClasses,
+        isOffline = false,
+        preferredResolution = MODEL_RESOLUTION_LOW,
+      ) {
+        const modelMarkup = buildRobotModelMarkup(robot, isOffline, preferredResolution);
         const is3D = modelMarkup.includes('model-viewer');
         return is3D
           ? `<div class="robot-model-slot ${failureClasses} ${isOffline ? 'offline' : ''}">${modelMarkup}</div>`
@@ -1319,6 +1356,7 @@ export function registerFleetViewRuntime(runtime, env) {
         });
   
         hydrateActionButtons(card);
+        syncModelViewerRotationForContainer(card, isOffline);
   
         return card;
       }
