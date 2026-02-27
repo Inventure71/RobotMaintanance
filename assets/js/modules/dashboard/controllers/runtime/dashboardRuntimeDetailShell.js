@@ -1,4 +1,6 @@
 export function registerDetailShellRuntime(runtime, env) {
+  const POST_CONNECT_TEST_DELAY_MS = 5_000;
+
   const {
     $,
     $$,
@@ -591,9 +593,10 @@ export function registerDetailShellRuntime(runtime, env) {
                 );
               }
   
-              setRobotSearching(normalizedRobotId, true, getOnlineCheckCountdownMs());
+              const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
+              const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
+              setRobotSearching(normalizedRobotId, true, searchCountdownMs);
               const onlineStatus = await runOneRobotOnlineCheck(robot);
-              setRobotSearching(normalizedRobotId, false);
               updateOnlineCheckEstimateFromResults([onlineStatus]);
               mapRobots((item) =>
                 robotId(item) === normalizedRobotId
@@ -624,9 +627,19 @@ export function registerDetailShellRuntime(runtime, env) {
                     'err',
                   );
                 }
+                setRobotSearching(normalizedRobotId, false);
                 setRobotTesting(normalizedRobotId, false);
                 return;
               }
+
+              if (terminal) {
+                appendTerminalLine(
+                  `Connected to ${robot.name || robotId(robot)}. Waiting 5s before starting tests...`,
+                  'warn',
+                );
+              }
+              await new Promise((resolve) => window.setTimeout(resolve, POST_CONNECT_TEST_DELAY_MS));
+              setRobotSearching(normalizedRobotId, false);
             }
   
             const body = { ...options.body };
