@@ -1798,8 +1798,8 @@
 }
 
 .grid .robot-card {
-  opacity: 0;
-  animation: card-reveal 0.45s ease forwards;
+  opacity: 0.92;
+  animation: card-reveal 0.2s ease-out forwards;
 }
 
 .grid .robot-card:nth-child(2) { animation-delay: 0.03s; }
@@ -1810,8 +1810,8 @@
 
 @keyframes card-reveal {
   from {
-    opacity: 0;
-    transform: translateY(6px);
+    opacity: 0.92;
+    transform: translateY(2px);
   }
   to {
     opacity: 1;

@@ -432,6 +432,7 @@ export function registerDetailShellRuntime(runtime, env) {
             .map(([id]) => `fault-${id}`)
             .join(' ')}`,
           isOffline,
+          'high',
         );
         const scanningMarkup = buildScanOverlayMarkup({
           isSearching,
