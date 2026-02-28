@@ -8,9 +8,7 @@ from backend.config_loader import (
     RobotCatalog,
     load_robot_types_config,
     load_robots_config,
-    migrate_robot_models_to_type_defaults,
     normalize_robot_types,
-    parse_legacy_model_url,
 )
 from backend.definition_loader import load_definition_catalog
 
@@ -31,55 +29,6 @@ def test_load_robot_types_config_ignores_invalid_shape(tmp_path):
     path = tmp_path / "robot-types.json"
     path.write_text(json.dumps({"version": "1.0", "items": []}), encoding="utf-8")
     assert load_robot_types_config(path) == []
-
-
-def test_parse_legacy_model_url_supports_quality_prefixed_paths():
-    assert parse_legacy_model_url("assets/models/robot.glb") == {
-        "file_name": "robot.glb",
-        "path_to_quality_folders": "assets/models",
-    }
-    assert parse_legacy_model_url("assets/models/LowRes/robot.glb") == {
-        "file_name": "robot.glb",
-        "path_to_quality_folders": "assets/models",
-    }
-    assert parse_legacy_model_url("assets/models/HighRes/fleet/robot.glb") == {
-        "file_name": "fleet/robot.glb",
-        "path_to_quality_folders": "assets/models",
-    }
-
-
-def test_migrate_robot_models_moves_defaults_to_type():
-    robots = [
-        {"id": "r1", "type": "rosbot-2-pro", "modelUrl": "assets/models/rosbot-2-pro.glb"},
-        {"id": "r2", "type": "rosbot-2-pro", "modelUrl": "assets/models/rosbot-2-pro.glb"},
-    ]
-    robot_types = [{"id": "rosbot-2-pro", "name": "Rosbot 2 Pro"}]
-
-    migrated_robots, migrated_types, robots_changed, types_changed = migrate_robot_models_to_type_defaults(
-        robots, robot_types
-    )
-
-    assert robots_changed is True
-    assert types_changed is True
-    assert migrated_types[0]["model"]["file_name"] == "rosbot-2-pro.glb"
-    assert "model" not in migrated_robots[0]
-    assert "model" not in migrated_robots[1]
-
-
-def test_migrate_robot_models_keeps_robot_override_when_different_from_type_default():
-    robots = [
-        {"id": "r1", "type": "rosbot-2-pro", "model": {"file_name": "custom.glb"}},
-    ]
-    robot_types = [{"id": "rosbot-2-pro", "name": "Rosbot 2 Pro", "model": {"file_name": "rosbot-2-pro.glb"}}]
-
-    migrated_robots, migrated_types, robots_changed, types_changed = migrate_robot_models_to_type_defaults(
-        robots, robot_types
-    )
-
-    assert robots_changed is False
-    assert types_changed is False
-    assert migrated_types[0]["model"]["file_name"] == "rosbot-2-pro.glb"
-    assert migrated_robots[0]["model"]["file_name"] == "custom.glb"
 
 
 def test_load_definition_catalog_supports_directory_shape(tmp_path):
@@ -308,7 +257,7 @@ def test_robot_catalog_load_from_paths_builds_indexes(tmp_path):
     assert "flash_fix" in catalog.fix_catalog_by_id
 
 
-def test_robot_catalog_load_from_paths_rewrites_legacy_model_url(tmp_path):
+def test_robot_catalog_load_from_paths_normalizes_legacy_model_url(tmp_path):
     robots_path = tmp_path / "robots.json"
     types_path = tmp_path / "types.json"
     commands_dir = tmp_path / "command-primitives"
@@ -346,13 +295,11 @@ def test_robot_catalog_load_from_paths_rewrites_legacy_model_url(tmp_path):
         tests_dir=tests_dir,
         fixes_dir=fixes_dir,
     )
-    assert "r1" in catalog.robots_by_id
 
-    rewritten_robots = json.loads(robots_path.read_text(encoding="utf-8"))
-    rewritten_types = json.loads(types_path.read_text(encoding="utf-8"))
-    assert "modelUrl" not in rewritten_robots["robots"][0]
-    assert "model" not in rewritten_robots["robots"][0]
-    assert rewritten_types["robotTypes"][0]["model"]["file_name"] == "rosbot-2-pro.glb"
+    robot = catalog.robots_by_id["r1"]
+    assert "modelUrl" not in robot
+    assert robot["model"]["file_name"] == "rosbot-2-pro.glb"
+    assert robot["model"]["path_to_quality_folders"] == "assets/models/HighRes"
 
 
 def test_load_definition_catalog_rejects_all_of_with_invalid_nested_kind(tmp_path):

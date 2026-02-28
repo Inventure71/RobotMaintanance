@@ -55,6 +55,7 @@ class TestRunnerMixin:
         robot_id: str,
         test_ids: list[str],
         source: str = "auto-monitor",
+        should_commit: Any = None,
     ) -> list[dict[str, Any]]:
         started_at = time.time()
         self._set_runtime_activity(
@@ -74,6 +75,8 @@ class TestRunnerMixin:
                 dry_run=False,
             )
             normalized_results = results if isinstance(results, list) else []
+            if callable(should_commit) and not bool(should_commit()):
+                return normalized_results
             self._record_runtime_results_from_test_run(
                 robot_id,
                 normalized_results,

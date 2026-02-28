@@ -137,7 +137,14 @@ def create_robots_router(
         username: str,
         password: str,
         model: dict[str, Any] | None,
+        existing_robot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        existing_ssh = existing_robot.get("ssh") if isinstance(existing_robot, dict) and isinstance(existing_robot.get("ssh"), dict) else {}
+        existing_port_raw = existing_ssh.get("port") if isinstance(existing_ssh, dict) else None
+        try:
+            existing_port = int(existing_port_raw)
+        except Exception:
+            existing_port = None
         robot_entry: dict[str, Any] = {
             "id": robot_id,
             "name": normalize_text(name),
@@ -148,6 +155,8 @@ def create_robots_router(
                 "password": normalize_text(password),
             },
         }
+        if isinstance(existing_port, int) and existing_port > 0:
+            robot_entry["ssh"]["port"] = existing_port
         normalized_model = normalize_model_block(model)
         if normalized_model:
             robot_entry["model"] = normalized_model
@@ -303,6 +312,7 @@ def create_robots_router(
             username=payload.username,
             password=payload.password,
             model=model_payload,
+            existing_robot=existing,
         )
         robots_by_id[target_id] = updated
         _write_config()

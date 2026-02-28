@@ -24,18 +24,68 @@ def load_json_file(path: Path) -> Any:
     return json.loads(payload)
 
 
+def _normalize_legacy_model_url(
+    raw_model_url: Any,
+    *,
+    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
+) -> dict[str, str] | None:
+    model_url = normalize_text(raw_model_url, "").replace("\\", "/")
+    model_url = model_url.split("?", 1)[0].split("#", 1)[0].strip()
+    if model_url.startswith("./"):
+        model_url = model_url[2:]
+    model_url = model_url.lstrip("/")
+    if not model_url:
+        return None
+
+    if "/" in model_url:
+        path_part, file_name_part = model_url.rsplit("/", 1)
+    else:
+        path_part, file_name_part = "", model_url
+
+    file_name = _normalize_model_file_name(file_name_part)
+    if not file_name:
+        return None
+    path = _normalize_model_path(path_part or default_path, default_path)
+    return {
+        "file_name": file_name,
+        "path_to_quality_folders": path,
+    }
+
+
 def load_robots_config(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
 
     payload = load_json_file(path)
+    robots: list[dict[str, Any]] = []
     if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
+        robots = payload
+    elif isinstance(payload, dict):
         if isinstance(payload.get("robots"), list):
-            return payload["robots"]
-        if isinstance(payload.get("fleet"), list):
-            return payload["fleet"]
+            robots = payload["robots"]
+        elif isinstance(payload.get("fleet"), list):
+            robots = payload["fleet"]
+    for robot in robots:
+        if not isinstance(robot, dict):
+            continue
+        if "modelUrl" not in robot:
+            continue
+        robot_id = normalize_text(robot.get("id"), "unknown")
+        has_model_block = isinstance(robot.get("model"), dict)
+        if not has_model_block:
+            legacy_model = _normalize_legacy_model_url(
+                robot.get("modelUrl"),
+                default_path=DEFAULT_MODEL_QUALITY_BASE_PATH,
+            )
+            if legacy_model:
+                robot["model"] = legacy_model
+        robot.pop("modelUrl", None)
+        LOGGER.warning(
+            "Robot '%s' uses deprecated modelUrl; normalizing to model.file_name/path_to_quality_folders.",
+            robot_id,
+        )
+    if robots:
+        return robots
     return []
 
 
@@ -96,44 +146,6 @@ def normalize_model_block(
     return model or None
 
 
-def parse_legacy_model_url(
-    model_url: Any,
-    *,
-    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
-) -> dict[str, str] | None:
-    raw = normalize_text(model_url, "").replace("\\", "/")
-    if not raw:
-        return None
-    if raw.startswith("./"):
-        raw = raw[2:]
-    raw = raw.lstrip("/")
-    split_index = len(raw)
-    for marker in ("?", "#"):
-        marker_index = raw.find(marker)
-        if marker_index >= 0:
-            split_index = min(split_index, marker_index)
-    path_only = raw[:split_index]
-    if not path_only.lower().endswith((".glb", ".gltf")):
-        return None
-    marker = "assets/models/"
-    marker_index = path_only.lower().find(marker)
-    if marker_index < 0:
-        return None
-    relative = path_only[marker_index + len(marker) :]
-    lowered = relative.lower()
-    if lowered.startswith("lowres/"):
-        relative = relative[7:]
-    elif lowered.startswith("highres/"):
-        relative = relative[8:]
-    file_name = _normalize_model_file_name(relative)
-    if not file_name:
-        return None
-    return {
-        "file_name": file_name,
-        "path_to_quality_folders": _normalize_model_path(default_path, default_path),
-    }
-
-
 def resolve_effective_model(
     robot: dict[str, Any],
     robot_type: dict[str, Any],
@@ -174,129 +186,6 @@ def build_model_base_url(model: Any, *, default_path: str = DEFAULT_MODEL_QUALIT
         return ""
     path = normalize_text(normalized.get("path_to_quality_folders"), "") or _normalize_model_path(default_path, default_path)
     return f"{path.rstrip('/')}/{normalized['file_name'].lstrip('/')}"
-
-
-def _minimize_robot_override_model(
-    robot_model: dict[str, str] | None,
-    type_model: dict[str, str] | None,
-    *,
-    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
-) -> dict[str, str] | None:
-    if not robot_model:
-        return None
-    out: dict[str, str] = {}
-    robot_file = normalize_text(robot_model.get("file_name"), "")
-    type_file = normalize_text((type_model or {}).get("file_name"), "")
-    if robot_file and robot_file != type_file:
-        out["file_name"] = robot_file
-
-    robot_path = normalize_text(robot_model.get("path_to_quality_folders"), "")
-    type_path = normalize_text((type_model or {}).get("path_to_quality_folders"), "") or _normalize_model_path(default_path, default_path)
-    if robot_path and robot_path != type_path:
-        out["path_to_quality_folders"] = robot_path
-    return out or None
-
-
-def migrate_robot_models_to_type_defaults(
-    robots: list[dict[str, Any]],
-    robot_types: list[dict[str, Any]],
-    *,
-    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool, bool]:
-    default_path_normalized = _normalize_model_path(default_path, default_path)
-    next_robots: list[dict[str, Any]] = []
-    next_types: list[dict[str, Any]] = [dict(item) for item in robot_types if isinstance(item, dict)]
-    type_by_key: dict[str, dict[str, Any]] = {}
-    for entry in next_types:
-        type_id = normalize_text(entry.get("id"), "")
-        if type_id:
-            type_by_key[normalize_type_key(type_id)] = entry
-
-    derived_by_type: dict[str, list[dict[str, str]]] = {}
-    for robot in robots:
-        if not isinstance(robot, dict):
-            continue
-        robot_out = dict(robot)
-        robot_type_key = normalize_type_key(robot_out.get("type"))
-        explicit_model = normalize_model_block(
-            robot_out.get("model"),
-            default_path=default_path_normalized,
-            include_default_path=True,
-        )
-        if not explicit_model:
-            explicit_model = parse_legacy_model_url(
-                robot_out.get("modelUrl"),
-                default_path=default_path_normalized,
-            )
-        if explicit_model and explicit_model.get("file_name"):
-            derived_by_type.setdefault(robot_type_key, []).append(explicit_model)
-        if explicit_model:
-            robot_out["model"] = explicit_model
-        else:
-            robot_out.pop("model", None)
-        robot_out.pop("modelUrl", None)
-        next_robots.append(robot_out)
-
-    for robot_type in next_types:
-        type_id = normalize_text(robot_type.get("id"), "")
-        if not type_id:
-            continue
-        type_key = normalize_type_key(type_id)
-        type_model = normalize_model_block(
-            robot_type.get("model"),
-            default_path=default_path_normalized,
-            include_default_path=True,
-        )
-        derived = derived_by_type.get(type_key, [])
-        if not type_model:
-            file_names = {normalize_text(item.get("file_name"), "") for item in derived if normalize_text(item.get("file_name"), "")}
-            paths = {
-                normalize_text(item.get("path_to_quality_folders"), "")
-                for item in derived
-                if normalize_text(item.get("path_to_quality_folders"), "")
-            }
-            inferred_file = file_names.pop() if len(file_names) == 1 else ""
-            inferred_path = paths.pop() if len(paths) == 1 else ""
-            if inferred_file:
-                type_model = {"file_name": inferred_file}
-                if inferred_path and inferred_path != default_path_normalized:
-                    type_model["path_to_quality_folders"] = inferred_path
-
-        normalized_type_model = normalize_model_block(
-            type_model,
-            default_path=default_path_normalized,
-            include_default_path=False,
-        )
-        if normalized_type_model:
-            robot_type["model"] = normalized_type_model
-        else:
-            robot_type.pop("model", None)
-
-    for robot in next_robots:
-        type_entry = type_by_key.get(normalize_type_key(robot.get("type")), {})
-        type_model = normalize_model_block(
-            type_entry.get("model"),
-            default_path=default_path_normalized,
-            include_default_path=True,
-        )
-        robot_model = normalize_model_block(
-            robot.get("model"),
-            default_path=default_path_normalized,
-            include_default_path=True,
-        )
-        minimized = _minimize_robot_override_model(
-            robot_model,
-            type_model,
-            default_path=default_path_normalized,
-        )
-        if minimized:
-            robot["model"] = minimized
-        else:
-            robot.pop("model", None)
-
-    robots_changed = json.dumps(robots, sort_keys=True) != json.dumps(next_robots, sort_keys=True)
-    types_changed = json.dumps(robot_types, sort_keys=True) != json.dumps(next_types, sort_keys=True)
-    return next_robots, next_types, robots_changed, types_changed
 
 
 def _normalize_possible_results(raw: Any) -> list[dict[str, str]]:
@@ -555,37 +444,8 @@ class RobotCatalog:
         tests_dir: Path = DEFAULT_TEST_DEFINITIONS_DIR,
         fixes_dir: Path = DEFAULT_FIX_DEFINITIONS_DIR,
     ) -> "RobotCatalog":
-        robots_payload = load_json_file(robots_path) if robots_path.exists() else {"version": "1.0", "robots": []}
-        robot_types_payload = (
-            load_json_file(robot_types_path)
-            if robot_types_path.exists()
-            else {"version": "3.0", "robotTypes": []}
-        )
         robots = load_robots_config(robots_path)
         robot_types = load_robot_types_config(robot_types_path)
-        migrated_robots, migrated_robot_types, robots_changed, robot_types_changed = migrate_robot_models_to_type_defaults(
-            robots,
-            robot_types,
-            default_path=DEFAULT_MODEL_QUALITY_BASE_PATH,
-        )
-        if robots_changed:
-            robots_version = "1.0"
-            if isinstance(robots_payload, dict):
-                robots_version = normalize_text(robots_payload.get("version"), "1.0")
-            robots_path.write_text(
-                json.dumps({"version": robots_version, "robots": migrated_robots}, indent=2) + "\n",
-                encoding="utf-8",
-            )
-        if robot_types_changed:
-            robot_types_version = "3.0"
-            if isinstance(robot_types_payload, dict):
-                robot_types_version = normalize_text(robot_types_payload.get("version"), "3.0")
-            robot_types_path.write_text(
-                json.dumps({"version": robot_types_version, "robotTypes": migrated_robot_types}, indent=2) + "\n",
-                encoding="utf-8",
-            )
-        robots = migrated_robots
-        robot_types = migrated_robot_types
 
         definitions = load_definition_catalog(
             command_primitives_dir=command_primitives_dir,

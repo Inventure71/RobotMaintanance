@@ -81,6 +81,36 @@ class ConnectionEventRunnerMixin:
                 return False
             return not bool(session.get("cancelled", False))
 
+    def _acquire_connection_retry_attempt_slot(self, robot_id: str, token: int) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+
+        with self._lock:
+            session = self._connection_retry_sessions.get(normalized_robot_id)
+            if not isinstance(session, dict):
+                return False
+            if int(session.get("token", 0)) != int(token):
+                return False
+            if bool(session.get("cancelled", False)):
+                return False
+
+            owner = self._connection_retry_attempt_owner.get(normalized_robot_id)
+            if owner is not None and int(owner) != int(token):
+                return False
+
+            self._connection_retry_attempt_owner[normalized_robot_id] = int(token)
+            return True
+
+    def _release_connection_retry_attempt_slot(self, robot_id: str, token: int) -> None:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return
+        with self._lock:
+            owner = self._connection_retry_attempt_owner.get(normalized_robot_id)
+            if owner is not None and int(owner) == int(token):
+                self._connection_retry_attempt_owner.pop(normalized_robot_id, None)
+
     def _select_connection_test_ids(self, robot_id: str) -> list[str]:
         robot_type = self._resolve_robot_type(robot_id)
         test_entries = robot_type.get("tests") if isinstance(robot_type, dict) else []
@@ -119,13 +149,27 @@ class ConnectionEventRunnerMixin:
                 if now >= deadline:
                     return
 
-                results = self._run_connection_retry_attempt(
-                    robot_id=robot_id,
-                    test_ids=test_ids,
-                    source="auto-monitor",
-                )
-                if self._selected_tests_all_ok(test_ids, results):
-                    return
+                if not self._acquire_connection_retry_attempt_slot(robot_id, token):
+                    if not self._is_connection_retry_session_active(robot_id, token):
+                        return
+                    time.sleep(0.05)
+                    continue
+
+                try:
+                    if not self._is_connection_retry_session_active(robot_id, token):
+                        continue
+                    results = self._run_connection_retry_attempt(
+                        robot_id=robot_id,
+                        test_ids=test_ids,
+                        source="auto-monitor",
+                        should_commit=lambda: self._is_connection_retry_session_active(robot_id, token),
+                    )
+                    if not self._is_connection_retry_session_active(robot_id, token):
+                        continue
+                    if self._selected_tests_all_ok(test_ids, results):
+                        return
+                finally:
+                    self._release_connection_retry_attempt_slot(robot_id, token)
 
                 remaining = max(0.0, deadline - time.time())
                 if remaining <= 0.0:
@@ -141,3 +185,6 @@ class ConnectionEventRunnerMixin:
                 inflight_token = int(self._connection_retry_inflight.get(robot_id, 0))
                 if inflight_token == int(token):
                     self._connection_retry_inflight.pop(robot_id, None)
+                owner = self._connection_retry_attempt_owner.get(robot_id)
+                if owner is not None and int(owner) == int(token):
+                    self._connection_retry_attempt_owner.pop(robot_id, None)

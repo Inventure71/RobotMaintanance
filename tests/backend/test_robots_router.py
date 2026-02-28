@@ -16,7 +16,7 @@ def test_get_robots_merges_runtime_tests():
             "name": "Robot One",
             "type": "rosbot-2-pro",
             "ip": "10.0.0.1",
-            "ssh": {"username": "u", "password": "p"},
+            "ssh": {"username": "u", "password": "p", "port": 2222},
         }
     }
     robot_types_by_id = {
@@ -67,7 +67,7 @@ def test_fleet_static_endpoint_returns_default_test_payloads():
             "name": "Robot One",
             "type": "rosbot-2-pro",
             "ip": "10.0.0.1",
-            "ssh": {"username": "u", "password": "p"},
+            "ssh": {"username": "u", "password": "p", "port": 2222},
         }
     }
     robot_types_by_id = {
@@ -153,7 +153,7 @@ def test_update_and_delete_robot_persists_config(tmp_path):
             "name": "Robot One",
             "type": "rosbot-2-pro",
             "ip": "10.0.0.1",
-            "ssh": {"username": "u", "password": "p"},
+            "ssh": {"username": "u", "password": "p", "port": 2222},
         }
     }
     robot_types_by_id = {
@@ -191,10 +191,12 @@ def test_update_and_delete_robot_persists_config(tmp_path):
     assert updated["name"] == "Robot One Updated"
     assert updated["ip"] == "10.0.0.11"
     assert updated["ssh"]["username"] == "u2"
+    assert updated["ssh"]["port"] == 2222
     assert updated["model"]["file_name"] == "robot.glb"
     assert "modelUrl" not in updated
     payload = json.loads(robots_config_path.read_text(encoding="utf-8"))
     assert payload["robots"][0]["name"] == "Robot One Updated"
+    assert payload["robots"][0]["ssh"]["port"] == 2222
     assert payload["robots"][0]["model"]["file_name"] == "robot.glb"
     assert "modelUrl" not in payload["robots"][0]
 

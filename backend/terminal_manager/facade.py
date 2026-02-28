@@ -140,6 +140,7 @@ class TerminalManager(
         self._auto_recovery_test_inflight = set()
         self._connection_retry_sessions: dict[str, dict[str, Any]] = {}
         self._connection_retry_inflight: dict[str, int] = {}
+        self._connection_retry_attempt_owner: dict[str, int] = {}
         self._fix_runs: dict[tuple[str, str], dict[str, Any]] = {}
         self._next_idle_sweep_at = 0.0
         self._auto_monitor_executor = None

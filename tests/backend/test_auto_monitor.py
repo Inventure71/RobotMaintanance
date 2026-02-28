@@ -1061,8 +1061,8 @@ def test_connection_event_runner_retries_until_selected_tests_pass():
         [{"id": "general", "status": "ok", "value": "present", "details": "ok", "ms": 1}],
     ]
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
-        _ = robot_id, test_ids, source
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
+        _ = robot_id, test_ids, source, should_commit
         attempts.append(len(attempts) + 1)
         return results.pop(0) if results else [{"id": "general", "status": "ok"}]
 
@@ -1089,8 +1089,8 @@ def test_connection_event_runner_cancels_on_manual_activity():
 
     attempts: list[int] = []
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
-        _ = robot_id, test_ids, source
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
+        _ = robot_id, test_ids, source, should_commit
         attempts.append(len(attempts) + 1)
         return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
 
@@ -1114,8 +1114,8 @@ def test_connection_event_runner_cancels_on_disconnect():
 
     attempts: list[int] = []
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
-        _ = robot_id, test_ids, source
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
+        _ = robot_id, test_ids, source, should_commit
         attempts.append(len(attempts) + 1)
         return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
 
@@ -1137,9 +1137,19 @@ def test_connection_event_runner_reconnect_replaces_prior_token():
     manager.CONNECTION_RETRY_INTERVAL_SEC = 0.05
     manager.CONNECTION_RETRY_WINDOW_SEC = 0.5
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor"):
-        _ = robot_id, test_ids, source
-        time.sleep(0.05)
+    active_attempts = 0
+    max_active_attempts = 0
+    lock = threading.Lock()
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
+        _ = robot_id, test_ids, source, should_commit
+        nonlocal active_attempts, max_active_attempts
+        with lock:
+            active_attempts += 1
+            max_active_attempts = max(max_active_attempts, active_attempts)
+        time.sleep(0.06)
+        with lock:
+            active_attempts -= 1
         return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
 
     manager._run_connection_retry_attempt = fake_attempt
@@ -1155,3 +1165,12 @@ def test_connection_event_runner_reconnect_replaces_prior_token():
 
     assert second_token > first_token
     assert inflight_token == second_token
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with manager._lock:
+            inflight = "r1" in manager._connection_retry_inflight
+        if not inflight:
+            break
+        time.sleep(0.01)
+    assert max_active_attempts == 1
