@@ -1,3 +1,5 @@
+import { renderManageEntityList } from '../../features/manage/manageEntityList.js';
+
 export function registerDetailShellRuntime(runtime, env) {
   const POST_CONNECT_TEST_DELAY_MS = 5_000;
 
@@ -70,6 +72,11 @@ export function registerDetailShellRuntime(runtime, env) {
     addRobotPasswordInput,
     addRobotPasswordToggle,
     addRobotSavingHint,
+    addRobotTypeForm,
+    addRobotTypeMessage,
+    addRobotTypeNameInput,
+    addRobotTypeSaveButton,
+    addRobotTypeTopicsInput,
     addRobotSection,
     addRobotTypeSelect,
     applyActionButton,
@@ -87,6 +94,20 @@ export function registerDetailShellRuntime(runtime, env) {
     dashboardFixModeStatus,
     dashboardFixModeSummary,
     detail,
+    editRobotDeleteButton,
+    editRobotForm,
+    editRobotList,
+    editRobotIpInput,
+    editRobotModelFileNameInput,
+    editRobotModelQualityBasePathInput,
+    editRobotNameInput,
+    editRobotPasswordInput,
+    editRobotSaveButton,
+    editRobotSelect,
+    editRobotStatus,
+    editRobotSummary,
+    editRobotTypeSelect,
+    editRobotUsernameInput,
     detailFixModeActions,
     detailFixModePanel,
     detailFixModeStatus,
@@ -864,10 +885,11 @@ export function registerDetailShellRuntime(runtime, env) {
         closeTerminalSession();
         state.detailRobotId = null;
         state.isCreateRobotInProgress = false;
-        if (addRobotMessage) {
-          addRobotMessage.textContent = '';
-          addRobotMessage.classList.remove('error', 'ok', 'warn');
-        }
+        state.isEditRobotInProgress = false;
+        state.isDeleteRobotInProgress = false;
+        setAddRobotMessage('', '');
+        setEditRobotMessage('', '');
+        setAddRobotTypeMessage('', '');
         if (addRobotSavingHint) {
           addRobotSavingHint.textContent = '';
         }
@@ -875,13 +897,20 @@ export function registerDetailShellRuntime(runtime, env) {
           addRobotForm.reset();
           setAddRobotPasswordVisibility(false);
         }
+        if (addRobotTypeForm) {
+          addRobotTypeForm.reset();
+        }
         detail.classList.remove('active');
         dashboard.classList.remove('active');
         populateAddRobotTypeOptions();
+        populateEditRobotSelectOptions(state.selectedManageRobotId);
         renderRecorderRobotOptions();
         const activeTab = resolveManageTab(tabId);
         setActiveManageTab(activeTab, { syncHash: false, persist: true });
         addRobotSection.classList.add('active');
+        if (!state.robots.length) {
+          refreshRobotsFromBackendSnapshot();
+        }
         syncFixModePanels();
         if (syncHash) {
           setLocationHash(buildManageHash(activeTab));
@@ -899,10 +928,12 @@ export function registerDetailShellRuntime(runtime, env) {
         if (addRobotForm) {
           addRobotForm.reset();
         }
-        if (addRobotMessage) {
-          addRobotMessage.textContent = '';
-          addRobotMessage.classList.remove('error', 'ok', 'warn');
+        if (addRobotTypeForm) {
+          addRobotTypeForm.reset();
         }
+        setAddRobotMessage('', '');
+        setEditRobotMessage('', '');
+        setAddRobotTypeMessage('', '');
         if (addRobotSavingHint) {
           addRobotSavingHint.textContent = '';
         }
@@ -1369,50 +1400,174 @@ export function registerDetailShellRuntime(runtime, env) {
         });
       }
 
+  function setMessageNode(node, message, style = '') {
+        if (!node) return;
+        node.textContent = message || '';
+        node.classList.remove('error', 'ok', 'warn');
+        if (style) node.classList.add(style);
+      }
+
+  function buildKnownTypeEntries() {
+        const seenTypes = new Set();
+        return env.ROBOT_TYPES
+          .map((typeConfig) => {
+            const typeId = normalizeText(typeConfig?.typeId, '');
+            const typeKey = normalizeTypeId(typeId);
+            if (!typeId || seenTypes.has(typeKey)) return null;
+            seenTypes.add(typeKey);
+            return {
+              typeId,
+              label: normalizeText(typeConfig?.label, typeId),
+            };
+          })
+          .filter(Boolean);
+      }
+
   function populateAddRobotTypeOptions() {
-        if (!addRobotTypeSelect) return;
-        addRobotTypeSelect.replaceChildren();
-  
-        if (!env.ROBOT_TYPES.length) {
+        const typeEntries = buildKnownTypeEntries();
+
+        if (addRobotTypeSelect) {
+          addRobotTypeSelect.replaceChildren();
+          if (!typeEntries.length) {
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = 'No robot types found';
+            emptyOption.disabled = true;
+            addRobotTypeSelect.appendChild(emptyOption);
+          } else {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Select a robot type';
+            placeholder.disabled = true;
+            addRobotTypeSelect.appendChild(placeholder);
+            typeEntries.forEach((entry) => {
+              const option = document.createElement('option');
+              option.value = entry.typeId;
+              option.textContent = entry.label;
+              addRobotTypeSelect.appendChild(option);
+            });
+            const firstOption = addRobotTypeSelect.querySelector('option:not([value=""])');
+            if (firstOption) firstOption.selected = true;
+          }
+        }
+
+        if (editRobotTypeSelect) {
+          const selectedType = normalizeText(editRobotTypeSelect.value, '');
+          editRobotTypeSelect.replaceChildren();
+          if (!typeEntries.length) {
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = 'No robot types found';
+            emptyOption.disabled = true;
+            editRobotTypeSelect.appendChild(emptyOption);
+          } else {
+            typeEntries.forEach((entry) => {
+              const option = document.createElement('option');
+              option.value = entry.typeId;
+              option.textContent = entry.label;
+              editRobotTypeSelect.appendChild(option);
+            });
+            const preferred = editRobotTypeSelect.querySelector(`option[value="${selectedType}"]`)
+              || editRobotTypeSelect.querySelector('option');
+            if (preferred) preferred.selected = true;
+          }
+        }
+
+      }
+
+  function populateEditRobotSelectOptions(preferredRobotId = '') {
+        if (!editRobotSelect) return;
+        const robots = [...state.robots].sort((a, b) => {
+          const aName = normalizeText(a?.name, '').toLowerCase();
+          const bName = normalizeText(b?.name, '').toLowerCase();
+          return aName.localeCompare(bName);
+        });
+        editRobotSelect.replaceChildren();
+        if (!robots.length) {
           const emptyOption = document.createElement('option');
           emptyOption.value = '';
-          emptyOption.textContent = 'No robot types found';
-          emptyOption.disabled = true;
-          addRobotTypeSelect.appendChild(emptyOption);
+          emptyOption.textContent = 'No robots available';
+          editRobotSelect.appendChild(emptyOption);
+          renderManageEntityList({ container: editRobotList, items: [], emptyText: 'No robots available.' });
+          state.selectedManageRobotId = '';
+          fillEditRobotForm(null);
           return;
         }
-  
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Select a robot type';
-        placeholder.disabled = true;
-        addRobotTypeSelect.appendChild(placeholder);
-  
-        const seenTypes = new Set();
-        env.ROBOT_TYPES.forEach((typeConfig) => {
-          const typeId = normalizeText(typeConfig?.typeId, '');
-          const typeKey = normalizeTypeId(typeId);
-          if (!typeId || seenTypes.has(typeKey)) return;
-          seenTypes.add(typeKey);
+        robots.forEach((robot) => {
+          const id = robotId(robot);
+          if (!id) return;
           const option = document.createElement('option');
-          option.value = typeConfig.typeId || typeConfig.label || '';
-          option.textContent = typeConfig.label || typeConfig.typeId || option.value;
-          addRobotTypeSelect.appendChild(option);
+          option.value = id;
+          option.textContent = `${normalizeText(robot.name, id)} (${normalizeText(robot.type, 'n/a')})`;
+          editRobotSelect.appendChild(option);
         });
-  
-        const firstOption = addRobotTypeSelect.querySelector('option:not([value=""])');
-        if (firstOption) {
-          firstOption.selected = true;
+        const nextId = preferredRobotId || state.selectedManageRobotId || robotId(robots[0]);
+        if (nextId) {
+          const option = editRobotSelect.querySelector(`option[value="${nextId}"]`) || editRobotSelect.querySelector('option');
+          if (option) option.selected = true;
+          state.selectedManageRobotId = normalizeText(option?.value, '');
         }
+        renderManageEntityList({
+          container: editRobotList,
+          items: robots,
+          emptyText: 'No robots available.',
+          activeId: state.selectedManageRobotId,
+          getId: (robot) => robotId(robot),
+          getLabel: (robot) => {
+            const id = robotId(robot);
+            return `${normalizeText(robot?.name, id)} (${id})`;
+          },
+          onSelect: (_robot, id) => {
+            state.selectedManageRobotId = id;
+            if (editRobotSelect) editRobotSelect.value = id;
+            fillEditRobotForm(getRobotById(id));
+            setEditRobotMessage('', '');
+            populateEditRobotSelectOptions(id);
+          },
+        });
+        fillEditRobotForm(getRobotById(state.selectedManageRobotId));
+      }
+
+  function fillEditRobotForm(robot) {
+        if (!editRobotForm) return;
+        if (!robot) {
+          if (editRobotNameInput) editRobotNameInput.value = '';
+          if (editRobotIpInput) editRobotIpInput.value = '';
+          if (editRobotModelFileNameInput) editRobotModelFileNameInput.value = '';
+          if (editRobotModelQualityBasePathInput) editRobotModelQualityBasePathInput.value = '';
+          if (editRobotUsernameInput) editRobotUsernameInput.value = '';
+          if (editRobotPasswordInput) editRobotPasswordInput.value = '';
+          if (editRobotSummary) editRobotSummary.textContent = 'Select a robot to view details.';
+          if (editRobotSaveButton) editRobotSaveButton.disabled = true;
+          if (editRobotDeleteButton) editRobotDeleteButton.disabled = true;
+          return;
+        }
+        if (editRobotNameInput) editRobotNameInput.value = normalizeText(robot.name, '');
+        if (editRobotTypeSelect) {
+          editRobotTypeSelect.value = normalizeText(robot.typeId, normalizeText(robot.type, ''));
+        }
+        if (editRobotIpInput) editRobotIpInput.value = normalizeText(robot.ip, '');
+        if (editRobotModelFileNameInput) editRobotModelFileNameInput.value = normalizeText(robot?.model?.file_name, '');
+        if (editRobotModelQualityBasePathInput) editRobotModelQualityBasePathInput.value = normalizeText(robot?.model?.path_to_quality_folders, '');
+        if (editRobotUsernameInput) editRobotUsernameInput.value = normalizeText(robot?.ssh?.username, '');
+        if (editRobotPasswordInput) editRobotPasswordInput.value = normalizeText(robot?.ssh?.password, '');
+        if (editRobotSummary) {
+          editRobotSummary.textContent = `ID: ${normalizeText(robot.id, 'n/a')} • Type: ${normalizeText(robot.type, 'n/a')} • Host: ${normalizeText(robot.ip, 'n/a')}`;
+        }
+        if (editRobotSaveButton) editRobotSaveButton.disabled = false;
+        if (editRobotDeleteButton) editRobotDeleteButton.disabled = false;
       }
 
   function setAddRobotMessage(message, style = 'warn') {
-        if (!addRobotMessage) return;
-        addRobotMessage.textContent = message || '';
-        addRobotMessage.classList.remove('error', 'ok', 'warn');
-        if (style) {
-          addRobotMessage.classList.add(style);
-        }
+        setMessageNode(addRobotMessage, message, style);
+      }
+
+  function setEditRobotMessage(message, style = 'warn') {
+        setMessageNode(editRobotStatus, message, style);
+      }
+
+  function setAddRobotTypeMessage(message, style = 'warn') {
+        setMessageNode(addRobotTypeMessage, message, style);
       }
 
   function setAddRobotPasswordVisibility(isVisible) {
@@ -1431,12 +1586,13 @@ export function registerDetailShellRuntime(runtime, env) {
         const name = normalizeText(form.get('name'), '');
         const typeId = normalizeText(form.get('type'), '');
         const ip = normalizeText(form.get('ip'), '');
-        const modelUrl = normalizeText(form.get('modelUrl'), '');
+        const modelFileName = normalizeText(form.get('modelFileName'), '');
+        const modelQualityBasePath = normalizeText(form.get('modelQualityBasePath'), '');
         const username = normalizeText(form.get('username'), '');
         const password = normalizeText(form.get('password'), '');
   
         if (!name || !typeId || !ip || !username || !password) {
-          setAddRobotMessage('All fields except model URL are required.', 'error');
+          setAddRobotMessage('All fields except model fields are required.', 'error');
           return;
         }
   
@@ -1448,6 +1604,14 @@ export function registerDetailShellRuntime(runtime, env) {
           return;
         }
   
+        const model =
+          modelFileName || modelQualityBasePath
+            ? {
+                file_name: modelFileName || undefined,
+                path_to_quality_folders: modelQualityBasePath || undefined,
+              }
+            : undefined;
+
         state.isCreateRobotInProgress = true;
         const saveButton = addRobotForm.querySelector('button[type="submit"]');
         if (saveButton) {
@@ -1468,21 +1632,26 @@ export function registerDetailShellRuntime(runtime, env) {
               name,
               type: typeId,
               ip,
-              modelUrl: modelUrl || undefined,
+              model,
               username,
               password,
             }),
           });
   
-          const responseText = await response.text();
           if (!response.ok) {
+            const responseText = await response.text();
             setAddRobotMessage(responseText || 'Unable to create robot.', 'error');
             return;
           }
-  
+          const createdRobot = await response.json();
+
           setAddRobotMessage('Robot created and written to config.', 'ok');
           await refreshRobotsFromBackendSnapshot();
-          showDashboard();
+          populateEditRobotSelectOptions(normalizeText(createdRobot?.id, ''));
+          setEditRobotMessage('New robot is ready for review/editing.', 'ok');
+          if (editRobotSelect?.value) {
+            setActiveManageTab('robots', { syncHash: false, persist: true });
+          }
         } finally {
           state.isCreateRobotInProgress = false;
           if (saveButton) {
@@ -1496,9 +1665,137 @@ export function registerDetailShellRuntime(runtime, env) {
         }
       }
 
+  async function saveRobotEditsFromForm() {
+        const selectedRobotId = normalizeText(editRobotSelect?.value, '');
+        if (!selectedRobotId || state.isEditRobotInProgress) return;
+        const name = normalizeText(editRobotNameInput?.value, '');
+        const type = normalizeText(editRobotTypeSelect?.value, '');
+        const ip = normalizeText(editRobotIpInput?.value, '');
+        const modelFileName = normalizeText(editRobotModelFileNameInput?.value, '');
+        const modelQualityBasePath = normalizeText(editRobotModelQualityBasePathInput?.value, '');
+        const username = normalizeText(editRobotUsernameInput?.value, '');
+        const password = normalizeText(editRobotPasswordInput?.value, '');
+        if (!name || !type || !ip || !username || !password) {
+          setEditRobotMessage('All fields except model fields are required.', 'error');
+          return;
+        }
+        const model =
+          modelFileName || modelQualityBasePath
+            ? {
+                file_name: modelFileName || undefined,
+                path_to_quality_folders: modelQualityBasePath || undefined,
+              }
+            : undefined;
+        state.isEditRobotInProgress = true;
+        if (editRobotSaveButton) {
+          setActionButtonLoading(editRobotSaveButton, true, {
+            loadingLabel: 'Saving...',
+            idleLabel: 'Save changes',
+          });
+        }
+        try {
+          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(selectedRobotId)}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, type, ip, model, username, password }),
+          });
+          if (!response.ok) {
+            const responseText = await response.text();
+            setEditRobotMessage(responseText || 'Unable to update robot.', 'error');
+            return;
+          }
+          setEditRobotMessage('Robot updated successfully.', 'ok');
+          await refreshRobotsFromBackendSnapshot();
+          populateEditRobotSelectOptions(selectedRobotId);
+        } finally {
+          state.isEditRobotInProgress = false;
+          if (editRobotSaveButton) {
+            setActionButtonLoading(editRobotSaveButton, false, { idleLabel: 'Save changes' });
+          }
+        }
+      }
+
+  async function deleteSelectedRobotFromForm() {
+        const selectedRobotId = normalizeText(editRobotSelect?.value, '');
+        if (!selectedRobotId || state.isDeleteRobotInProgress) return;
+        const robot = getRobotById(selectedRobotId);
+        const label = normalizeText(robot?.name, selectedRobotId);
+        if (!window.confirm(`Delete robot "${label}"? This cannot be undone.`)) {
+          return;
+        }
+        state.isDeleteRobotInProgress = true;
+        if (editRobotDeleteButton) {
+          setActionButtonLoading(editRobotDeleteButton, true, {
+            loadingLabel: 'Deleting...',
+            idleLabel: 'Delete robot',
+          });
+        }
+        try {
+          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(selectedRobotId)}`), {
+            method: 'DELETE',
+          });
+          if (!response.ok) {
+            const responseText = await response.text();
+            setEditRobotMessage(responseText || 'Unable to delete robot.', 'error');
+            return;
+          }
+          setEditRobotMessage('Robot deleted from registry.', 'ok');
+          await refreshRobotsFromBackendSnapshot();
+          populateEditRobotSelectOptions('');
+        } finally {
+          state.isDeleteRobotInProgress = false;
+          if (editRobotDeleteButton) {
+            setActionButtonLoading(editRobotDeleteButton, false, { idleLabel: 'Delete robot' });
+          }
+        }
+      }
+
+  async function createRobotTypeFromForm() {
+        if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
+        const name = normalizeText(addRobotTypeNameInput?.value, '');
+        const topics = normalizeText(addRobotTypeTopicsInput?.value, '')
+          .split(',')
+          .map((topic) => normalizeText(topic, ''))
+          .filter(Boolean);
+        if (!name) {
+          setAddRobotTypeMessage('Display name is required.', 'error');
+          return;
+        }
+        state.isCreateRobotTypeInProgress = true;
+        if (addRobotTypeSaveButton) {
+          setActionButtonLoading(addRobotTypeSaveButton, true, {
+            loadingLabel: 'Creating...',
+            idleLabel: 'Create robot type',
+          });
+        }
+        try {
+          const response = await fetch(buildApiUrl('/api/robot-types'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, topics }),
+          });
+          if (!response.ok) {
+            const responseText = await response.text();
+            setAddRobotTypeMessage(responseText || 'Unable to create robot type.', 'error');
+            return;
+          }
+          setAddRobotTypeMessage('Robot type created and saved.', 'ok');
+          await loadRobotTypeConfig();
+          populateAddRobotTypeOptions();
+          populateEditRobotSelectOptions(state.selectedManageRobotId);
+          if (addRobotTypeForm) addRobotTypeForm.reset();
+        } finally {
+          state.isCreateRobotTypeInProgress = false;
+          if (addRobotTypeSaveButton) {
+            setActionButtonLoading(addRobotTypeSaveButton, false, { idleLabel: 'Create robot type' });
+          }
+        }
+      }
+
   async function refreshRobotsFromBackendSnapshot() {
         const previousSelectedIds = Array.from(state.selectedRobotIds || []);
         const previousDetailRobotId = normalizeText(state.detailRobotId, '');
+        const previousManageRobotId = normalizeText(state.selectedManageRobotId, '');
         try {
           const refreshed = await loadRobotsFromBackend();
           setRobots(refreshed);
@@ -1523,6 +1820,7 @@ export function registerDetailShellRuntime(runtime, env) {
         syncAutoMonitorRefreshState();
         populateFilters();
         populateAddRobotTypeOptions();
+        populateEditRobotSelectOptions(previousManageRobotId);
         renderRecorderRobotOptions();
   
         if (dashboard.classList.contains('active')) {
@@ -1587,9 +1885,16 @@ export function registerDetailShellRuntime(runtime, env) {
     openTestDebugModal,
     populateFilters,
     populateAddRobotTypeOptions,
+    populateEditRobotSelectOptions,
+    fillEditRobotForm,
     setAddRobotMessage,
+    setEditRobotMessage,
+    setAddRobotTypeMessage,
     setAddRobotPasswordVisibility,
     createRobotFromForm,
+    saveRobotEditsFromForm,
+    deleteSelectedRobotFromForm,
+    createRobotTypeFromForm,
     refreshRobotsFromBackendSnapshot,
     initAddRobotPasswordToggle,
   };

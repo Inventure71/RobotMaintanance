@@ -1,3 +1,5 @@
+import { renderManageEntityList } from '../../features/manage/manageEntityList.js';
+
 export function registerManageRecorderRuntime(runtime, env) {
   const {
     $,
@@ -105,6 +107,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     manageFixIdInput,
     manageFixLabelInput,
     manageFixPostTestsInput,
+    manageFixRunAtConnectionInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,
@@ -116,6 +119,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     manageTestExecuteJsonInput,
     manageTestIdInput,
     manageTestLabelInput,
+    manageTestRunAtConnectionInput,
     manageTestRobotTypeTargets,
     manageTestsList,
     monitorApplyButton,
@@ -136,6 +140,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     recorderCreateNewTestButton,
     recorderDefinitionIdInput,
     recorderDefinitionLabelInput,
+    recorderRunAtConnectionInput,
     recorderFlowBlocks,
     recorderLastEditingOutputKey: initialRecorderLastEditingOutputKey,
     recorderLastEditingReadBlockId: initialRecorderLastEditingReadBlockId,
@@ -435,7 +440,44 @@ export function registerManageRecorderRuntime(runtime, env) {
           seen.add(normalized);
           out.push(normalized);
         });
-        return out;
+      return out;
+      }
+
+  function resolveCheckRunAtConnection(check, fallback = true) {
+        if (typeof check?.runAtConnection === 'boolean') {
+          return check.runAtConnection;
+        }
+        if (typeof check?.metadata?.runAtConnection === 'boolean') {
+          return check.metadata.runAtConnection;
+        }
+        return Boolean(fallback);
+      }
+
+  function applyRunAtConnection(entries, runAtConnection) {
+        const list = Array.isArray(entries) ? entries : [];
+        const value = Boolean(runAtConnection);
+        return list.map((entry) => ({
+          ...(entry && typeof entry === 'object' ? entry : {}),
+          runAtConnection: value,
+        }));
+      }
+
+  function inferUniformRunAtConnection(entries, fallback = true) {
+        const list = Array.isArray(entries) ? entries : [];
+        if (!list.length) return Boolean(fallback);
+        const values = list.map((entry) => resolveCheckRunAtConnection(entry, fallback));
+        const first = values[0];
+        const mixed = values.some((value) => value !== first);
+        if (mixed) return null;
+        return first;
+      }
+
+  function getManageTestRunAtConnectionValue() {
+        return Boolean(manageTestRunAtConnectionInput?.checked);
+      }
+
+  function getRecorderRunAtConnectionDefault() {
+        return Boolean(recorderRunAtConnectionInput?.checked);
       }
 
   function slugifyRecorderValue(value, fallback = '') {
@@ -591,94 +633,102 @@ export function registerManageRecorderRuntime(runtime, env) {
 
   function renderManageTestsList() {
         if (!manageTestsList) return;
-        manageTestsList.replaceChildren();
         const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
-        if (!tests.length) {
-          const empty = document.createElement('div');
-          empty.className = 'manage-list-empty';
-          empty.textContent = 'No test definitions found.';
-          manageTestsList.appendChild(empty);
-          return;
-        }
-        tests
+        const sorted = tests
           .slice()
-          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
-          .forEach((testDefinition) => {
-            const row = document.createElement('button');
-            row.type = 'button';
-            row.className = 'manage-list-item';
+          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')));
+        renderManageEntityList({
+          container: manageTestsList,
+          items: sorted,
+          emptyText: 'No test definitions found.',
+          getId: (testDefinition) => normalizeText(testDefinition?.id, ''),
+          getLabel: (testDefinition) => {
             const id = normalizeText(testDefinition?.id, '');
             const label = normalizeText(testDefinition?.label, id);
             const checkCount = Array.isArray(testDefinition?.checks) ? testDefinition.checks.length : 0;
-            row.textContent = `${label} (${id}) • ${checkCount} check(s)`;
-            row.addEventListener('click', () => {
-              if (manageTestIdInput) manageTestIdInput.value = id;
-              if (manageTestLabelInput) manageTestLabelInput.value = label;
-              if (manageTestExecuteJsonInput) {
-                const execute = Array.isArray(testDefinition?.execute) ? testDefinition.execute : [];
-                manageTestExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            return `${label} (${id}) • ${checkCount} check(s)`;
+          },
+          onSelect: (testDefinition) => {
+            const id = normalizeText(testDefinition?.id, '');
+            const label = normalizeText(testDefinition?.label, id);
+            if (manageTestIdInput) manageTestIdInput.value = id;
+            if (manageTestLabelInput) manageTestLabelInput.value = label;
+            if (manageTestExecuteJsonInput) {
+              const execute = Array.isArray(testDefinition?.execute) ? testDefinition.execute : [];
+              manageTestExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageTestChecksJsonInput) {
+              const checks = Array.isArray(testDefinition?.checks) ? testDefinition.checks : [];
+              const editableChecks = checks.map((check) => ({
+                id: normalizeText(check?.id, ''),
+                label: normalizeText(check?.label, ''),
+                icon: normalizeText(check?.icon, ''),
+                runAtConnection: resolveCheckRunAtConnection(check, true),
+                read: check?.read || {},
+                pass: check?.pass || { status: 'ok', value: 'present', details: 'Check passed.' },
+                fail: check?.fail || { status: 'error', value: 'missing', details: 'Check failed.' },
+              }));
+              manageTestChecksJsonInput.value = JSON.stringify(editableChecks, null, 2);
+              if (manageTestRunAtConnectionInput) {
+                const uniform = inferUniformRunAtConnection(editableChecks, true);
+                manageTestRunAtConnectionInput.checked = uniform !== null ? uniform : true;
+                if (uniform === null) {
+                  setManageTabStatus(
+                    `Loaded ${id} into editor with mixed run-at-connection values. Saving will normalize to the test toggle.`,
+                    'warn',
+                  );
+                }
               }
-              if (manageTestChecksJsonInput) {
-                const checks = Array.isArray(testDefinition?.checks) ? testDefinition.checks : [];
-                const editableChecks = checks.map((check) => ({
-                  id: normalizeText(check?.id, ''),
-                  label: normalizeText(check?.label, ''),
-                  icon: normalizeText(check?.icon, ''),
-                  read: check?.read || {},
-                  pass: check?.pass || { status: 'ok', value: 'present', details: 'Check passed.' },
-                  fail: check?.fail || { status: 'error', value: 'missing', details: 'Check failed.' },
-                }));
-                manageTestChecksJsonInput.value = JSON.stringify(editableChecks, null, 2);
-              }
-              renderTestRobotTypeTargets(id);
-              if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'inline-block';
+            }
+            renderTestRobotTypeTargets(id);
+            if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'inline-block';
+            if (!manageTestRunAtConnectionInput || inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true) !== null) {
               setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
-            });
-            manageTestsList.appendChild(row);
-          });
+            }
+          },
+        });
       }
 
   function renderManageFixesList() {
         if (!manageFixesList) return;
-        manageFixesList.replaceChildren();
         const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
-        if (!fixes.length) {
-          const empty = document.createElement('div');
-          empty.className = 'manage-list-empty';
-          empty.textContent = 'No fix definitions found.';
-          manageFixesList.appendChild(empty);
-          return;
-        }
-        fixes
+        const sorted = fixes
           .slice()
-          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')))
-          .forEach((fixDefinition) => {
-            const row = document.createElement('button');
-            row.type = 'button';
-            row.className = 'manage-list-item';
+          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')));
+        renderManageEntityList({
+          container: manageFixesList,
+          items: sorted,
+          emptyText: 'No fix definitions found.',
+          getId: (fixDefinition) => normalizeText(fixDefinition?.id, ''),
+          getLabel: (fixDefinition) => {
             const id = normalizeText(fixDefinition?.id, '');
             const label = normalizeText(fixDefinition?.label, id);
-            row.textContent = `${label} (${id})`;
-            row.addEventListener('click', () => {
-              if (manageFixIdInput) manageFixIdInput.value = id;
-              if (manageFixLabelInput) manageFixLabelInput.value = label;
-              if (manageFixDescriptionInput) {
-                manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
-              }
-              if (manageFixExecuteJsonInput) {
-                const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
-                manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
-              }
-              if (manageFixPostTestsInput) {
-                const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
-                manageFixPostTestsInput.value = postTests.join(', ');
-              }
-              renderFixRobotTypeTargets(id);
-              if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'inline-block';
-              setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
-            });
-            manageFixesList.appendChild(row);
-          });
+            return `${label} (${id})`;
+          },
+          onSelect: (fixDefinition) => {
+            const id = normalizeText(fixDefinition?.id, '');
+            const label = normalizeText(fixDefinition?.label, id);
+            if (manageFixIdInput) manageFixIdInput.value = id;
+            if (manageFixLabelInput) manageFixLabelInput.value = label;
+            if (manageFixDescriptionInput) {
+              manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
+            }
+            if (manageFixExecuteJsonInput) {
+              const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
+              manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+            }
+            if (manageFixPostTestsInput) {
+              const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
+              manageFixPostTestsInput.value = postTests.join(', ');
+            }
+            if (manageFixRunAtConnectionInput) {
+              manageFixRunAtConnectionInput.checked = Boolean(fixDefinition?.runAtConnection);
+            }
+            renderFixRobotTypeTargets(id);
+            if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'inline-block';
+            setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
+          },
+        });
       }
 
   function renderRecorderRobotOptions() {
@@ -708,6 +758,12 @@ export function registerManageRecorderRuntime(runtime, env) {
         renderManageFixesList();
         renderRecorderRobotTypeTargets();
         renderRecorderRobotOptions();
+        if (manageTestRunAtConnectionInput) {
+          manageTestRunAtConnectionInput.checked = Boolean(manageTestRunAtConnectionInput.checked);
+        }
+        if (recorderRunAtConnectionInput) {
+          recorderRunAtConnectionInput.checked = Boolean(recorderRunAtConnectionInput.checked);
+        }
       }
 
   async function loadDefinitionsSummary() {
@@ -806,7 +862,14 @@ export function registerManageRecorderRuntime(runtime, env) {
             throw new Error('Test definition ID is required.');
           }
           const execute = parseJsonInput(manageTestExecuteJsonInput, 'Execute steps');
-          const checks = parseJsonInput(manageTestChecksJsonInput, 'Checks');
+          const checksInput = parseJsonInput(manageTestChecksJsonInput, 'Checks').map((check) => ({
+            ...(check && typeof check === 'object' ? check : {}),
+            runAtConnection: resolveCheckRunAtConnection(check, true),
+          }));
+          const checks = applyRunAtConnection(
+            checksInput,
+            getManageTestRunAtConnectionValue(),
+          );
           const payload = {
             id: testId,
             label: normalizeText(manageTestLabelInput?.value, testId),
@@ -874,6 +937,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           if (manageTestLabelInput) manageTestLabelInput.value = '';
           if (manageTestExecuteJsonInput) manageTestExecuteJsonInput.value = '';
           if (manageTestChecksJsonInput) manageTestChecksJsonInput.value = '';
+          if (manageTestRunAtConnectionInput) manageTestRunAtConnectionInput.checked = true;
           if (manageTestRobotTypeTargets) manageTestRobotTypeTargets.replaceChildren();
           if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'none';
           setManageEditorStatus(manageTestEditorStatus, `Deleted test definition '${testId}'.`, 'ok');
@@ -942,6 +1006,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             label: normalizeText(manageFixLabelInput?.value, fixId),
             description: normalizeText(manageFixDescriptionInput?.value, ''),
             enabled: true,
+            runAtConnection: Boolean(manageFixRunAtConnectionInput?.checked),
             execute,
             postTestIds: postTests,
           };
@@ -1005,6 +1070,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
           if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
           if (manageFixPostTestsInput) manageFixPostTestsInput.value = '';
+          if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
           if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
           if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
           setManageEditorStatus(manageFixEditorStatus, `Deleted fix definition '${fixId}'.`, 'ok');
@@ -1258,6 +1324,10 @@ export function registerManageRecorderRuntime(runtime, env) {
             definitionId,
             label: normalizeText(recorderDefinitionLabelInput?.value, ''),
           });
+          definition.checks = applyRunAtConnection(
+            definition.checks,
+            getRecorderRunAtConnectionDefault(),
+          );
   
           const response = await fetch(buildApiUrl('/api/definitions/tests'), {
             method: 'POST',
@@ -1296,6 +1366,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             icon: '💾',
             passDetails: 'Passed',
             failDetails: 'Failed',
+            runAtConnection: getRecorderRunAtConnectionDefault(),
           });
           state.workflowRecorder.setStatus('Added output block. Expand to edit.', 'ok');
         } catch (error) {
@@ -1337,6 +1408,12 @@ export function registerManageRecorderRuntime(runtime, env) {
             setActiveManageTab(normalizeText(button?.dataset?.tab, 'robots'), { syncHash: true, persist: true });
           });
         });
+        if (manageTestRunAtConnectionInput) {
+          manageTestRunAtConnectionInput.checked = Boolean(manageTestRunAtConnectionInput.checked);
+        }
+        if (manageFixRunAtConnectionInput) {
+          manageFixRunAtConnectionInput.checked = Boolean(manageFixRunAtConnectionInput.checked);
+        }
         if (manageDeleteTestButton) {
           manageDeleteTestButton.addEventListener('click', deleteManageTestDefinition);
         }
@@ -1361,6 +1438,9 @@ export function registerManageRecorderRuntime(runtime, env) {
           },
         });
         state.workflowRecorder.render();
+        if (recorderRunAtConnectionInput) {
+          recorderRunAtConnectionInput.checked = Boolean(recorderRunAtConnectionInput.checked);
+        }
   
         try {
           state.recorderTerminalComponent = new RobotTerminalComponent({

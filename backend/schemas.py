@@ -5,6 +5,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class RobotModelRequest(BaseModel):
+    file_name: str | None = None
+    path_to_quality_folders: str | None = None
+
+
 class RobotCreateRequest(BaseModel):
     id: str | None = Field(default=None, min_length=1)
     name: str = Field(min_length=1)
@@ -12,7 +17,22 @@ class RobotCreateRequest(BaseModel):
     ip: str = Field(min_length=1)
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
-    modelUrl: str | None = None
+    model: RobotModelRequest | None = None
+
+
+class RobotUpdateRequest(BaseModel):
+    name: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+    ip: str = Field(min_length=1)
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+    model: RobotModelRequest | None = None
+
+
+class RobotTypeCreateRequest(BaseModel):
+    id: str | None = Field(default=None, min_length=1)
+    name: str = Field(min_length=1)
+    topics: list[str] | None = None
 
 
 class CommandRequest(BaseModel):
@@ -96,6 +116,7 @@ class DefinitionCheckSpec(BaseModel):
     icon: str | None = None
     manualOnly: bool | None = None
     enabled: bool | None = None
+    runAtConnection: bool
     defaultStatus: str | None = None
     defaultValue: str | None = None
     defaultDetails: str | None = None
@@ -134,6 +155,7 @@ class FixDefinitionUpsertRequest(BaseModel):
     label: str | None = None
     description: str | None = None
     enabled: bool = True
+    runAtConnection: bool = False
     execute: list[DefinitionExecuteStep] = Field(min_length=1)
     postTestIds: list[str] | None = None
     params: dict[str, Any] | None = None

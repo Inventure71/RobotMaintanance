@@ -199,6 +199,7 @@ class DefinitionService:
                     "label": normalize_text(fix_definition.get("label"), fix_id),
                     "description": normalize_text(fix_definition.get("description"), ""),
                     "enabled": bool(fix_definition.get("enabled", True)),
+                    "runAtConnection": bool(fix_definition.get("runAtConnection", False)),
                     "params": fix_definition.get("params") if isinstance(fix_definition.get("params"), dict) else {},
                     "execute": fix_definition.get("execute") if isinstance(fix_definition.get("execute"), list) else [],
                     "postTestIds": self._normalize_string_list(fix_definition.get("postTestIds")),
@@ -323,6 +324,16 @@ class DefinitionService:
         if len(check_ids) != len(set(check_ids)):
             raise HTTPException(status_code=400, detail="Test definition contains duplicate check ids.")
         self._check_id_conflicts(definition_id, check_ids)
+        run_at_connection_values = {
+            bool(item.get("runAtConnection"))
+            for item in checks
+            if isinstance(item, dict) and isinstance(item.get("runAtConnection"), bool)
+        }
+        if len(run_at_connection_values) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="All checks in a test must share the same runAtConnection value.",
+            )
 
         normalized_checks: list[dict[str, Any]] = []
         for raw_check in checks:
@@ -336,6 +347,7 @@ class DefinitionService:
                 "icon",
                 "manualOnly",
                 "enabled",
+                "runAtConnection",
                 "defaultStatus",
                 "defaultValue",
                 "defaultDetails",
@@ -388,6 +400,7 @@ class DefinitionService:
             "label": normalize_text(payload.get("label"), fix_id),
             "enabled": bool(payload.get("enabled", True)),
             "description": normalize_text(payload.get("description"), ""),
+            "runAtConnection": bool(payload.get("runAtConnection", False)),
             "execute": execute,
             "postTestIds": self._normalize_string_list(payload.get("postTestIds")),
             "params": payload.get("params") if isinstance(payload.get("params"), dict) else {},

@@ -1129,6 +1129,54 @@
       gap: 0.55rem;
     }
 
+    .definition-assignment {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.62rem 0.68rem;
+      border: 1px solid rgba(138, 198, 255, 0.24);
+      border-radius: 12px;
+      background: rgba(9, 16, 35, 0.56);
+    }
+
+    .definition-assignment-header {
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .definition-assignment-header h3 {
+      margin: 0;
+      font-size: 0.84rem;
+      letter-spacing: 0.02em;
+      color: #d9e6ff;
+      text-transform: uppercase;
+    }
+
+    .definition-assignment-header .muted-copy {
+      margin: 0;
+      font-size: 0.78rem;
+    }
+
+    .definition-assignment-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto;
+      gap: 0.45rem;
+      align-items: end;
+    }
+
+    .definition-assignment-action {
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+    }
+
+    .definition-assignment-subtitle {
+      margin: 0 0 0.3rem;
+      color: #d6e2ff;
+      font-size: 0.8rem;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+
     .manage-editor-actions {
       display: flex;
       align-items: center;
@@ -1530,6 +1578,14 @@
         grid-template-columns: 1fr;
         align-items: stretch;
       }
+
+      .definition-assignment-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .definition-assignment-action {
+        justify-content: flex-start;
+      }
     }
 
   @media (max-width: 640px) {
@@ -1886,6 +1942,15 @@
 .test-row {
   border-color: color-mix(in srgb, var(--surface-border) 75%, transparent);
   background: linear-gradient(170deg, color-mix(in srgb, var(--surface-panel-strong) 88%, transparent), color-mix(in srgb, var(--surface-panel) 92%, transparent));
+}
+
+.robot-registry-panel .add-robot-shell {
+  margin-top: 0.5rem;
+}
+
+#editRobotList .manage-list-item.active {
+  border-color: color-mix(in srgb, var(--accent-primary) 70%, var(--surface-border-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 36%, transparent);
 }
 
 .test-icon-fallback {

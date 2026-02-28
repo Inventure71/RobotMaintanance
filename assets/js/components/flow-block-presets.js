@@ -92,6 +92,21 @@ export function createFlowBlockPreset({
   const editor = document.createElement('div');
   editor.className = 'flow-block-editor-modal';
   editor.style.display = 'none';
+  const hasEditor = typeof renderEditor === 'function';
+  const actionWrap = header.querySelector('.flow-block-actions');
+  let editBtn = null;
+
+  if (hasEditor && actionWrap) {
+    editBtn = document.createElement('button');
+    editBtn.className = 'button button-compact';
+    editBtn.textContent = 'Edit';
+    editBtn.type = 'button';
+    editBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setEditing(!isEditing);
+    });
+    actionWrap.prepend(editBtn);
+  }
 
   let isEditing = false;
   const setEditing = (nextEditing) => {
@@ -99,16 +114,20 @@ export function createFlowBlockPreset({
     if (next === isEditing) return;
     isEditing = next;
     editor.style.display = next ? 'grid' : 'none';
+    if (editBtn) {
+      editBtn.textContent = next ? 'Close' : 'Edit';
+    }
     if (typeof onToggle === 'function') {
       onToggle(next);
     }
   };
 
   header.addEventListener('click', () => {
+    if (!hasEditor) return;
     setEditing(!isEditing);
   });
 
-  if (typeof renderEditor === 'function') {
+  if (hasEditor) {
     renderEditor(editor, {
       isEditing: () => isEditing,
       setEditing,

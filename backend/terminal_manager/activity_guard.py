@@ -27,6 +27,7 @@ class ActivityGuardMixin:
                     float(self._manual_defer_until_by_robot.get(normalized_robot_id, 0.0)),
                     now + self.MANUAL_AUTO_FIX_DEFER_SEC,
                 )
+        self._emit_connection_event_manual_activity(normalized_robot_id)
 
     def _is_manual_activity_recent(self, robot_id: str, now: float) -> bool:
         with self._lock:

@@ -122,9 +122,13 @@ class AutoMonitorWorkerMixin:
                 with self._lock:
                     self._battery_next_check_at[robot_id] = 0.0
                     self._topics_next_check_at[robot_id] = 0.0
-                self._run_auto_recovery_tests(robot_id)
+                self._emit_connection_event_connected(
+                    robot_id,
+                    connected_at=float(online_update.get("checkedAt") or time.time()),
+                )
 
         if not is_online:
+            self._emit_connection_event_disconnected(robot_id)
             self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
             with self._lock:
                 self._last_auto_monitor_online_state[robot_id] = False

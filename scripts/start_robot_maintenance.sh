@@ -131,8 +131,8 @@ attempt_auto_update() {
     return 0
   fi
 
-  if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null)" ]]; then
-    echo "Skipped update: working tree has local changes."
+  if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain -- config/ 2>/dev/null)" ]]; then
+    echo "Skipped update: config folder has local changes."
     return 0
   fi
 

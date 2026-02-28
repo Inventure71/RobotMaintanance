@@ -8,7 +8,8 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
 
-from ..schemas import RobotCreateRequest
+from ..config_loader import normalize_model_block
+from ..schemas import RobotCreateRequest, RobotTypeCreateRequest, RobotUpdateRequest
 from ..normalization import normalize_status, normalize_type_key
 from ..normalization import normalize_text
 
@@ -39,6 +40,7 @@ def create_robots_router(
     robots_by_id: dict[str, dict[str, Any]],
     robot_types_by_id: dict[str, dict[str, Any]],
     robots_config_path: Path,
+    robot_types_config_path: Path | None = None,
     runtime_tests_provider: Callable[[str], dict[str, dict[str, Any]]] | None = None,
     runtime_activity_provider: Callable[[str], dict[str, Any]] | None = None,
     runtime_snapshot_provider: Callable[[int], dict[str, Any]] | None = None,
@@ -51,6 +53,30 @@ def create_robots_router(
             "robots": list(robots_by_id.values()),
         }
         robots_config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    def _load_robot_types_document() -> tuple[dict[str, Any] | list[dict[str, Any]], list[dict[str, Any]]]:
+        if robot_types_config_path is None or not robot_types_config_path.exists():
+            return {"version": "3.0", "robotTypes": []}, []
+
+        payload = json.loads(robot_types_config_path.read_text(encoding="utf-8"))
+        if isinstance(payload, list):
+            entries = [item for item in payload if isinstance(item, dict)]
+            return payload, entries
+        if isinstance(payload, dict):
+            entries = payload.get("robotTypes") if isinstance(payload.get("robotTypes"), list) else []
+            entries = [item for item in entries if isinstance(item, dict)]
+            return payload, entries
+        return {"version": "3.0", "robotTypes": []}, []
+
+    def _write_robot_types_config(root_payload: dict[str, Any] | list[dict[str, Any]], entries: list[dict[str, Any]]) -> None:
+        if robot_types_config_path is None:
+            return
+        if isinstance(root_payload, list):
+            next_payload: Any = entries
+        else:
+            next_payload = dict(root_payload)
+            next_payload["robotTypes"] = entries
+        robot_types_config_path.write_text(json.dumps(next_payload, indent=2) + "\n", encoding="utf-8")
 
     def _normalize_robot_id(raw: str) -> str:
         cleaned = normalize_text(raw, "")
@@ -66,6 +92,17 @@ def create_robots_router(
 
         counter = 2
         while f"{normalized_id}-{counter}" in robots_by_id:
+            counter += 1
+        return f"{normalized_id}-{counter}"
+
+    def _generate_robot_type_id(base: str) -> str:
+        normalized_id = _normalize_robot_id(base)
+        normalized_key = normalize_type_key(normalized_id)
+        if normalized_key not in robot_types_by_id:
+            return normalized_id
+
+        counter = 2
+        while normalize_type_key(f"{normalized_id}-{counter}") in robot_types_by_id:
             counter += 1
         return f"{normalized_id}-{counter}"
 
@@ -86,9 +123,44 @@ def create_robots_router(
             "type": robot.get("type"),
             "ip": robot.get("ip"),
             "ssh": robot.get("ssh") or {},
-            "modelUrl": robot.get("modelUrl"),
+            "model": robot.get("model") if isinstance(robot.get("model"), dict) else None,
             "tests": _default_tests_for_robot(robot),
         }
+
+    def _build_robot_entry(
+        *,
+        robot_id: str,
+        name: str,
+        robot_type: dict[str, Any],
+        robot_type_fallback: str,
+        ip: str,
+        username: str,
+        password: str,
+        model: dict[str, Any] | None,
+        existing_robot: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        existing_ssh = existing_robot.get("ssh") if isinstance(existing_robot, dict) and isinstance(existing_robot.get("ssh"), dict) else {}
+        existing_port_raw = existing_ssh.get("port") if isinstance(existing_ssh, dict) else None
+        try:
+            existing_port = int(existing_port_raw)
+        except Exception:
+            existing_port = None
+        robot_entry: dict[str, Any] = {
+            "id": robot_id,
+            "name": normalize_text(name),
+            "type": normalize_text(robot_type.get("typeId", robot_type_fallback)),
+            "ip": normalize_text(ip),
+            "ssh": {
+                "username": normalize_text(username),
+                "password": normalize_text(password),
+            },
+        }
+        if isinstance(existing_port, int) and existing_port > 0:
+            robot_entry["ssh"]["port"] = existing_port
+        normalized_model = normalize_model_block(model)
+        if normalized_model:
+            robot_entry["model"] = normalized_model
+        return robot_entry
 
     @router.get("/api/fleet/static")
     def get_fleet_static() -> dict[str, Any]:
@@ -202,23 +274,104 @@ def create_robots_router(
                 raise HTTPException(status_code=409, detail="Robot id already exists")
             raise HTTPException(status_code=409, detail="Unable to generate unique robot id")
 
-        robot_entry: dict[str, Any] = {
-            "id": robot_id,
-            "name": normalize_text(payload.name),
-            "type": normalize_text(robot_type.get("typeId", payload.type)),
-            "ip": normalize_text(payload.ip),
-            "ssh": {
-                "username": normalize_text(payload.username),
-                "password": normalize_text(payload.password),
-            },
-        }
-
-        model_url = normalize_text(payload.modelUrl, "")
-        if model_url:
-            robot_entry["modelUrl"] = model_url
+        model_payload = payload.model.model_dump() if payload.model else None
+        robot_entry = _build_robot_entry(
+            robot_id=robot_id,
+            name=payload.name,
+            robot_type=robot_type,
+            robot_type_fallback=payload.type,
+            ip=payload.ip,
+            username=payload.username,
+            password=payload.password,
+            model=model_payload,
+        )
 
         robots_by_id[robot_id] = robot_entry
         _write_config()
         return robot_entry
+
+    @router.put("/api/robots/{robot_id}")
+    def update_robot(robot_id: str, payload: RobotUpdateRequest) -> dict[str, Any]:
+        target_id = normalize_text(robot_id, "")
+        existing = robots_by_id.get(target_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"Robot '{target_id}' not found")
+
+        robot_type_key = normalize_type_key(payload.type)
+        robot_type = robot_types_by_id.get(robot_type_key)
+        if robot_type is None:
+            raise HTTPException(status_code=400, detail="Invalid robot type")
+
+        model_payload = payload.model.model_dump() if payload.model else None
+        updated = _build_robot_entry(
+            robot_id=target_id,
+            name=payload.name,
+            robot_type=robot_type,
+            robot_type_fallback=payload.type,
+            ip=payload.ip,
+            username=payload.username,
+            password=payload.password,
+            model=model_payload,
+            existing_robot=existing,
+        )
+        robots_by_id[target_id] = updated
+        _write_config()
+        return updated
+
+    @router.delete("/api/robots/{robot_id}")
+    def delete_robot(robot_id: str) -> dict[str, Any]:
+        target_id = normalize_text(robot_id, "")
+        if target_id not in robots_by_id:
+            raise HTTPException(status_code=404, detail=f"Robot '{target_id}' not found")
+        robots_by_id.pop(target_id, None)
+        _write_config()
+        return {"ok": True, "id": target_id}
+
+    @router.post("/api/robot-types", status_code=201)
+    def create_robot_type(payload: RobotTypeCreateRequest) -> dict[str, Any]:
+        if robot_types_config_path is None:
+            raise HTTPException(status_code=500, detail="Robot types config path is not configured")
+
+        requested_id = normalize_text(payload.id, "")
+        type_id = requested_id or _generate_robot_type_id(payload.name)
+        type_key = normalize_type_key(type_id)
+        if type_key in robot_types_by_id:
+            raise HTTPException(status_code=409, detail=f"Robot type '{type_id}' already exists")
+
+        topics_in = payload.topics if isinstance(payload.topics, list) else []
+        topics: list[str] = []
+        seen_topics: set[str] = set()
+        for topic in topics_in:
+            normalized_topic = normalize_text(topic, "")
+            if not normalized_topic or normalized_topic in seen_topics:
+                continue
+            seen_topics.add(normalized_topic)
+            topics.append(normalized_topic)
+
+        raw_entry: dict[str, Any] = {
+            "id": type_id,
+            "name": normalize_text(payload.name, type_id),
+            "testRefs": [],
+            "fixRefs": [],
+            "topics": topics,
+        }
+
+        root_payload, entries = _load_robot_types_document()
+        entries.append(raw_entry)
+        _write_robot_types_config(root_payload, entries)
+
+        normalized_entry = {
+            "typeId": type_id,
+            "typeKey": type_key,
+            "label": normalize_text(payload.name, type_id),
+            "topics": topics,
+            "testRefs": raw_entry["testRefs"],
+            "fixRefs": raw_entry["fixRefs"],
+            "tests": [],
+            "autoFixes": [],
+            "autoMonitor": {},
+        }
+        robot_types_by_id[type_key] = normalized_entry
+        return normalized_entry
 
     return router

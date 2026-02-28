@@ -764,6 +764,16 @@ export function registerMonitorConfigRuntime(runtime, env) {
             const topics = Array.isArray(entry.topics)
               ? entry.topics.map((topic) => normalizeText(topic, '')).filter(Boolean)
               : [];
+            const rawModel = entry.model && typeof entry.model === 'object' ? entry.model : {};
+            const modelFileName = normalizeText(rawModel.file_name, '');
+            const modelPath = normalizeText(rawModel.path_to_quality_folders, '');
+            const model =
+              modelFileName || modelPath
+                ? {
+                    file_name: modelFileName,
+                    path_to_quality_folders: modelPath,
+                  }
+                : null;
   
             return {
               typeId,
@@ -772,6 +782,7 @@ export function registerMonitorConfigRuntime(runtime, env) {
               topics,
               tests,
               autoFixes,
+              model,
             };
           })
           .filter(Boolean);

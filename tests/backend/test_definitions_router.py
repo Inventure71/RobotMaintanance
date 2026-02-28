@@ -81,6 +81,7 @@ def _build_client(tmp_path: Path) -> tuple[TestClient, Path]:
                         "label": "Online",
                         "icon": "🛰️",
                         "manualOnly": True,
+                        "runAtConnection": True,
                         "defaultStatus": "warning",
                         "defaultValue": "unknown",
                         "defaultDetails": "Not checked yet",
@@ -102,6 +103,7 @@ def _build_client(tmp_path: Path) -> tuple[TestClient, Path]:
                         "label": "Battery",
                         "icon": "🔋",
                         "manualOnly": True,
+                        "runAtConnection": True,
                         "defaultStatus": "warning",
                         "defaultValue": "unknown",
                         "defaultDetails": "Not checked yet",
@@ -177,6 +179,7 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
                     "label": "Camera",
                     "icon": "📷",
                     "manualOnly": True,
+                        "runAtConnection": True,
                     "enabled": True,
                     "defaultStatus": "warning",
                     "defaultValue": "unknown",
@@ -205,6 +208,35 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
     assert any(item.get("id") == "camera" for item in checks)
 
 
+def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    response = client.post(
+        "/api/definitions/fixes",
+        json={
+            "id": "quick_fix",
+            "label": "Quick Fix",
+            "description": "Quick repair",
+            "enabled": True,
+            "runAtConnection": True,
+            "execute": [{"id": "repair", "command": "echo repair"}],
+            "postTestIds": ["battery"],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["id"] == "quick_fix"
+
+    saved = json.loads((tmp_path / "fixes" / "quick_fix.fix.json").read_text(encoding="utf-8"))
+    assert saved["runAtConnection"] is True
+
+    summary = client.get("/api/definitions/summary")
+    assert summary.status_code == 200
+    fixes = summary.json().get("fixes", [])
+    saved_fix = next(item for item in fixes if item.get("id") == "quick_fix")
+    assert saved_fix["runAtConnection"] is True
+
+
 def test_create_test_definition_accepts_all_of_read_kind(tmp_path: Path):
     client, _ = _build_client(tmp_path)
     response = client.post(
@@ -221,6 +253,7 @@ def test_create_test_definition_accepts_all_of_read_kind(tmp_path: Path):
                     "label": "General",
                     "icon": "📡",
                     "manualOnly": True,
+                        "runAtConnection": True,
                     "enabled": True,
                     "defaultStatus": "warning",
                     "defaultValue": "unknown",
@@ -256,6 +289,48 @@ def test_create_test_definition_accepts_all_of_read_kind(tmp_path: Path):
     assert len(saved["checks"][0]["read"]["rules"]) == 2
 
 
+def test_create_test_definition_rejects_mixed_run_at_connection_values(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "mixed_run_mode",
+            "label": "Mixed Run Mode",
+            "enabled": True,
+            "mode": "orchestrate",
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "mixed_run_mode__a",
+                    "label": "A",
+                    "runAtConnection": True,
+                    "read": {
+                        "kind": "contains_string",
+                        "inputRef": "topics_raw",
+                        "needle": "/battery",
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "found"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                },
+                {
+                    "id": "mixed_run_mode__b",
+                    "label": "B",
+                    "runAtConnection": False,
+                    "read": {
+                        "kind": "contains_string",
+                        "inputRef": "topics_raw",
+                        "needle": "/camera",
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "found"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                },
+            ],
+        },
+    )
+    assert response.status_code == 400
+    assert "same runAtConnection value" in response.json().get("detail", "")
+
+
 def test_create_test_rejects_duplicate_global_check_id(tmp_path: Path):
     client, _ = _build_client(tmp_path)
     response = client.post(
@@ -270,6 +345,7 @@ def test_create_test_rejects_duplicate_global_check_id(tmp_path: Path):
                 {
                     "id": "battery",
                     "label": "Battery Duplicate",
+                    "runAtConnection": True,
                     "read": {
                         "kind": "contains_string",
                         "inputRef": "topics_raw",
@@ -300,6 +376,7 @@ def test_patch_robot_type_mapping_updates_only_target_type(tmp_path: Path):
                 {
                     "id": "camera",
                     "label": "Camera",
+                    "runAtConnection": True,
                     "read": {
                         "kind": "contains_lines_unordered",
                         "inputRef": "topics_raw",
@@ -348,6 +425,7 @@ def test_publish_and_mapping_make_test_immediately_runnable(tmp_path: Path):
                 {
                     "id": "ping_check",
                     "label": "Ping Check",
+                    "runAtConnection": True,
                     "read": {
                         "kind": "contains_string",
                         "inputRef": "ping_raw",
@@ -395,6 +473,7 @@ def test_update_test_mappings_uses_check_ids_and_supports_unmap(tmp_path: Path):
                 {
                     "id": "camera_snapshot_v2__camera",
                     "label": "Camera",
+                    "runAtConnection": True,
                     "read": {
                         "kind": "contains_string",
                         "inputRef": "topics_raw",
@@ -446,6 +525,7 @@ def test_delete_test_removes_mapped_check_refs(tmp_path: Path):
                 {
                     "id": "delete_probe__camera",
                     "label": "Camera",
+                    "runAtConnection": True,
                     "read": {
                         "kind": "contains_string",
                         "inputRef": "topics_raw",

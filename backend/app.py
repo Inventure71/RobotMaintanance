@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
             catalog.robots_by_id,
             catalog.robot_types_by_id,
             config_path,
+            robot_types_config_path=robot_types_path,
             runtime_tests_provider=terminal_manager.get_runtime_tests,
             runtime_activity_provider=terminal_manager.get_runtime_activity,
             runtime_snapshot_provider=terminal_manager.get_runtime_snapshot_since,

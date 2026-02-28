@@ -17,7 +17,9 @@ Each robot entry:
 - `type` (required): references `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json` `robotTypes[].id`
 - `ip` (required)
 - `ssh` (optional): `username`, `password`, `port`
-- `modelUrl` (optional)
+- `model` (optional robot-level override object):
+  - `file_name` (optional override)
+  - `path_to_quality_folders` (optional override, default `assets/models`)
 
 ## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/command-primitives/`
 
@@ -49,6 +51,7 @@ Contract:
   - `id` (global check id used by dashboard/API)
   - `read` (`contains_string`, `contains_lines_unordered`, `contains_any_string`)
   - `pass` and `fail` result payloads
+  - required `metadata.runAtConnection` (boolean)
   - optional `metadata` (`label`, `icon`, defaults, `possibleResults`, `params`)
 
 Behavior:
@@ -78,6 +81,9 @@ Shape:
 
 Each robot type entry:
 - `id`, `name`
+- `model` (optional type default object):
+  - `file_name` (optional, recommended)
+  - `path_to_quality_folders` (optional, default `assets/models`)
 - `topics`
 - `testRefs`: ordered list of check ids (from test definition `checks[].id`)
 - `fixRefs`: ordered list of fix ids
@@ -95,3 +101,4 @@ Validation:
 - `POST /api/robots/{robotId}/tests/run` returns flat `results[]` by check id.
 - `POST /api/robots/{robotId}/fixes/{fixId}/runs` starts async fix jobs.
 - `GET /api/robots/{robotId}/fixes/runs/{runId}` polls job state/events/results.
+- On `offline -> online`, backend runs checks flagged `runAtConnection=true`; retries every 5s for up to 60s, and cancels on manual activity or disconnect.

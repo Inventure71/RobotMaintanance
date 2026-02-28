@@ -16,6 +16,7 @@ DEFAULT_COMMAND_PRIMITIVES_DIR = PROJECT_ROOT / "config" / "command-primitives"
 DEFAULT_TEST_DEFINITIONS_DIR = PROJECT_ROOT / "config" / "tests"
 DEFAULT_FIX_DEFINITIONS_DIR = PROJECT_ROOT / "config" / "fixes"
 LOGGER = logging.getLogger(__name__)
+DEFAULT_MODEL_QUALITY_BASE_PATH = "assets/models"
 
 
 def load_json_file(path: Path) -> Any:
@@ -23,18 +24,68 @@ def load_json_file(path: Path) -> Any:
     return json.loads(payload)
 
 
+def _normalize_legacy_model_url(
+    raw_model_url: Any,
+    *,
+    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
+) -> dict[str, str] | None:
+    model_url = normalize_text(raw_model_url, "").replace("\\", "/")
+    model_url = model_url.split("?", 1)[0].split("#", 1)[0].strip()
+    if model_url.startswith("./"):
+        model_url = model_url[2:]
+    model_url = model_url.lstrip("/")
+    if not model_url:
+        return None
+
+    if "/" in model_url:
+        path_part, file_name_part = model_url.rsplit("/", 1)
+    else:
+        path_part, file_name_part = "", model_url
+
+    file_name = _normalize_model_file_name(file_name_part)
+    if not file_name:
+        return None
+    path = _normalize_model_path(path_part or default_path, default_path)
+    return {
+        "file_name": file_name,
+        "path_to_quality_folders": path,
+    }
+
+
 def load_robots_config(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
 
     payload = load_json_file(path)
+    robots: list[dict[str, Any]] = []
     if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
+        robots = payload
+    elif isinstance(payload, dict):
         if isinstance(payload.get("robots"), list):
-            return payload["robots"]
-        if isinstance(payload.get("fleet"), list):
-            return payload["fleet"]
+            robots = payload["robots"]
+        elif isinstance(payload.get("fleet"), list):
+            robots = payload["fleet"]
+    for robot in robots:
+        if not isinstance(robot, dict):
+            continue
+        if "modelUrl" not in robot:
+            continue
+        robot_id = normalize_text(robot.get("id"), "unknown")
+        has_model_block = isinstance(robot.get("model"), dict)
+        if not has_model_block:
+            legacy_model = _normalize_legacy_model_url(
+                robot.get("modelUrl"),
+                default_path=DEFAULT_MODEL_QUALITY_BASE_PATH,
+            )
+            if legacy_model:
+                robot["model"] = legacy_model
+        robot.pop("modelUrl", None)
+        LOGGER.warning(
+            "Robot '%s' uses deprecated modelUrl; normalizing to model.file_name/path_to_quality_folders.",
+            robot_id,
+        )
+    if robots:
+        return robots
     return []
 
 
@@ -48,6 +99,93 @@ def load_robot_types_config(path: Path) -> list[dict[str, Any]]:
     if isinstance(payload, dict) and isinstance(payload.get("robotTypes"), list):
         return payload["robotTypes"]
     return []
+
+
+def _normalize_model_path(raw_path: Any, fallback: str = DEFAULT_MODEL_QUALITY_BASE_PATH) -> str:
+    path = normalize_text(raw_path, fallback).replace("\\", "/")
+    path = path.strip().strip("/")
+    if path.startswith("./"):
+        path = path[2:]
+    return path or fallback
+
+
+def _normalize_model_file_name(raw_name: Any) -> str:
+    file_name = normalize_text(raw_name, "").replace("\\", "/")
+    file_name = file_name.strip().lstrip("/")
+    if file_name.startswith("./"):
+        file_name = file_name[2:]
+    if not file_name:
+        return ""
+    if not file_name.lower().endswith((".glb", ".gltf")):
+        return ""
+    return file_name
+
+
+def normalize_model_block(
+    raw_model: Any,
+    *,
+    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
+    include_default_path: bool = False,
+) -> dict[str, str] | None:
+    if not isinstance(raw_model, dict):
+        return None
+    file_name = _normalize_model_file_name(raw_model.get("file_name"))
+    raw_path = normalize_text(raw_model.get("path_to_quality_folders"), "")
+    path = _normalize_model_path(raw_path, default_path) if raw_path else ""
+
+    if not file_name and not path:
+        return None
+    if file_name and not path:
+        path = _normalize_model_path(default_path, default_path)
+
+    model: dict[str, str] = {}
+    if file_name:
+        model["file_name"] = file_name
+    if path and (include_default_path or path != _normalize_model_path(default_path, default_path)):
+        model["path_to_quality_folders"] = path
+    return model or None
+
+
+def resolve_effective_model(
+    robot: dict[str, Any],
+    robot_type: dict[str, Any],
+    *,
+    default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH,
+) -> dict[str, str] | None:
+    robot_model = normalize_model_block(
+        robot.get("model"),
+        default_path=default_path,
+        include_default_path=True,
+    ) or {}
+    type_model = normalize_model_block(
+        robot_type.get("model"),
+        default_path=default_path,
+        include_default_path=True,
+    ) or {}
+
+    file_name = normalize_text(robot_model.get("file_name"), "") or normalize_text(type_model.get("file_name"), "")
+    file_name = _normalize_model_file_name(file_name)
+    if not file_name:
+        return None
+
+    path = (
+        normalize_text(robot_model.get("path_to_quality_folders"), "")
+        or normalize_text(type_model.get("path_to_quality_folders"), "")
+        or default_path
+    )
+    normalized_path = _normalize_model_path(path, default_path)
+    return {
+        "file_name": file_name,
+        "path_to_quality_folders": normalized_path,
+    }
+
+
+def build_model_base_url(model: Any, *, default_path: str = DEFAULT_MODEL_QUALITY_BASE_PATH) -> str:
+    normalized = normalize_model_block(model, default_path=default_path, include_default_path=True)
+    if not normalized or not normalized.get("file_name"):
+        return ""
+    path = normalize_text(normalized.get("path_to_quality_folders"), "") or _normalize_model_path(default_path, default_path)
+    return f"{path.rstrip('/')}/{normalized['file_name'].lstrip('/')}"
 
 
 def _normalize_possible_results(raw: Any) -> list[dict[str, str]]:
@@ -98,6 +236,7 @@ def _resolve_test_entry(
             "icon",
             "enabled",
             "manualOnly",
+            "runAtConnection",
             "defaultStatus",
             "defaultValue",
             "defaultDetails",
@@ -110,6 +249,14 @@ def _resolve_test_entry(
     if not possible_results:
         possible_results = _normalize_possible_results(check_definition.get("possibleResults"))
 
+    run_at_connection = (
+        override.get("runAtConnection")
+        if "runAtConnection" in override
+        else check_definition.get("runAtConnection")
+    )
+    if not isinstance(run_at_connection, bool):
+        raise ValueError(f"Test '{test_id}' must define boolean runAtConnection")
+
     return {
         "id": test_id,
         "definitionId": normalize_text(check_definition.get("definitionId"), ""),
@@ -118,6 +265,7 @@ def _resolve_test_entry(
         "icon": normalize_text(override.get("icon"), normalize_text(check_definition.get("icon"), "⚙️")),
         "manualOnly": bool(override.get("manualOnly", check_definition.get("manualOnly", True))),
         "enabled": bool(override.get("enabled", check_definition.get("enabled", True))),
+        "runAtConnection": run_at_connection,
         "defaultStatus": normalize_status(override.get("defaultStatus") or check_definition.get("defaultStatus")),
         "defaultValue": normalize_text(override.get("defaultValue"), normalize_text(check_definition.get("defaultValue"), "unknown")),
         "defaultDetails": normalize_text(
@@ -138,7 +286,7 @@ def _resolve_fix_entry(
     params = _merged_params(
         source,
         override,
-        reserved_keys={"label", "description", "enabled", "params", "postTestIds", "execute"},
+        reserved_keys={"label", "description", "enabled", "runAtConnection", "params", "postTestIds", "execute"},
     )
 
     override_post_tests = override.get("postTestIds") if isinstance(override.get("postTestIds"), list) else None
@@ -150,6 +298,13 @@ def _resolve_fix_entry(
     if execute_steps is None:
         execute_steps = source.get("execute") if isinstance(source.get("execute"), list) else []
     execute_steps = [item for item in execute_steps if isinstance(item, dict)]
+    run_at_connection = (
+        override.get("runAtConnection")
+        if "runAtConnection" in override
+        else source.get("runAtConnection", False)
+    )
+    if not isinstance(run_at_connection, bool):
+        raise ValueError(f"Fix '{fix_id}' must define boolean runAtConnection")
 
     return {
         "id": fix_id,
@@ -157,6 +312,7 @@ def _resolve_fix_entry(
         "label": normalize_text(override.get("label"), normalize_text(source.get("label"), fix_id)),
         "description": normalize_text(override.get("description"), normalize_text(source.get("description"), "")),
         "enabled": bool(override.get("enabled", source.get("enabled", True))),
+        "runAtConnection": run_at_connection,
         "params": params,
         "postTestIds": post_test_ids,
         "execute": execute_steps,
@@ -245,6 +401,7 @@ def normalize_robot_types(
         battery_command = normalize_text(raw_auto_monitor.get("batteryCommand"), "")
         if battery_command:
             auto_monitor["batteryCommand"] = battery_command
+        model = normalize_model_block(raw.get("model"), default_path=DEFAULT_MODEL_QUALITY_BASE_PATH, include_default_path=False)
 
         normalized = {
             "typeId": type_id,
@@ -258,6 +415,7 @@ def normalize_robot_types(
             "tests": tests,
             "autoMonitor": auto_monitor,
             "autoFixes": auto_fixes,
+            "model": model,
         }
         by_type_id[normalized["typeKey"]] = normalized
 

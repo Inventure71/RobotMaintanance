@@ -189,6 +189,7 @@ export function registerFleetViewRuntime(runtime, env) {
 
   const MODEL_RESOLUTION_LOW = 'low';
   const MODEL_RESOLUTION_HIGH = 'high';
+  const DEFAULT_MODEL_QUALITY_BASE_PATH = 'assets/models';
   const modelAssetResolver = createModelAssetResolver({
     qualityLevels: [
       { id: MODEL_RESOLUTION_LOW, folder: 'LowRes' },
@@ -438,15 +439,36 @@ export function registerFleetViewRuntime(runtime, env) {
         if (typeof candidate === 'string' && candidate.trim()) {
           const clean = candidate.trim().replace(/^\.\//, '');
           const hasModelExtension = /\.(gltf|glb)(?:\?|#|$)/i.test(clean);
-          const isAssetsModelPath =
-            clean.includes('assets/models/') ||
-            clean.includes('/assets/models/');
-  
-          if (isAssetsModelPath && hasModelExtension) {
+          if (hasModelExtension) {
             return clean;
           }
         }
         return DEFAULT_ROBOT_MODEL_URL;
+      }
+
+  function normalizeModelConfig(model) {
+        if (!model || typeof model !== 'object') return null;
+        const file_name = normalizeText(model.file_name, '').replace(/^\.?\//, '');
+        const path_to_quality_folders = normalizeText(model.path_to_quality_folders, '')
+          .replace(/^\.?\//, '')
+          .replace(/\/+$/, '');
+        if (!file_name && !path_to_quality_folders) return null;
+        return {
+          file_name,
+          path_to_quality_folders,
+        };
+      }
+
+  function resolveRobotBaseModelUrl(robot, typeConfig) {
+        const robotModel = normalizeModelConfig(robot?.model);
+        const typeModel = normalizeModelConfig(typeConfig?.model);
+        const fileName = normalizeText(robotModel?.file_name, '') || normalizeText(typeModel?.file_name, '');
+        if (!fileName) return DEFAULT_ROBOT_MODEL_URL;
+        const basePath =
+          normalizeText(robotModel?.path_to_quality_folders, '') ||
+          normalizeText(typeModel?.path_to_quality_folders, '') ||
+          DEFAULT_MODEL_QUALITY_BASE_PATH;
+        return normalizeRobotModelBaseUrl(`${basePath}/${fileName}`);
       }
 
   function resolveRobotModelUrl(candidate, preferredResolution = MODEL_RESOLUTION_LOW) {
@@ -454,14 +476,14 @@ export function registerFleetViewRuntime(runtime, env) {
         return modelAssetResolver.getInitialModelUrl(baseUrl, preferredResolution);
       }
 
-  function normalizeRobotData(raw) {
+      function normalizeRobotData(raw) {
         const entries = Array.isArray(raw) ? raw : [];
         return entries.map((bot) => {
           const botType = bot?.type || 'unknown';
-          const modelUrlCandidate = bot?.modelUrl || bot?.modelUrlPath || bot?.model?.url || bot?.model?.file || bot?.model?.path;
           const typeConfig = getRobotTypeConfig(botType);
           const { tests, definitions } = normalizeRobotTests(bot?.tests, botType);
-          const modelUrl = normalizeRobotModelBaseUrl(modelUrlCandidate);
+          const modelUrl = resolveRobotBaseModelUrl(bot, typeConfig);
+          const robotModel = normalizeModelConfig(bot?.model);
           const activity = normalizeRobotActivity(bot?.activity);
           return {
             id: bot?.id || `robot-${Math.random().toString(16).slice(2, 7)}`,
@@ -472,7 +494,7 @@ export function registerFleetViewRuntime(runtime, env) {
             username: normalizeText(readRobotField(bot, 'username'), ''),
             password: normalizeText(readRobotField(bot, 'password'), ''),
             modelUrl,
-            model: bot?.model || null,
+            model: robotModel,
             tests,
             testDefinitions: definitions,
             topics: typeConfig?.topics || [],
@@ -1224,7 +1246,8 @@ export function registerFleetViewRuntime(runtime, env) {
         isOffline = false,
         preferredResolution = MODEL_RESOLUTION_LOW,
       ) {
-        const baseModelUrl = normalizeRobotModelBaseUrl(robot?.modelUrl);
+        const typeConfig = getRobotTypeConfig(robot?.typeId || robot?.type);
+        const baseModelUrl = resolveRobotBaseModelUrl(robot, typeConfig);
         const modelUrl = modelAssetResolver.getInitialModelUrl(baseModelUrl, preferredResolution);
         if (modelUrl && CAN_USE_MODEL_VIEWER) {
           return `

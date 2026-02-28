@@ -51,6 +51,7 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
                 "checks": [
                     {
                         "id": "battery",
+                        "metadata": {"runAtConnection": True},
                         "read": {
                             "kind": "contains_lines_unordered",
                             "inputRef": "topics_raw",
@@ -85,6 +86,7 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
     assert "topics_snapshot" in catalog.test_definitions_by_id
     assert "battery" in catalog.check_definitions_by_id
     assert "flash_fix" in catalog.fix_definitions_by_id
+    assert catalog.fix_definitions_by_id["flash_fix"]["runAtConnection"] is False
 
 
 def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
@@ -109,6 +111,7 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
             "defaultValue": "unknown",
             "defaultDetails": "Not checked yet",
             "manualOnly": True,
+            "runAtConnection": True,
             "enabled": True,
         }
     }
@@ -118,6 +121,7 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
             "label": "Flash fix",
             "description": "desc",
             "enabled": True,
+            "runAtConnection": True,
             "execute": [{"id": "down", "command": "echo down"}],
             "postTestIds": ["online"],
             "params": {},
@@ -129,6 +133,7 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
     assert normalized["rosbot-2-pro"]["typeId"] == "ROSBOT-2-PRO"
     assert [item["id"] for item in normalized["rosbot-2-pro"]["tests"]] == ["online"]
     assert [item["id"] for item in normalized["rosbot-2-pro"]["autoFixes"]] == ["flash_fix"]
+    assert normalized["rosbot-2-pro"]["autoFixes"][0]["runAtConnection"] is True
 
 
 def test_normalize_robot_types_keeps_auto_monitor_battery_command():
@@ -153,6 +158,7 @@ def test_normalize_robot_types_keeps_auto_monitor_battery_command():
             "defaultValue": "unknown",
             "defaultDetails": "Not checked yet",
             "manualOnly": True,
+            "runAtConnection": True,
             "enabled": True,
         }
     }
@@ -216,6 +222,7 @@ def test_robot_catalog_load_from_paths_builds_indexes(tmp_path):
                         "id": "online",
                         "metadata": {
                             "label": "Online",
+                            "runAtConnection": False,
                             "defaultStatus": "warning",
                             "defaultValue": "unknown",
                             "defaultDetails": "Not checked yet",
@@ -250,6 +257,51 @@ def test_robot_catalog_load_from_paths_builds_indexes(tmp_path):
     assert "flash_fix" in catalog.fix_catalog_by_id
 
 
+def test_robot_catalog_load_from_paths_normalizes_legacy_model_url(tmp_path):
+    robots_path = tmp_path / "robots.json"
+    types_path = tmp_path / "types.json"
+    commands_dir = tmp_path / "command-primitives"
+    tests_dir = tmp_path / "tests"
+    fixes_dir = tmp_path / "fixes"
+    commands_dir.mkdir()
+    tests_dir.mkdir()
+    fixes_dir.mkdir()
+
+    robots_path.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "robots": [
+                    {
+                        "id": "r1",
+                        "name": "A",
+                        "type": "rosbot-2-pro",
+                        "modelUrl": "assets/models/HighRes/rosbot-2-pro.glb",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    types_path.write_text(
+        json.dumps({"version": "3.0", "robotTypes": [{"id": "rosbot-2-pro", "name": "Rosbot", "testRefs": [], "fixRefs": []}]}),
+        encoding="utf-8",
+    )
+
+    catalog = RobotCatalog.load_from_paths(
+        robots_path=robots_path,
+        robot_types_path=types_path,
+        command_primitives_dir=commands_dir,
+        tests_dir=tests_dir,
+        fixes_dir=fixes_dir,
+    )
+
+    robot = catalog.robots_by_id["r1"]
+    assert "modelUrl" not in robot
+    assert robot["model"]["file_name"] == "rosbot-2-pro.glb"
+    assert robot["model"]["path_to_quality_folders"] == "assets/models/HighRes"
+
+
 def test_load_definition_catalog_rejects_all_of_with_invalid_nested_kind(tmp_path):
     commands_dir = tmp_path / "command-primitives"
     tests_dir = tmp_path / "tests"
@@ -270,6 +322,7 @@ def test_load_definition_catalog_rejects_all_of_with_invalid_nested_kind(tmp_pat
                 "checks": [
                     {
                         "id": "bad_check",
+                        "metadata": {"runAtConnection": True},
                         "read": {
                             "kind": "all_of",
                             "rules": [
@@ -291,6 +344,56 @@ def test_load_definition_catalog_rejects_all_of_with_invalid_nested_kind(tmp_pat
     )
 
     with pytest.raises(ValueError, match="invalid nested read kind"):
+        load_definition_catalog(
+            command_primitives_dir=commands_dir,
+            tests_dir=tests_dir,
+            fixes_dir=fixes_dir,
+        )
+
+
+def test_load_definition_catalog_rejects_mixed_run_at_connection_values(tmp_path):
+    commands_dir = tmp_path / "command-primitives"
+    tests_dir = tmp_path / "tests"
+    fixes_dir = tmp_path / "fixes"
+    commands_dir.mkdir()
+    tests_dir.mkdir()
+    fixes_dir.mkdir()
+
+    (commands_dir / "rostopic.command.json").write_text(
+        json.dumps({"id": "rostopic_list", "command": "timeout 12s rostopic list"}),
+        encoding="utf-8",
+    )
+    (tests_dir / "mixed.test.json").write_text(
+        json.dumps(
+            {
+                "id": "mixed",
+                "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+                "checks": [
+                    {
+                        "id": "mixed_a",
+                        "metadata": {"runAtConnection": True},
+                        "read": {"kind": "contains_string", "inputRef": "topics_raw", "needle": "/battery"},
+                        "pass": {"status": "ok", "value": "present", "details": "ok"},
+                        "fail": {"status": "error", "value": "missing", "details": "missing"},
+                    },
+                    {
+                        "id": "mixed_b",
+                        "metadata": {"runAtConnection": False},
+                        "read": {"kind": "contains_string", "inputRef": "topics_raw", "needle": "/camera"},
+                        "pass": {"status": "ok", "value": "present", "details": "ok"},
+                        "fail": {"status": "error", "value": "missing", "details": "missing"},
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (fixes_dir / "flash.fix.json").write_text(
+        json.dumps({"id": "flash_fix", "execute": [{"id": "noop", "command": "echo fix"}]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="single metadata.runAtConnection value"):
         load_definition_catalog(
             command_primitives_dir=commands_dir,
             tests_dir=tests_dir,

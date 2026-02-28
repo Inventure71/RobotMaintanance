@@ -30,6 +30,68 @@ class TestRunnerMixin:
     def _auto_recovery_test_ids(self, robot_id: str) -> list[str]:
         return [test_id for test_id in self._configured_test_ids(robot_id) if test_id != "online"]
 
+    def _selected_tests_all_ok(self, selected_test_ids: list[str], results: list[dict[str, Any]]) -> bool:
+        expected = [normalize_text(test_id, "") for test_id in selected_test_ids if normalize_text(test_id, "")]
+        if not expected:
+            return True
+
+        by_id: dict[str, str] = {}
+        for result in results:
+            if not isinstance(result, dict):
+                continue
+            test_id = normalize_text(result.get("id"), "")
+            if not test_id:
+                continue
+            by_id[test_id] = normalize_status(result.get("status"))
+
+        for test_id in expected:
+            if by_id.get(test_id) != "ok":
+                return False
+        return True
+
+    def _run_connection_retry_attempt(
+        self,
+        *,
+        robot_id: str,
+        test_ids: list[str],
+        source: str = "auto-monitor",
+        should_commit: Any = None,
+    ) -> list[dict[str, Any]]:
+        started_at = time.time()
+        self._set_runtime_activity(
+            robot_id,
+            searching=False,
+            testing=True,
+            phase=self.ACTIVITY_PHASE_CONNECTION_RETRY,
+        )
+
+        try:
+            if not test_ids:
+                return []
+            results = self._executor.run_tests(
+                robot_id=robot_id,
+                page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
+                test_ids=test_ids,
+                dry_run=False,
+            )
+            normalized_results = results if isinstance(results, list) else []
+            if callable(should_commit) and not bool(should_commit()):
+                return normalized_results
+            self._record_runtime_results_from_test_run(
+                robot_id,
+                normalized_results,
+                source=source,
+            )
+            return normalized_results
+        except Exception:
+            return []
+        finally:
+            elapsed = time.time() - started_at
+            min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))
+            if elapsed < min_visible_sec:
+                time.sleep(min_visible_sec - elapsed)
+            self._set_runtime_activity(robot_id, testing=False)
+
     def _runtime_non_online_test_ids(self, robot_id: str) -> list[str]:
         configured_non_online = [test_id for test_id in self._configured_test_ids(robot_id) if test_id != "online"]
         runtime_non_online = [
@@ -175,36 +237,18 @@ class TestRunnerMixin:
             self._auto_recovery_test_inflight.add(robot_id)
 
         def _runner() -> None:
-            started_at = time.time()
-            self._set_runtime_activity(
-                robot_id,
-                searching=False,
-                testing=True,
-                phase=self.ACTIVITY_PHASE_FULL_TEST_AFTER_RECOVERY,
-            )
             try:
                 test_ids = self._auto_recovery_test_ids(robot_id)
                 if not test_ids:
                     return
-                results = self._executor.run_tests(
+                self._run_connection_retry_attempt(
                     robot_id=robot_id,
-                    page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
                     test_ids=test_ids,
-                    dry_run=False,
-                )
-                self._record_runtime_results_from_test_run(
-                    robot_id,
-                    results if isinstance(results, list) else [],
                     source=source,
                 )
             except Exception:
                 pass
             finally:
-                elapsed = time.time() - started_at
-                min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))
-                if elapsed < min_visible_sec:
-                    time.sleep(min_visible_sec - elapsed)
-                self._set_runtime_activity(robot_id, testing=False)
                 with self._lock:
                     self._auto_recovery_test_inflight.discard(robot_id)
 

@@ -99,7 +99,7 @@ export const backendData = [
     id: 'rosbot-a1',
     name: 'ROSbot-2P-A1',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'ok', value: 'online', details: '2 consecutive packets/min no loss' },
       battery: { status: 'ok', value: '93%', details: 'Charging healthy, temp 29C' },
@@ -113,7 +113,7 @@ export const backendData = [
     id: 'rosbot-b2',
     name: 'ROSbot-2P-B2',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'warning', value: 'packet jitter', details: 'Latency spikes every 40-60s' },
       battery: { status: 'ok', value: '81%', details: 'Charge stable' },
@@ -127,7 +127,7 @@ export const backendData = [
     id: 'rosbot-c3',
     name: 'ROSbot-2P-C3',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'ok', value: 'online', details: 'No packet drops' },
       battery: { status: 'error', value: '37%', details: 'Voltage sag under load' },
@@ -141,7 +141,7 @@ export const backendData = [
     id: 'rosbot-d4',
     name: 'ROSbot-2P-D4',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'error', value: 'offline', details: 'No heartbeat in last minute' },
       battery: { status: 'warning', value: '54%', details: 'Long runtime on old cycle' },
@@ -155,7 +155,7 @@ export const backendData = [
     id: 'rosbot-e5',
     name: 'ROSbot-2P-E5',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'ok', value: 'online', details: 'Healthy network tunnel' },
       battery: { status: 'ok', value: '88%', details: 'Expected for 4h workload' },
@@ -169,7 +169,7 @@ export const backendData = [
     id: 'rosbot-f6',
     name: 'ROSbot-2P-F6',
     type: 'Rosbot 2 Pro',
-    modelUrl: 'assets/models/rosbot-2-pro.glb',
+    model: { file_name: 'rosbot-2-pro.glb' },
     tests: {
       general: { status: 'ok', value: 'online', details: 'Heartbeat steady' },
       battery: { status: 'warning', value: '61%', details: 'Unusual discharge when lidar active' },

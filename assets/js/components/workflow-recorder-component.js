@@ -239,7 +239,7 @@ export class WorkflowRecorderComponent {
     this._emitState();
   }
 
-  addOrUpdateOutput({ key, label, icon, passDetails, failDetails }) {
+  addOrUpdateOutput({ key, label, icon, passDetails, failDetails, runAtConnection }) {
     if (!this.started) {
       throw new Error('Create a new test draft first.');
     }
@@ -253,6 +253,7 @@ export class WorkflowRecorderComponent {
       icon: normalizeText(icon, '🧪'),
       passDetails: normalizeText(passDetails, `${normalizeText(label, normalizedKey)} checks passed.`),
       failDetails: normalizeText(failDetails, `${normalizeText(label, normalizedKey)} checks failed.`),
+      runAtConnection: runAtConnection !== false,
     };
     const duplicate = this.outputs.find((output) => output.key === normalizedKey);
     if (duplicate && this.outputEditKey !== normalizedKey) {
@@ -465,6 +466,7 @@ export class WorkflowRecorderComponent {
         id: checkId,
         label: output.label,
         icon: output.icon,
+        runAtConnection: output.runAtConnection !== false,
         manualOnly: true,
         enabled: true,
         defaultStatus: 'warning',
@@ -588,6 +590,7 @@ export class WorkflowRecorderComponent {
                 icon: editor.querySelector('.icon-input').value.trim(),
                 passDetails: editor.querySelector('.pass-input').value.trim(),
                 failDetails: editor.querySelector('.fail-input').value.trim(),
+                runAtConnection: output.runAtConnection !== false,
               });
               this.setStatus('Output updated.', 'ok');
             } catch (error) {
