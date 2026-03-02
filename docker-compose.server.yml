@@ -7,7 +7,16 @@ services:
     environment:
       PORT: "5010"
     volumes:
-      - backend_logs:/app/logs
+      - type: bind
+        source: ./config
+        target: /app/config
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./logs
+        target: /app/logs
+        bind:
+          create_host_path: true
     restart: unless-stopped
 
   frontend:
@@ -18,7 +27,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-
-volumes:
-  backend_logs:
-

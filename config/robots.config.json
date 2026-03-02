@@ -5,7 +5,7 @@
       "id": "rosbot-a1",
       "name": "agamemnon",
       "type": "rosbot-2-pro",
-      "ip": "agamemnon",
+      "ip": "agamemnon.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -15,7 +15,7 @@
       "id": "rosbot-b2",
       "name": "alexander",
       "type": "rosbot-2-pro",
-      "ip": "alexander",
+      "ip": "alexander.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -25,7 +25,7 @@
       "id": "rosbot-c3",
       "name": "leonidas",
       "type": "rosbot-2-pro",
-      "ip": "leonidas",
+      "ip": "leonidas.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -35,7 +35,7 @@
       "id": "rosbot-d4",
       "name": "menelao",
       "type": "rosbot-2-pro",
-      "ip": "menelao",
+      "ip": "menelao.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -45,7 +45,7 @@
       "id": "rosbot-e5",
       "name": "odysseus",
       "type": "rosbot-2-pro",
-      "ip": "odysseus",
+      "ip": "odysseus.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"
@@ -55,7 +55,7 @@
       "id": "rosbot-e6",
       "name": "philip",
       "type": "rosbot-2-pro",
-      "ip": "philip",
+      "ip": "philip.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"

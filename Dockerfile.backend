@@ -11,10 +11,11 @@ RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
 
 COPY backend /app/backend
 COPY config /app/config
+COPY config /app/config.defaults
+COPY scripts/start_backend_container.sh /app/start_backend_container.sh
 
-RUN mkdir -p /app/logs
+RUN mkdir -p /app/logs && chmod +x /app/start_backend_container.sh
 
 EXPOSE 5010
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5010"]
-
+CMD ["/app/start_backend_container.sh"]
