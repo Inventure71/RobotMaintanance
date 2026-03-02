@@ -1,0 +1,15 @@
+.git
+.gitignore
+.DS_Store
+.venv
+.pytest_cache
+.run
+logs
+tasks
+NextSteps.md
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+node_modules
+

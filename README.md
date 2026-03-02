@@ -89,6 +89,51 @@ Supported environment overrides:
 - `SKIP_GIT_UPDATE=1`
 - `GIT_UPDATE_REMOTE`, `GIT_UPDATE_BRANCH`
 
+## Docker Deployment (No Nginx Proxy)
+
+This repository supports a two-image deployment model:
+
+- backend image (FastAPI) exposed on server port `5010`
+- frontend image (static dashboard) exposed on server port `5000`
+
+The frontend is already configured so opening `http://<server-ip>:5000` automatically targets backend `http://<server-ip>:5010`.
+
+### Build and Push Images (local machine or CI)
+
+```bash
+docker login <registry>
+
+docker build -f Dockerfile.backend -t <registry>/robot-maintenance-backend:<tag> .
+docker build -f Dockerfile.frontend -t <registry>/robot-maintenance-frontend:<tag> .
+
+docker push <registry>/robot-maintenance-backend:<tag>
+docker push <registry>/robot-maintenance-frontend:<tag>
+```
+
+### Server Deployment (pull and run only)
+
+1. Copy `docker-compose.server.yml` to the server.
+2. Create `.env.server` on the server (or rename `.env.server.example`) with:
+
+```bash
+BACKEND_IMAGE=<registry>/robot-maintenance-backend:<tag>
+FRONTEND_IMAGE=<registry>/robot-maintenance-frontend:<tag>
+```
+
+3. Deploy:
+
+```bash
+docker login <registry>
+docker compose --env-file .env.server -f docker-compose.server.yml pull
+docker compose --env-file .env.server -f docker-compose.server.yml up -d
+```
+
+4. Access:
+
+```text
+http://<server-ip>:5000
+```
+
 ## Development and Testing
 
 ### Backend Tests

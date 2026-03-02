@@ -8,6 +8,10 @@ export const API_BASE_URL = (() => {
     return 'http://127.0.0.1:8010';
   }
 
+  if (window.location.port === '5000') {
+    return `${window.location.protocol}//${window.location.hostname}:5010`;
+  }
+
   return `${window.location.protocol}//${window.location.host}`;
 })();
 
