@@ -84,7 +84,7 @@ class MonitorConfigResponse(BaseModel):
 
 
 class BugReportRequest(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=8192)
 
 
 class BugReportResponse(BaseModel):
