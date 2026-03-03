@@ -60,6 +60,16 @@
         "username": "husarion",
         "password": "husarion"
       }
+    },
+    {
+      "id": "theseus",
+      "name": "Theseus",
+      "type": "rosbot-3-pro",
+      "ip": "theseus.robotics.lab",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
     }
   ]
 }

@@ -33,6 +33,7 @@ class RobotTypeCreateRequest(BaseModel):
     id: str | None = Field(default=None, min_length=1)
     name: str = Field(min_length=1)
     topics: list[str] | None = None
+    model: RobotModelRequest | None = None
 
 
 class CommandRequest(BaseModel):

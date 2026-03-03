@@ -348,12 +348,17 @@ def create_robots_router(
             seen_topics.add(normalized_topic)
             topics.append(normalized_topic)
 
+        model = normalize_model_block(payload.model.model_dump() if payload.model else None)
+        if not model or not model.get("file_name"):
+            raise HTTPException(status_code=400, detail="Model file name is required for new robot types")
+
         raw_entry: dict[str, Any] = {
             "id": type_id,
             "name": normalize_text(payload.name, type_id),
             "testRefs": [],
             "fixRefs": [],
             "topics": topics,
+            "model": model,
         }
 
         root_payload, entries = _load_robot_types_document()
@@ -370,6 +375,7 @@ def create_robots_router(
             "tests": [],
             "autoFixes": [],
             "autoMonitor": {},
+            "model": raw_entry.get("model"),
         }
         robot_types_by_id[type_key] = normalized_entry
         return normalized_entry

@@ -55,6 +55,16 @@
         "/tf_static",
         "/velocity"
       ]
+    },
+    {
+      "id": "rosbot-3-pro",
+      "name": "Rosbot 3 Pro",
+      "testRefs": [],
+      "fixRefs": [],
+      "topics": [],
+      "model": {
+        "file_name": "rosbot-3-pro.glb"
+      }
     }
   ]
 }

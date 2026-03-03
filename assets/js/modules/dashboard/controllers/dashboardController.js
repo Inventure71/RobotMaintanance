@@ -245,6 +245,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotTypeForm = $('#addRobotTypeForm');
     const addRobotTypeMessage = $('#addRobotTypeMessage');
     const addRobotTypeNameInput = $('#addRobotTypeName');
+    const addRobotTypeModelFileNameInput = $('#addRobotTypeModelFileName');
+    const addRobotTypeModelQualityBasePathInput = $('#addRobotTypeModelQualityBasePath');
     const addRobotTypeTopicsInput = $('#addRobotTypeTopics');
     const addRobotTypeSaveButton = $('#addRobotTypeSaveButton');
     const manageTabStatus = $('#manageTabStatus');
@@ -411,6 +413,8 @@ const runtimeEnv = {
   addRobotTypeForm,
   addRobotTypeMessage,
   addRobotTypeNameInput,
+  addRobotTypeModelFileNameInput,
+  addRobotTypeModelQualityBasePathInput,
   addRobotTypeSaveButton,
   addRobotTypeTopicsInput,
   addRobotSection,

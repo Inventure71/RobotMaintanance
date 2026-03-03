@@ -257,6 +257,10 @@ def test_create_robot_type_generates_id_from_name(tmp_path):
         "/api/robot-types",
         json={
             "name": "Rosbot 2 Pro V2",
+            "model": {
+                "file_name": "rosbot-2-pro-v2.glb",
+                "path_to_quality_folders": "assets/models",
+            },
         },
     )
     assert response.status_code == 201
@@ -264,10 +268,35 @@ def test_create_robot_type_generates_id_from_name(tmp_path):
     assert payload["typeId"] == "rosbot-2-pro-v2"
     assert payload["testRefs"] == []
     assert payload["fixRefs"] == []
+    assert payload["model"]["file_name"] == "rosbot-2-pro-v2.glb"
 
     config_payload = json.loads(robot_types_config_path.read_text(encoding="utf-8"))
     ids = [entry.get("id") for entry in config_payload["robotTypes"]]
     assert "rosbot-2-pro-v2" in ids
+    created_entry = next(entry for entry in config_payload["robotTypes"] if entry.get("id") == "rosbot-2-pro-v2")
+    assert created_entry["model"]["file_name"] == "rosbot-2-pro-v2.glb"
+
+
+def test_create_robot_type_requires_model_file_name(tmp_path):
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id={},
+            robot_types_by_id={},
+            robots_config_path=tmp_path / "robots.config.json",
+            robot_types_config_path=tmp_path / "robot-types.config.json",
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/robot-types",
+        json={
+            "name": "Rosbot 4",
+        },
+    )
+    assert response.status_code == 400
+    assert "Model file name is required" in response.json().get("detail", "")
 
 
 def test_create_robot_accepts_model_override_payload(tmp_path):

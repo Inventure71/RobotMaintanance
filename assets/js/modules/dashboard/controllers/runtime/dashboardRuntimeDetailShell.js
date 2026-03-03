@@ -75,6 +75,8 @@ export function registerDetailShellRuntime(runtime, env) {
     addRobotTypeForm,
     addRobotTypeMessage,
     addRobotTypeNameInput,
+    addRobotTypeModelFileNameInput,
+    addRobotTypeModelQualityBasePathInput,
     addRobotTypeSaveButton,
     addRobotTypeTopicsInput,
     addRobotSection,
@@ -1752,13 +1754,20 @@ export function registerDetailShellRuntime(runtime, env) {
 
   async function createRobotTypeFromForm() {
         if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
-        const name = normalizeText(addRobotTypeNameInput?.value, '');
-        const topics = normalizeText(addRobotTypeTopicsInput?.value, '')
+        const form = new FormData(addRobotTypeForm);
+        const name = normalizeText(form.get('name'), '');
+        const modelFileName = normalizeText(form.get('modelFileName'), '');
+        const modelQualityBasePath = normalizeText(form.get('modelQualityBasePath'), '');
+        const topics = normalizeText(form.get('topics'), '')
           .split(',')
           .map((topic) => normalizeText(topic, ''))
           .filter(Boolean);
         if (!name) {
           setAddRobotTypeMessage('Display name is required.', 'error');
+          return;
+        }
+        if (!modelFileName) {
+          setAddRobotTypeMessage('Model file name is required.', 'error');
           return;
         }
         state.isCreateRobotTypeInProgress = true;
@@ -1772,11 +1781,25 @@ export function registerDetailShellRuntime(runtime, env) {
           const response = await fetch(buildApiUrl('/api/robot-types'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, topics }),
+            body: JSON.stringify({
+              name,
+              topics,
+              model: {
+                file_name: modelFileName,
+                path_to_quality_folders: modelQualityBasePath || undefined,
+              },
+            }),
           });
           if (!response.ok) {
-            const responseText = await response.text();
-            setAddRobotTypeMessage(responseText || 'Unable to create robot type.', 'error');
+            const raw = await response.text();
+            let message = raw;
+            try {
+              const parsed = JSON.parse(raw);
+              message = normalizeText(parsed?.detail, raw);
+            } catch (_error) {
+              // keep raw response text
+            }
+            setAddRobotTypeMessage(message || 'Unable to create robot type.', 'error');
             return;
           }
           setAddRobotTypeMessage('Robot type created and saved.', 'ok');
