@@ -36,6 +36,11 @@ class RobotTypeCreateRequest(BaseModel):
     model: RobotModelRequest | None = None
 
 
+class RobotTypeUpdateRequest(BaseModel):
+    name: str = Field(min_length=1)
+    topics: list[str] | None = None
+
+
 class CommandRequest(BaseModel):
     command: str = Field(min_length=1)
     pageSessionId: str | None = None

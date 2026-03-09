@@ -452,23 +452,60 @@ export function registerFleetViewRuntime(runtime, env) {
         const path_to_quality_folders = normalizeText(model.path_to_quality_folders, '')
           .replace(/^\.?\//, '')
           .replace(/\/+$/, '');
+        const asset_version = normalizeText(model.asset_version, '');
+        const availableQualitiesRaw = Array.isArray(model.available_qualities)
+          ? model.available_qualities
+          : Array.isArray(model.availableQualities)
+            ? model.availableQualities
+            : null;
+        const available_qualities = Array.isArray(availableQualitiesRaw)
+          ? availableQualitiesRaw
+              .map((quality) => normalizeText(quality, '').toLowerCase())
+              .filter(
+                (quality, index, list) =>
+                  (quality === MODEL_RESOLUTION_LOW || quality === MODEL_RESOLUTION_HIGH)
+                  && list.indexOf(quality) === index,
+              )
+          : null;
         if (!file_name && !path_to_quality_folders) return null;
         return {
           file_name,
           path_to_quality_folders,
+          ...(asset_version ? { asset_version } : {}),
+          ...(available_qualities !== null ? { available_qualities } : {}),
         };
       }
 
-  function resolveRobotBaseModelUrl(robot, typeConfig) {
+  function appendModelVersionQuery(baseUrl, assetVersion) {
+        const normalizedBaseUrl = normalizeRobotModelBaseUrl(baseUrl);
+        const version = normalizeText(assetVersion, '');
+        if (!normalizedBaseUrl || !version) return normalizedBaseUrl;
+        const separator = normalizedBaseUrl.includes('?') ? '&' : '?';
+        return `${normalizedBaseUrl}${separator}mv=${encodeURIComponent(version)}`;
+      }
+
+  function modelSupportsQuality(model, preferredResolution) {
+        if (!model) return false;
+        if (!Array.isArray(model.available_qualities)) return true;
+        return model.available_qualities.includes(preferredResolution);
+      }
+
+  function pickModelConfigForQuality(robotModel, typeModel, preferredResolution) {
+        if (modelSupportsQuality(robotModel, preferredResolution)) return robotModel;
+        if (modelSupportsQuality(typeModel, preferredResolution)) return typeModel;
+        return robotModel || typeModel || null;
+      }
+
+  function resolveRobotBaseModelUrl(robot, typeConfig, preferredResolution = MODEL_RESOLUTION_LOW) {
         const robotModel = normalizeModelConfig(robot?.model);
         const typeModel = normalizeModelConfig(typeConfig?.model);
-        const fileName = normalizeText(robotModel?.file_name, '') || normalizeText(typeModel?.file_name, '');
+        const effectiveModel = pickModelConfigForQuality(robotModel, typeModel, preferredResolution);
+        const fileName = normalizeText(effectiveModel?.file_name, '');
         if (!fileName) return DEFAULT_ROBOT_MODEL_URL;
         const basePath =
-          normalizeText(robotModel?.path_to_quality_folders, '') ||
-          normalizeText(typeModel?.path_to_quality_folders, '') ||
+          normalizeText(effectiveModel?.path_to_quality_folders, '') ||
           DEFAULT_MODEL_QUALITY_BASE_PATH;
-        return normalizeRobotModelBaseUrl(`${basePath}/${fileName}`);
+        return appendModelVersionQuery(`${basePath}/${fileName}`, effectiveModel?.asset_version);
       }
 
   function resolveRobotModelUrl(candidate, preferredResolution = MODEL_RESOLUTION_LOW) {
@@ -482,7 +519,7 @@ export function registerFleetViewRuntime(runtime, env) {
           const botType = bot?.type || 'unknown';
           const typeConfig = getRobotTypeConfig(botType);
           const { tests, definitions } = normalizeRobotTests(bot?.tests, botType);
-          const modelUrl = resolveRobotBaseModelUrl(bot, typeConfig);
+          const modelUrl = resolveRobotBaseModelUrl(bot, typeConfig, MODEL_RESOLUTION_LOW);
           const robotModel = normalizeModelConfig(bot?.model);
           const activity = normalizeRobotActivity(bot?.activity);
           return {
@@ -1247,7 +1284,7 @@ export function registerFleetViewRuntime(runtime, env) {
         preferredResolution = MODEL_RESOLUTION_LOW,
       ) {
         const typeConfig = getRobotTypeConfig(robot?.typeId || robot?.type);
-        const baseModelUrl = resolveRobotBaseModelUrl(robot, typeConfig);
+        const baseModelUrl = resolveRobotBaseModelUrl(robot, typeConfig, preferredResolution);
         const modelUrl = modelAssetResolver.getInitialModelUrl(baseModelUrl, preferredResolution);
         if (modelUrl && CAN_USE_MODEL_VIEWER) {
           return `
@@ -1335,17 +1372,19 @@ export function registerFleetViewRuntime(runtime, env) {
               <h3 class="robot-card-title">${title}</h3>
               <p class="robot-card-sub">${robot.type}</p>
             </div>
-            ${statusChip(stateKey, 'card-status-chip')}
-            <button
-              class="button robot-select-btn ${selected ? 'selected' : ''}"
-              type="button"
-              data-action="select-robot"
-              data-button-intent="selection"
-              aria-pressed="${selected ? 'true' : 'false'}"
-              aria-label="${selected ? 'Deselect robot' : 'Select robot'}"
-              title="${selected ? 'Deselect robot' : 'Select robot'}">
-              ${selected ? '[x]' : '[ ]'}
-            </button>
+            <div class="robot-card-header-actions">
+              ${statusChip(stateKey, 'card-status-chip')}
+              <button
+                class="button robot-select-btn ${selected ? 'selected' : ''}"
+                type="button"
+                data-action="select-robot"
+                data-button-intent="selection"
+                aria-pressed="${selected ? 'true' : 'false'}"
+                aria-label="${selected ? 'Deselect robot' : 'Select robot'}"
+                title="${selected ? 'Deselect robot' : 'Select robot'}">
+                ${selected ? '[x]' : '[ ]'}
+              </button>
+            </div>
           </div>
           <div class="model-wrap">
             <div class="badge-strip" data-role="badge-strip">${list}</div>

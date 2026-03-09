@@ -1487,7 +1487,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
 
   function getConfiguredDefaultTestIds(robot, includeOnline = false) {
         const byDefinition =
-          Array.isArray(robot?.testDefinitions) && robot.testDefinitions.length
+          Array.isArray(robot?.testDefinitions)
             ? robot.testDefinitions
             : env.TEST_DEFINITIONS;
         const fromDefinitions = byDefinition
@@ -1498,6 +1498,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         const candidates = new Set([...fromDefinitions, ...fromCurrentTests]);
         const testIds = Array.from(candidates).filter((id) => id && (includeOnline || id !== 'online'));
         if (testIds.length) return testIds;
+        if (Array.isArray(robot?.testDefinitions)) return [];
         return env.TEST_DEFINITIONS
           .map((item) => normalizeText(item?.id, ''))
           .filter((id) => id && (includeOnline || id !== 'online'));

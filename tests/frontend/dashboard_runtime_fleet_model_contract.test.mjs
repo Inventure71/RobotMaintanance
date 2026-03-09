@@ -56,6 +56,7 @@ function makeRuntime(env) {
 
 function makeEnv() {
   return {
+    CAN_USE_MODEL_VIEWER: true,
     DEFAULT_ROBOT_MODEL_URL: 'assets/models/default.glb',
     FIX_MODE_CONTEXT_DASHBOARD: 'dashboard',
     FIX_MODE_CONTEXT_DETAIL: 'detail',
@@ -73,7 +74,7 @@ function makeEnv() {
           label: 'Rosbot 2 Pro',
           topics: [],
           autoFixes: [],
-          model: { file_name: 'rosbot-2-pro.glb' },
+          model: { file_name: 'rosbot-2-pro.glb', available_qualities: ['low', 'high'] },
         },
       ],
     ]),
@@ -113,4 +114,52 @@ test('normalizeRobotData resolves effective model from overrides then type defau
   assert.equal(robots[0].modelUrl, 'assets/models/rosbot-2-pro.glb');
   assert.equal(robots[1].modelUrl, 'assets/models/custom/custom.glb');
   assert.equal(robots[2].modelUrl, 'assets/models/default.glb');
+});
+
+test('normalizeRobotData appends asset version query to bust stale model caches', async () => {
+  const registerFleetViewRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = registerFleetViewRuntime(runtime, env);
+
+  const robots = api.normalizeRobotData([
+    {
+      id: 'r1',
+      name: 'one',
+      type: 'rosbot-2-pro',
+      ip: 'host-a',
+      model: {
+        file_name: 'robots/theseus.glb',
+        asset_version: '123456',
+        available_qualities: ['low'],
+      },
+    },
+  ]);
+
+  assert.equal(robots[0].modelUrl, 'assets/models/robots/theseus.glb?mv=123456');
+});
+
+test('buildRobotModelMarkup falls back to type model when robot override lacks requested quality', async () => {
+  const registerFleetViewRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = registerFleetViewRuntime(runtime, env);
+
+  const markup = api.buildRobotModelMarkup(
+    {
+      id: 'r-low-only',
+      name: 'Theseus',
+      type: 'rosbot-2-pro',
+      typeId: 'rosbot-2-pro',
+      model: {
+        file_name: 'robots/theseus.glb',
+        available_qualities: ['low'],
+      },
+    },
+    false,
+    'high',
+  );
+
+  assert.match(markup, /src="assets\/models\/rosbot-2-pro\.glb"/);
+  assert.match(markup, /data-model-resolution-base-url="assets\/models\/rosbot-2-pro\.glb"/);
 });

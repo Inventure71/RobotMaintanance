@@ -71,6 +71,9 @@ export function registerDataInitRuntime(runtime, env) {
     addRobotTypeForm,
     addRobotSection,
     addRobotTypeSelect,
+    editRobotTypeDeleteButton,
+    editRobotTypeForm,
+    editRobotTypeManageSelect,
     applyActionButton,
     bugReportMessageInput,
     bugReportModal,
@@ -172,6 +175,8 @@ export function registerDataInitRuntime(runtime, env) {
     recorderTerminalShell,
     recorderTerminalToolbar,
     renderBatteryPill,
+    robotRegistryPanelButtons,
+    robotRegistryPanels,
     setActionButtonLoading,
     state,
     submitBugReportButton,
@@ -271,7 +276,10 @@ export function registerDataInitRuntime(runtime, env) {
   const initFleetParallelism = (...args) => runtime.initFleetParallelism(...args);
   const initManageTabs = (...args) => runtime.initManageTabs(...args);
   const initMonitorConfigControls = (...args) => runtime.initMonitorConfigControls(...args);
+  const initRobotRegistryPanels = (...args) => runtime.initRobotRegistryPanels(...args);
+  const initRobotOverrideControls = (...args) => runtime.initRobotOverrideControls(...args);
   const initRobotTerminal = (...args) => runtime.initRobotTerminal(...args);
+  const initRobotTypeUploadInputs = (...args) => runtime.initRobotTypeUploadInputs(...args);
   const initThemeControls = (...args) => runtime.initThemeControls(...args);
   const initWorkflowRecorder = (...args) => runtime.initWorkflowRecorder(...args);
   const invalidateCountdownNodeCache = (...args) => runtime.invalidateCountdownNodeCache(...args);
@@ -316,6 +324,7 @@ export function registerDataInitRuntime(runtime, env) {
   const patchRobotTypeMapping = (...args) => runtime.patchRobotTypeMapping(...args);
   const persistManageTab = (...args) => runtime.persistManageTab(...args);
   const populateAddRobotTypeOptions = (...args) => runtime.populateAddRobotTypeOptions(...args);
+  const populateEditRobotTypeOptions = (...args) => runtime.populateEditRobotTypeOptions(...args);
   const populateEditRobotSelectOptions = (...args) => runtime.populateEditRobotSelectOptions(...args);
   const populateFilters = (...args) => runtime.populateFilters(...args);
   const publishRecorderAsTest = (...args) => runtime.publishRecorderAsTest(...args);
@@ -352,6 +361,7 @@ export function registerDataInitRuntime(runtime, env) {
   const saveManageFixDefinition = (...args) => runtime.saveManageFixDefinition(...args);
   const saveManageTestDefinition = (...args) => runtime.saveManageTestDefinition(...args);
   const saveRobotEditsFromForm = (...args) => runtime.saveRobotEditsFromForm(...args);
+  const saveRobotTypeEditsFromForm = (...args) => runtime.saveRobotTypeEditsFromForm(...args);
   const scheduleMonitorParallelismSync = (...args) => runtime.scheduleMonitorParallelismSync(...args);
   const selectAllOfflineRobots = (...args) => runtime.selectAllOfflineRobots(...args);
   const selectAllOnlineRobots = (...args) => runtime.selectAllOnlineRobots(...args);
@@ -360,6 +370,7 @@ export function registerDataInitRuntime(runtime, env) {
   const setActiveManageTab = (...args) => runtime.setActiveManageTab(...args);
   const setAddRobotMessage = (...args) => runtime.setAddRobotMessage(...args);
   const setEditRobotMessage = (...args) => runtime.setEditRobotMessage(...args);
+  const setEditRobotTypeMessage = (...args) => runtime.setEditRobotTypeMessage(...args);
   const setAddRobotPasswordVisibility = (...args) => runtime.setAddRobotPasswordVisibility(...args);
   const setBugReportStatus = (...args) => runtime.setBugReportStatus(...args);
   const setFixModeStatus = (...args) => runtime.setFixModeStatus(...args);
@@ -423,6 +434,7 @@ export function registerDataInitRuntime(runtime, env) {
   const updateSelectionSummary = (...args) => runtime.updateSelectionSummary(...args);
   const updateTestMappings = (...args) => runtime.updateTestMappings(...args);
   const deleteSelectedRobotFromForm = (...args) => runtime.deleteSelectedRobotFromForm(...args);
+  const deleteSelectedRobotTypeFromForm = (...args) => runtime.deleteSelectedRobotTypeFromForm(...args);
   const fillEditRobotForm = (...args) => runtime.fillEditRobotForm(...args);
 
   async function loadRobotConfig() {
@@ -794,7 +806,10 @@ export function registerDataInitRuntime(runtime, env) {
         $('#openBugReportFloating')?.addEventListener('click', openBugReportModal);
         $('#backFromAddRobot')?.addEventListener('click', showDashboard);
         initManageTabs();
+        initRobotRegistryPanels();
+        initRobotOverrideControls();
         initWorkflowRecorder();
+        initRobotTypeUploadInputs();
         initVisualFlows();
         if (addRobotForm) {
           addRobotForm.addEventListener('submit', (event) => {
@@ -819,6 +834,25 @@ export function registerDataInitRuntime(runtime, env) {
         if (editRobotDeleteButton) {
           editRobotDeleteButton.addEventListener('click', () => {
             deleteSelectedRobotFromForm();
+          });
+        }
+        if (editRobotTypeManageSelect) {
+          editRobotTypeManageSelect.addEventListener('change', () => {
+            const selectedTypeId = normalizeText(editRobotTypeManageSelect.value, '');
+            state.selectedManageRobotTypeId = selectedTypeId;
+            populateEditRobotTypeOptions(selectedTypeId);
+            setEditRobotTypeMessage('', '');
+          });
+        }
+        if (editRobotTypeForm) {
+          editRobotTypeForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            saveRobotTypeEditsFromForm();
+          });
+        }
+        if (editRobotTypeDeleteButton) {
+          editRobotTypeDeleteButton.addEventListener('click', () => {
+            deleteSelectedRobotTypeFromForm();
           });
         }
         if (addRobotTypeForm) {

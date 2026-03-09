@@ -1828,6 +1828,10 @@
   background: linear-gradient(175deg, color-mix(in srgb, var(--surface-panel-strong) 90%, transparent), color-mix(in srgb, var(--surface-panel) 96%, transparent));
 }
 
+.robot-card-header-actions {
+  justify-self: end;
+}
+
 .model-wrap {
   background: linear-gradient(170deg, rgba(8, 11, 18, 0.4), rgba(24, 19, 17, 0.33));
 }
@@ -1946,6 +1950,97 @@
 
 .robot-registry-panel .add-robot-shell {
   margin-top: 0.5rem;
+  grid-template-columns: 1fr;
+}
+
+.registry-submenu-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.registry-submenu-row .button.active {
+  border-color: color-mix(in srgb, var(--accent-primary) 72%, var(--accent-primary-strong));
+  background: linear-gradient(165deg, color-mix(in srgb, var(--accent-primary) 34%, transparent), color-mix(in srgb, var(--surface-panel-strong) 96%, transparent));
+  color: #fff2e3;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 42%, transparent), 0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+.registry-subpanel {
+  display: block;
+}
+
+.registry-subpanel.hidden {
+  display: none;
+}
+
+.registry-types-grid {
+  margin-top: 0.85rem;
+}
+
+.robot-model-override-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.8rem;
+  grid-column: 1 / -1;
+}
+
+.robot-registry-panel .add-robot-side-panel {
+  position: static;
+  width: 100%;
+}
+
+.robot-type-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.robot-type-create-name-field {
+  grid-column: 1 / -1;
+}
+
+.upload-dropzone-field {
+  gap: 0.5rem;
+}
+
+.upload-dropzone {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 0.95rem;
+  border: 1px dashed color-mix(in srgb, var(--accent-primary) 48%, var(--surface-border));
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-primary) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-panel-strong) 88%, transparent), color-mix(in srgb, var(--surface-panel) 96%, transparent));
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.is-drag-over {
+  border-color: color-mix(in srgb, var(--accent-primary) 82%, var(--accent-secondary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.upload-dropzone-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.upload-dropzone-meta {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+.upload-dropzone-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 #editRobotList .manage-list-item.active {
@@ -2022,6 +2117,18 @@
     gap: 0.4rem;
   }
 
+  .registry-submenu-row {
+    gap: 0.45rem;
+  }
+
+  .robot-type-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .robot-model-override-grid {
+    grid-template-columns: 1fr;
+  }
+
   .manage-tabs-row {
     align-items: flex-start;
   }
@@ -2029,6 +2136,10 @@
   .floating-bug-button {
     width: 44px;
     height: 44px;
+  }
+
+  .robot-card-header-actions {
+    justify-self: start;
   }
 }
 

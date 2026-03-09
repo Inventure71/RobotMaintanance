@@ -515,26 +515,26 @@
     }
 
     .robot-card-header {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.6rem;
       padding: 0.8rem;
       border-bottom: 1px solid var(--line);
-      align-items: center;
-      flex-wrap: wrap;
-      row-gap: 0.5rem;
+      align-items: start;
     }
 
     .robot-card-header > div:first-child {
       min-width: 0;
-      flex: 1 1 auto;
       overflow: hidden;
     }
 
-    .robot-card-header > .status-chip,
-    .robot-card-header > .battery-pill,
-    .robot-card-header > .robot-select-btn {
-      flex: 0 0 auto;
+    .robot-card-header-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.55rem;
+      min-width: max-content;
+      flex-wrap: nowrap;
     }
 
     .robot-select-btn {
@@ -558,6 +558,16 @@
     .robot-select-btn.selected:hover {
       background: rgba(255, 215, 60, 0.3);
       color: #fff7d6;
+    }
+
+    @media (max-width: 520px) {
+      .robot-card-header {
+        grid-template-columns: 1fr;
+      }
+
+      .robot-card-header-actions {
+        justify-content: flex-start;
+      }
     }
 
 /* Block Flow Styling */

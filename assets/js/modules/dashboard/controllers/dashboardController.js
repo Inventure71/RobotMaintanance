@@ -149,8 +149,12 @@ let ROBOT_TYPE_BY_ID = new Map();
       isEditRobotInProgress: false,
       isDeleteRobotInProgress: false,
       isCreateRobotTypeInProgress: false,
+      isEditRobotTypeInProgress: false,
+      isDeleteRobotTypeInProgress: false,
       selectedManageRobotId: '',
+      selectedManageRobotTypeId: '',
       activeManageTab: 'robots',
+      activeRobotRegistryPanel: 'manage',
       definitionsSummary: {
         commandPrimitives: [],
         tests: [],
@@ -228,6 +232,16 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotSavingHint = $('#addRobotSavingHint');
     const addRobotPasswordInput = $('#addRobotPassword');
     const addRobotPasswordToggle = $('#toggleAddRobotPassword');
+    const addRobotOverrideLowModelSelect = $('#addRobotOverrideLowModelSelect');
+    const addRobotOverrideHighModelSelect = $('#addRobotOverrideHighModelSelect');
+    const addRobotLowModelField = $('#addRobotLowModelField');
+    const addRobotLowModelDropzone = $('#addRobotLowModelDropzone');
+    const addRobotLowModelFileInput = $('#addRobotLowModelFile');
+    const addRobotLowModelFileName = $('#addRobotLowModelFileName');
+    const addRobotHighModelField = $('#addRobotHighModelField');
+    const addRobotHighModelDropzone = $('#addRobotHighModelDropzone');
+    const addRobotHighModelFileInput = $('#addRobotHighModelFile');
+    const addRobotHighModelFileName = $('#addRobotHighModelFileName');
     const editRobotForm = $('#editRobotForm');
     const editRobotList = $('#editRobotList');
     const editRobotSelect = $('#editRobotSelect');
@@ -236,17 +250,52 @@ let ROBOT_TYPE_BY_ID = new Map();
     const editRobotNameInput = $('#editRobotName');
     const editRobotTypeSelect = $('#editRobotType');
     const editRobotIpInput = $('#editRobotIp');
-    const editRobotModelFileNameInput = $('#editRobotModelFileName');
-    const editRobotModelQualityBasePathInput = $('#editRobotModelQualityBasePath');
+    const editRobotOverrideLowModelSelect = $('#editRobotOverrideLowModelSelect');
+    const editRobotOverrideHighModelSelect = $('#editRobotOverrideHighModelSelect');
+    const editRobotLowModelField = $('#editRobotLowModelField');
+    const editRobotLowModelDropzone = $('#editRobotLowModelDropzone');
+    const editRobotLowModelFileInput = $('#editRobotLowModelFile');
+    const editRobotLowModelFileName = $('#editRobotLowModelFileName');
+    const editRobotHighModelField = $('#editRobotHighModelField');
+    const editRobotHighModelDropzone = $('#editRobotHighModelDropzone');
+    const editRobotHighModelFileInput = $('#editRobotHighModelFile');
+    const editRobotHighModelFileName = $('#editRobotHighModelFileName');
+    const editRobotModelStatus = $('#editRobotModelStatus');
+    const editRobotClearOverrideField = $('#editRobotClearOverrideField');
+    const editRobotClearOverrideInput = $('#editRobotClearOverrideInput');
     const editRobotUsernameInput = $('#editRobotUsername');
     const editRobotPasswordInput = $('#editRobotPassword');
     const editRobotSaveButton = $('#editRobotSaveButton');
     const editRobotDeleteButton = $('#editRobotDeleteButton');
+    const robotRegistryPanelButtons = $$('[data-robot-registry-panel-button]');
+    const robotRegistryPanels = $$('[data-robot-registry-panel]');
+    const editRobotTypeManageSelect = $('#editRobotTypeManageSelect');
+    const editRobotTypeList = $('#editRobotTypeList');
+    const editRobotTypeSummary = $('#editRobotTypeSummary');
+    const editRobotTypeStatus = $('#editRobotTypeStatus');
+    const editRobotTypeForm = $('#editRobotTypeForm');
+    const editRobotTypeIdInput = $('#editRobotTypeId');
+    const editRobotTypeNameInput = $('#editRobotTypeName');
+    const editRobotTypeLowModelDropzone = $('#editRobotTypeLowModelDropzone');
+    const editRobotTypeLowModelFileInput = $('#editRobotTypeLowModelFile');
+    const editRobotTypeLowModelFileName = $('#editRobotTypeLowModelFileName');
+    const editRobotTypeHighModelDropzone = $('#editRobotTypeHighModelDropzone');
+    const editRobotTypeHighModelFileInput = $('#editRobotTypeHighModelFile');
+    const editRobotTypeHighModelFileName = $('#editRobotTypeHighModelFileName');
+    const editRobotTypeModelStatus = $('#editRobotTypeModelStatus');
+    const editRobotTypeClearModelField = $('#editRobotTypeClearModelField');
+    const editRobotTypeClearModelInput = $('#editRobotTypeClearModelInput');
+    const editRobotTypeSaveButton = $('#editRobotTypeSaveButton');
+    const editRobotTypeDeleteButton = $('#editRobotTypeDeleteButton');
     const addRobotTypeForm = $('#addRobotTypeForm');
     const addRobotTypeMessage = $('#addRobotTypeMessage');
     const addRobotTypeNameInput = $('#addRobotTypeName');
-    const addRobotTypeModelFileNameInput = $('#addRobotTypeModelFileName');
-    const addRobotTypeModelQualityBasePathInput = $('#addRobotTypeModelQualityBasePath');
+    const addRobotTypeLowModelDropzone = $('#addRobotTypeLowModelDropzone');
+    const addRobotTypeLowModelFileInput = $('#addRobotTypeLowModelFile');
+    const addRobotTypeLowModelFileName = $('#addRobotTypeLowModelFileName');
+    const addRobotTypeHighModelDropzone = $('#addRobotTypeHighModelDropzone');
+    const addRobotTypeHighModelFileInput = $('#addRobotTypeHighModelFile');
+    const addRobotTypeHighModelFileName = $('#addRobotTypeHighModelFileName');
     const addRobotTypeTopicsInput = $('#addRobotTypeTopics');
     const addRobotTypeSaveButton = $('#addRobotTypeSaveButton');
     const manageTabStatus = $('#manageTabStatus');
@@ -410,11 +459,25 @@ const runtimeEnv = {
   addRobotPasswordInput,
   addRobotPasswordToggle,
   addRobotSavingHint,
+  addRobotOverrideLowModelSelect,
+  addRobotOverrideHighModelSelect,
+  addRobotLowModelField,
+  addRobotLowModelDropzone,
+  addRobotLowModelFileInput,
+  addRobotLowModelFileName,
+  addRobotHighModelField,
+  addRobotHighModelDropzone,
+  addRobotHighModelFileInput,
+  addRobotHighModelFileName,
   addRobotTypeForm,
   addRobotTypeMessage,
   addRobotTypeNameInput,
-  addRobotTypeModelFileNameInput,
-  addRobotTypeModelQualityBasePathInput,
+  addRobotTypeLowModelDropzone,
+  addRobotTypeLowModelFileInput,
+  addRobotTypeLowModelFileName,
+  addRobotTypeHighModelDropzone,
+  addRobotTypeHighModelFileInput,
+  addRobotTypeHighModelFileName,
   addRobotTypeSaveButton,
   addRobotTypeTopicsInput,
   addRobotSection,
@@ -438,8 +501,19 @@ const runtimeEnv = {
   editRobotForm,
   editRobotList,
   editRobotIpInput,
-  editRobotModelFileNameInput,
-  editRobotModelQualityBasePathInput,
+  editRobotOverrideLowModelSelect,
+  editRobotOverrideHighModelSelect,
+  editRobotLowModelField,
+  editRobotLowModelDropzone,
+  editRobotLowModelFileInput,
+  editRobotLowModelFileName,
+  editRobotHighModelField,
+  editRobotHighModelDropzone,
+  editRobotHighModelFileInput,
+  editRobotHighModelFileName,
+  editRobotModelStatus,
+  editRobotClearOverrideField,
+  editRobotClearOverrideInput,
   editRobotNameInput,
   editRobotPasswordInput,
   editRobotSaveButton,
@@ -447,6 +521,24 @@ const runtimeEnv = {
   editRobotStatus,
   editRobotSummary,
   editRobotTypeSelect,
+  editRobotTypeManageSelect,
+  editRobotTypeList,
+  editRobotTypeSummary,
+  editRobotTypeStatus,
+  editRobotTypeForm,
+  editRobotTypeIdInput,
+  editRobotTypeNameInput,
+  editRobotTypeLowModelDropzone,
+  editRobotTypeLowModelFileInput,
+  editRobotTypeLowModelFileName,
+  editRobotTypeHighModelDropzone,
+  editRobotTypeHighModelFileInput,
+  editRobotTypeHighModelFileName,
+  editRobotTypeModelStatus,
+  editRobotTypeClearModelField,
+  editRobotTypeClearModelInput,
+  editRobotTypeSaveButton,
+  editRobotTypeDeleteButton,
   editRobotUsernameInput,
   detailFixModeActions,
   detailFixModePanel,
@@ -534,6 +626,8 @@ const runtimeEnv = {
   recorderTerminalShell,
   recorderTerminalToolbar,
   renderBatteryPill,
+  robotRegistryPanelButtons,
+  robotRegistryPanels,
   setActionButtonLoading,
   state,
   submitBugReportButton,

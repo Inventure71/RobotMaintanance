@@ -156,137 +156,267 @@
           </div>
 
           <div id="manageTabPanelRobots" class="manage-tab-panel active robot-registry-panel" data-tab-panel="robots">
-            <div class="manage-grid two-cols">
-              <div class="panel manage-list-panel">
-                <h2>Robot Catalog</h2>
-                <p class="muted-copy">Select a robot to inspect and modify connection details.</p>
-                <label class="form-field">
-                  Select robot
-                  <select id="editRobotSelect" class="form-input">
-                    <option value="">No robots available</option>
-                  </select>
-                </label>
-                <div id="editRobotSummary" class="muted-copy" style="margin-top: 8px;">Select a robot to view details.</div>
-                <div id="editRobotList" class="manage-entity-list" aria-label="Robot catalog list"></div>
-              </div>
-              <div class="panel manage-editor-panel">
-                <h2>Modify selected robot</h2>
-                <div id="editRobotStatus" class="add-robot-message" aria-live="polite"></div>
-                <form id="editRobotForm" class="manage-editor-form" novalidate>
-                  <label class="form-field">
-                    Robot name
-                    <input id="editRobotName" class="form-input" name="name" type="text" autocomplete="off" required />
-                  </label>
-                  <label class="form-field">
-                    Robot type
-                    <select id="editRobotType" class="form-input" name="type" required></select>
-                  </label>
-                  <label class="form-field">
-                    IP / Host
-                    <input id="editRobotIp" class="form-input" name="ip" type="text" autocomplete="off" required />
-                  </label>
-                  <label class="form-field">
-                    Model file name (optional override)
-                    <input id="editRobotModelFileName" class="form-input" name="modelFileName" type="text" autocomplete="off" placeholder="e.g. rosbot-2-pro.glb" />
-                  </label>
-                  <label class="form-field">
-                    Quality folder base path (optional override)
-                    <input id="editRobotModelQualityBasePath" class="form-input" name="modelQualityBasePath" type="text" autocomplete="off" placeholder="assets/models" />
-                  </label>
-                  <label class="form-field">
-                    SSH username
-                    <input id="editRobotUsername" class="form-input" name="username" type="text" autocomplete="off" required />
-                  </label>
-                  <label class="form-field">
-                    SSH password
-                    <input id="editRobotPassword" class="form-input" name="password" type="password" autocomplete="off" required />
-                  </label>
-                  <div class="add-robot-actions">
-                    <button id="editRobotSaveButton" class="button" type="submit" data-button-intent="create">Save changes</button>
-                    <button id="editRobotDeleteButton" class="button button-danger" type="button" data-button-intent="danger">Delete robot</button>
-                  </div>
-                </form>
-              </div>
+            <div class="registry-submenu-row" role="tablist" aria-label="Robot registry actions">
+              <button id="robotRegistryManageButton" class="button button-compact active" type="button"
+                data-robot-registry-panel-button="manage" data-button-intent="navigation">Manage existing</button>
+              <button id="robotRegistryAddButton" class="button button-compact" type="button"
+                data-robot-registry-panel-button="add" data-button-intent="navigation">Add new</button>
             </div>
-            <div class="add-robot-shell">
-              <div class="panel add-robot-panel">
-                <div class="add-robot-head">
-                  <h2>Register a new robot</h2>
-                  <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+
+            <div class="registry-subpanel active" data-robot-registry-panel="manage">
+              <div class="manage-grid two-cols">
+                <div class="panel manage-list-panel">
+                  <h2>Robot Catalog</h2>
+                  <p class="muted-copy">Select a robot to inspect and modify connection details.</p>
+                  <label class="form-field">
+                    Select robot
+                    <select id="editRobotSelect" class="form-input">
+                      <option value="">No robots available</option>
+                    </select>
+                  </label>
+                  <div id="editRobotSummary" class="muted-copy" style="margin-top: 8px;">Select a robot to view details.</div>
+                  <div id="editRobotList" class="manage-entity-list" aria-label="Robot catalog list"></div>
                 </div>
-                <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
-                <form id="addRobotForm" class="add-robot-form" novalidate>
-                  <div class="form-grid">
+                <div class="panel manage-editor-panel">
+                  <h2>Modify selected robot</h2>
+                  <div id="editRobotStatus" class="add-robot-message" aria-live="polite"></div>
+                  <form id="editRobotForm" class="manage-editor-form" novalidate>
                     <label class="form-field">
                       Robot name
-                      <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input"
-                        placeholder="e.g. ROSbot Lab South" required />
+                      <input id="editRobotName" class="form-input" name="name" type="text" autocomplete="off" required />
                     </label>
                     <label class="form-field">
                       Robot type
-                      <select id="addRobotType" name="type" class="form-input" required>
-                        <option value="" disabled selected>Loading robot types...</option>
-                      </select>
+                      <select id="editRobotType" class="form-input" name="type" required></select>
                     </label>
                     <label class="form-field">
                       IP / Host
-                      <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
-                        placeholder="e.g. 192.168.0.42 or robot-host" required />
+                      <input id="editRobotIp" class="form-input" name="ip" type="text" autocomplete="off" required />
                     </label>
-                    <label class="form-field">
-                      Model file name (optional override)
-                      <input id="addRobotModelFileName" name="modelFileName" type="text" autocomplete="off" class="form-input"
-                        placeholder="e.g. rosbot-2-pro.glb" />
-                    </label>
-                    <label class="form-field">
-                      Quality folder base path (optional override)
-                      <input id="addRobotModelQualityBasePath" name="modelQualityBasePath" type="text" autocomplete="off" class="form-input"
-                        placeholder="assets/models" />
+                    <div class="robot-model-override-grid">
+                      <label class="form-field">
+                        Override class model (low quality)
+                        <select id="editRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
+                          <option value="default" selected>Use current assignment</option>
+                          <option value="override">Replace with override file</option>
+                        </select>
+                      </label>
+                      <label class="form-field">
+                        Override class model (high quality)
+                        <select id="editRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
+                          <option value="default" selected>Use current assignment</option>
+                          <option value="override">Replace with override file</option>
+                        </select>
+                      </label>
+                      <label id="editRobotLowModelField" class="form-field upload-dropzone-field hidden">
+                        Low quality override file
+                        <div id="editRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-low">
+                          <input id="editRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
+                          <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
+                          <span id="editRobotLowModelFileName" class="upload-dropzone-meta">Keep class low-res model</span>
+                        </div>
+                      </label>
+                      <label id="editRobotHighModelField" class="form-field upload-dropzone-field hidden">
+                        High quality override file
+                        <div id="editRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-high">
+                          <input id="editRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
+                          <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
+                          <span id="editRobotHighModelFileName" class="upload-dropzone-meta">Keep class high-res model</span>
+                        </div>
+                      </label>
+                    </div>
+                    <div id="editRobotModelStatus" class="muted-copy" style="margin-top: -4px;">Robot currently uses the class model.</div>
+                    <label id="editRobotClearOverrideField" class="form-field hidden">
+                      <span style="display:flex; align-items:center; gap:8px;">
+                        <input id="editRobotClearOverrideInput" name="clearModelOverride" type="checkbox" />
+                        <span>Remove robot override and use the class model</span>
+                      </span>
                     </label>
                     <label class="form-field">
                       SSH username
-                      <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input"
-                        placeholder="robot" required />
+                      <input id="editRobotUsername" class="form-input" name="username" type="text" autocomplete="off" required />
                     </label>
                     <label class="form-field">
                       SSH password
-                      <div class="form-password-field">
-                        <input id="addRobotPassword" name="password" type="password" autocomplete="off"
-                          class="form-input" placeholder="••••••••" required />
-                        <button id="toggleAddRobotPassword" class="button password-toggle" type="button"
-                          data-button-intent="utility" aria-label="Show password">Show</button>
-                      </div>
+                      <input id="editRobotPassword" class="form-input" name="password" type="password" autocomplete="off" required />
                     </label>
-                  </div>
-                  <div class="add-robot-actions">
-                    <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
-                    <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
-                  </div>
-                </form>
+                    <div class="add-robot-actions">
+                      <button id="editRobotSaveButton" class="button" type="submit" data-button-intent="create">Save changes</button>
+                      <button id="editRobotDeleteButton" class="button button-danger" type="button" data-button-intent="danger">Delete robot</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
-                <h3 class="add-robot-side-title">Create a new robot type</h3>
-                <div id="addRobotTypeMessage" class="add-robot-message" aria-live="polite"></div>
-                <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
+
+              <div class="manage-grid two-cols registry-types-grid">
+                <div class="panel manage-list-panel">
+                  <h2>Robot Types</h2>
+                  <p class="muted-copy">Inspect, rename, and remove existing robot type definitions.</p>
                   <label class="form-field">
-                    Display name
-                    <input id="addRobotTypeName" class="form-input" name="name" type="text" placeholder="Rosbot 2 Pro V2" required />
+                    Select robot type
+                    <select id="editRobotTypeManageSelect" class="form-input">
+                      <option value="">No robot types available</option>
+                    </select>
                   </label>
-                  <label class="form-field">
-                    Model file name
-                    <input id="addRobotTypeModelFileName" class="form-input" name="modelFileName" type="text" placeholder="e.g. rosbot-2-pro-v2.glb" required />
-                  </label>
-                  <label class="form-field">
-                    Model quality folder base path (optional)
-                    <input id="addRobotTypeModelQualityBasePath" class="form-input" name="modelQualityBasePath" type="text" placeholder="assets/models" />
-                  </label>
-                  <label class="form-field">
-                    Topics (comma separated, optional)
-                    <input id="addRobotTypeTopics" class="form-input" name="topics" type="text" placeholder="/battery,/scan,/imu" />
-                  </label>
-                  <button id="addRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Create robot type</button>
-                </form>
-              </aside>
+                  <div id="editRobotTypeSummary" class="muted-copy" style="margin-top: 8px;">Select a robot type to view details.</div>
+                  <div id="editRobotTypeList" class="manage-entity-list" aria-label="Robot type list"></div>
+                </div>
+                <div class="panel manage-editor-panel">
+                  <h2>Modify selected robot type</h2>
+                  <div id="editRobotTypeStatus" class="add-robot-message" aria-live="polite"></div>
+                  <form id="editRobotTypeForm" class="manage-editor-form" novalidate>
+                    <label class="form-field">
+                      Type ID
+                      <input id="editRobotTypeId" class="form-input" type="text" readonly />
+                    </label>
+                    <label class="form-field">
+                      Display name
+                      <input id="editRobotTypeName" class="form-input" name="name" type="text" autocomplete="off" required />
+                    </label>
+                    <div class="robot-type-create-grid">
+                      <label class="form-field upload-dropzone-field">
+                        Low quality model (optional)
+                        <div id="editRobotTypeLowModelDropzone" class="upload-dropzone" data-upload-dropzone="edit-low">
+                          <input id="editRobotTypeLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
+                          <span class="upload-dropzone-title">Drop a low-res replacement here or choose a file</span>
+                          <span id="editRobotTypeLowModelFileName" class="upload-dropzone-meta">Keep existing low-res file</span>
+                        </div>
+                      </label>
+                      <label class="form-field upload-dropzone-field">
+                        High quality model (optional)
+                        <div id="editRobotTypeHighModelDropzone" class="upload-dropzone" data-upload-dropzone="edit-high">
+                          <input id="editRobotTypeHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
+                          <span class="upload-dropzone-title">Drop a high-res replacement here or choose a file</span>
+                          <span id="editRobotTypeHighModelFileName" class="upload-dropzone-meta">Keep existing high-res file</span>
+                        </div>
+                      </label>
+                    </div>
+                    <div id="editRobotTypeModelStatus" class="muted-copy" style="margin-top: -4px;">Type model status unavailable.</div>
+                    <label id="editRobotTypeClearModelField" class="form-field hidden">
+                      <span style="display:flex; align-items:center; gap:8px;">
+                        <input id="editRobotTypeClearModelInput" name="clearModel" type="checkbox" />
+                        <span>Remove class model and fall back to the default viewer</span>
+                      </span>
+                    </label>
+                    <div class="add-robot-actions">
+                      <button id="editRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Save type</button>
+                      <button id="editRobotTypeDeleteButton" class="button button-danger" type="button" data-button-intent="danger">Delete type</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="registry-subpanel hidden" data-robot-registry-panel="add">
+              <div class="add-robot-shell">
+                <div class="panel add-robot-panel">
+                  <div class="add-robot-head">
+                    <h2>Register a new robot</h2>
+                    <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+                  </div>
+                  <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
+                  <form id="addRobotForm" class="add-robot-form" novalidate>
+                    <div class="form-grid">
+                      <label class="form-field">
+                        Robot name
+                        <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input"
+                          placeholder="e.g. ROSbot Lab South" required />
+                      </label>
+                      <label class="form-field">
+                        Robot type
+                        <select id="addRobotType" name="type" class="form-input" required>
+                          <option value="" disabled selected>Loading robot types...</option>
+                        </select>
+                      </label>
+                      <label class="form-field">
+                        IP / Host
+                        <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
+                          placeholder="e.g. 192.168.0.42 or robot-host" required />
+                      </label>
+                      <div class="robot-model-override-grid">
+                        <label class="form-field">
+                          Override class model (low quality)
+                          <select id="addRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
+                            <option value="default" selected>Keep class model</option>
+                            <option value="override">Upload override</option>
+                          </select>
+                        </label>
+                        <label class="form-field">
+                          Override class model (high quality)
+                          <select id="addRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
+                            <option value="default" selected>Keep class model</option>
+                            <option value="override">Upload override</option>
+                          </select>
+                        </label>
+                        <label id="addRobotLowModelField" class="form-field upload-dropzone-field hidden">
+                          Low quality override file
+                          <div id="addRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-low">
+                            <input id="addRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
+                            <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
+                            <span id="addRobotLowModelFileName" class="upload-dropzone-meta">No low-res override selected</span>
+                          </div>
+                        </label>
+                        <label id="addRobotHighModelField" class="form-field upload-dropzone-field hidden">
+                          High quality override file
+                          <div id="addRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-high">
+                            <input id="addRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
+                            <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
+                            <span id="addRobotHighModelFileName" class="upload-dropzone-meta">No high-res override selected</span>
+                          </div>
+                        </label>
+                      </div>
+                      <label class="form-field">
+                        SSH username
+                        <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input"
+                          placeholder="robot" required />
+                      </label>
+                      <label class="form-field">
+                        SSH password
+                        <div class="form-password-field">
+                          <input id="addRobotPassword" name="password" type="password" autocomplete="off"
+                            class="form-input" placeholder="••••••••" required />
+                          <button id="toggleAddRobotPassword" class="button password-toggle" type="button"
+                            data-button-intent="utility" aria-label="Show password">Show</button>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="add-robot-actions">
+                      <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
+                      <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+                    </div>
+                  </form>
+                </div>
+                <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
+                  <h3 class="add-robot-side-title">Create a new robot type</h3>
+                  <p class="muted-copy">Upload both model variants. The server will rename them and place them in the low/high model folders automatically.</p>
+                  <div id="addRobotTypeMessage" class="add-robot-message" aria-live="polite"></div>
+                  <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
+                    <div class="robot-type-create-grid">
+                      <label class="form-field robot-type-create-name-field">
+                        Display name
+                        <input id="addRobotTypeName" class="form-input" name="name" type="text" placeholder="Rosbot 2 Pro V2" required />
+                      </label>
+                      <label class="form-field upload-dropzone-field">
+                        Low quality model
+                        <div id="addRobotTypeLowModelDropzone" class="upload-dropzone" data-upload-dropzone="low">
+                          <input id="addRobotTypeLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" required />
+                          <span class="upload-dropzone-title">Drop the low-res model here or choose a file</span>
+                          <span id="addRobotTypeLowModelFileName" class="upload-dropzone-meta">No file selected</span>
+                        </div>
+                      </label>
+                      <label class="form-field upload-dropzone-field">
+                        High quality model
+                        <div id="addRobotTypeHighModelDropzone" class="upload-dropzone" data-upload-dropzone="high">
+                          <input id="addRobotTypeHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" required />
+                          <span class="upload-dropzone-title">Drop the high-res model here or choose a file</span>
+                          <span id="addRobotTypeHighModelFileName" class="upload-dropzone-meta">No file selected</span>
+                        </div>
+                      </label>
+                    </div>
+                    <button id="addRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Create robot type</button>
+                  </form>
+                </aside>
+              </div>
             </div>
           </div>
 

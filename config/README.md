@@ -94,6 +94,7 @@ Each robot type entry:
 Validation:
 - unknown `testRefs`, `fixRefs`, or fix `postTestIds` fail startup.
 - overrides are merged on top of definition metadata/params.
+- when robot types are created from the UI, the backend stores low/high uploads under `assets/models/LowRes` and `assets/models/HighRes`, then writes the shared renamed file as `model.file_name`.
 
 ## Runtime behavior
 

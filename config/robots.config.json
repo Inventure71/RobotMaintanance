@@ -62,10 +62,10 @@
       }
     },
     {
-      "id": "theseus",
-      "name": "Theseus",
+      "id": "hypnos",
+      "name": "hypnos",
       "type": "rosbot-3-pro",
-      "ip": "theseus.robotics.lab",
+      "ip": "hypnos.robotics.lab",
       "ssh": {
         "username": "husarion",
         "password": "husarion"

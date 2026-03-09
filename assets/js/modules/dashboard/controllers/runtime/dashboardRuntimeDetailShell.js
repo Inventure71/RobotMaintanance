@@ -72,11 +72,25 @@ export function registerDetailShellRuntime(runtime, env) {
     addRobotPasswordInput,
     addRobotPasswordToggle,
     addRobotSavingHint,
+    addRobotOverrideLowModelSelect,
+    addRobotOverrideHighModelSelect,
+    addRobotLowModelField,
+    addRobotLowModelDropzone,
+    addRobotLowModelFileInput,
+    addRobotLowModelFileName,
+    addRobotHighModelField,
+    addRobotHighModelDropzone,
+    addRobotHighModelFileInput,
+    addRobotHighModelFileName,
     addRobotTypeForm,
     addRobotTypeMessage,
     addRobotTypeNameInput,
-    addRobotTypeModelFileNameInput,
-    addRobotTypeModelQualityBasePathInput,
+    addRobotTypeLowModelDropzone,
+    addRobotTypeLowModelFileInput,
+    addRobotTypeLowModelFileName,
+    addRobotTypeHighModelDropzone,
+    addRobotTypeHighModelFileInput,
+    addRobotTypeHighModelFileName,
     addRobotTypeSaveButton,
     addRobotTypeTopicsInput,
     addRobotSection,
@@ -100,8 +114,19 @@ export function registerDetailShellRuntime(runtime, env) {
     editRobotForm,
     editRobotList,
     editRobotIpInput,
-    editRobotModelFileNameInput,
-    editRobotModelQualityBasePathInput,
+    editRobotOverrideLowModelSelect,
+    editRobotOverrideHighModelSelect,
+    editRobotLowModelField,
+    editRobotLowModelDropzone,
+    editRobotLowModelFileInput,
+    editRobotLowModelFileName,
+    editRobotHighModelField,
+    editRobotHighModelDropzone,
+    editRobotHighModelFileInput,
+    editRobotHighModelFileName,
+    editRobotModelStatus,
+    editRobotClearOverrideField,
+    editRobotClearOverrideInput,
     editRobotNameInput,
     editRobotPasswordInput,
     editRobotSaveButton,
@@ -109,6 +134,24 @@ export function registerDetailShellRuntime(runtime, env) {
     editRobotStatus,
     editRobotSummary,
     editRobotTypeSelect,
+    editRobotTypeManageSelect,
+    editRobotTypeList,
+    editRobotTypeSummary,
+    editRobotTypeStatus,
+    editRobotTypeForm,
+    editRobotTypeIdInput,
+    editRobotTypeNameInput,
+    editRobotTypeLowModelDropzone,
+    editRobotTypeLowModelFileInput,
+    editRobotTypeLowModelFileName,
+    editRobotTypeHighModelDropzone,
+    editRobotTypeHighModelFileInput,
+    editRobotTypeHighModelFileName,
+    editRobotTypeModelStatus,
+    editRobotTypeClearModelField,
+    editRobotTypeClearModelInput,
+    editRobotTypeSaveButton,
+    editRobotTypeDeleteButton,
     editRobotUsernameInput,
     detailFixModeActions,
     detailFixModePanel,
@@ -193,6 +236,8 @@ export function registerDetailShellRuntime(runtime, env) {
     recorderTerminalShell,
     recorderTerminalToolbar,
     renderBatteryPill,
+    robotRegistryPanelButtons,
+    robotRegistryPanels,
     setActionButtonLoading,
     state,
     submitBugReportButton,
@@ -816,6 +861,391 @@ export function registerDetailShellRuntime(runtime, env) {
         return Boolean(addRobotSection?.classList?.contains('active'));
       }
 
+  function normalizeRobotRegistryPanel(panelId) {
+        const normalized = normalizeText(panelId, '').toLowerCase();
+        return normalized === 'add' ? 'add' : 'manage';
+      }
+
+  function setActiveRobotRegistryPanel(panelId = 'manage') {
+        const nextPanel = normalizeRobotRegistryPanel(panelId);
+        state.activeRobotRegistryPanel = nextPanel;
+        robotRegistryPanelButtons.forEach((button) => {
+          const isActive = normalizeRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton) === nextPanel;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        robotRegistryPanels.forEach((panel) => {
+          const isActive = normalizeRobotRegistryPanel(panel?.dataset?.robotRegistryPanel) === nextPanel;
+          panel.classList.toggle('active', isActive);
+          panel.classList.toggle('hidden', !isActive);
+        });
+      }
+
+  function initRobotRegistryPanels() {
+        robotRegistryPanelButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            setActiveRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton || 'manage');
+          });
+        });
+        setActiveRobotRegistryPanel(state.activeRobotRegistryPanel || 'manage');
+      }
+
+  function syncUploadDropzoneLabel(input, labelNode, emptyLabel = 'No file selected') {
+        if (!labelNode) return;
+        const file = input?.files?.[0] || null;
+        labelNode.textContent = file ? `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)} MB` : emptyLabel;
+      }
+
+  function normalizeAvailableQualities(model) {
+        const raw = Array.isArray(model?.available_qualities)
+          ? model.available_qualities
+          : Array.isArray(model?.availableQualities)
+            ? model.availableQualities
+            : null;
+        if (!Array.isArray(raw)) return null;
+        return raw
+          .map((quality) => normalizeText(quality, '').toLowerCase())
+          .filter(
+            (quality, index, list) =>
+              (quality === 'low' || quality === 'high') && list.indexOf(quality) === index,
+          );
+      }
+
+  function modelSupportsQuality(model, quality) {
+        const fileName = normalizeText(model?.file_name, '');
+        if (!fileName) return false;
+        const availableQualities = normalizeAvailableQualities(model);
+        if (!Array.isArray(availableQualities)) return true;
+        return availableQualities.includes(quality);
+      }
+
+  function setSelectOptionLabel(selectNode, value, label) {
+        if (!selectNode) return;
+        const option = Array.from(selectNode.options || []).find((entry) => normalizeText(entry.value, '') === value);
+        if (option) option.textContent = label;
+      }
+
+  function buildModelUsageLabel(model, quality, sourceLabel) {
+        const fileName = normalizeText(model?.file_name, '');
+        if (!fileName) return `${sourceLabel}: no ${quality}-res file`;
+        return `${sourceLabel}: ${quality}-res ${fileName}`;
+      }
+
+  function bindUploadDropzone(dropzone, input, labelNode, emptyLabel = 'No file selected') {
+        if (!dropzone || !input) return;
+        input.addEventListener('change', () => {
+          syncUploadDropzoneLabel(input, labelNode, emptyLabel);
+        });
+        ['dragenter', 'dragover'].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add('is-drag-over');
+          });
+        });
+        ['dragleave', 'dragend', 'drop'].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            if (eventName === 'dragleave' && event.target !== dropzone) return;
+            dropzone.classList.remove('is-drag-over');
+          });
+        });
+        dropzone.addEventListener('drop', (event) => {
+          const [file] = Array.from(event?.dataTransfer?.files || []);
+          if (!file) return;
+          try {
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            input.files = transfer.files;
+            syncUploadDropzoneLabel(input, labelNode, emptyLabel);
+          } catch (_error) {
+            // Browser fallback: keep native picker path available.
+          }
+        });
+        syncUploadDropzoneLabel(input, labelNode, emptyLabel);
+      }
+
+  function resetRobotTypeUploadInputs() {
+        syncUploadDropzoneLabel(addRobotTypeLowModelFileInput, addRobotTypeLowModelFileName);
+        syncUploadDropzoneLabel(addRobotTypeHighModelFileInput, addRobotTypeHighModelFileName);
+        if (editRobotTypeClearModelInput) editRobotTypeClearModelInput.checked = false;
+        if (editRobotTypeClearModelField) editRobotTypeClearModelField.classList.add('hidden');
+        if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.disabled = false;
+        if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.disabled = false;
+        syncUploadDropzoneLabel(editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, 'Keep existing low-res file');
+        syncUploadDropzoneLabel(editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, 'Keep existing high-res file');
+        if (editRobotTypeModelStatus) editRobotTypeModelStatus.textContent = 'Type model status unavailable.';
+      }
+
+  function syncEditRobotTypeModelControls(typeConfig) {
+        const hasModel = Boolean(normalizeText(typeConfig?.model?.file_name, ''));
+        const clearModel = Boolean(editRobotTypeClearModelInput?.checked) && hasModel;
+        const lowStatus = modelSupportsQuality(typeConfig?.model, 'low')
+          ? `Current low-res file: ${normalizeText(typeConfig?.model?.file_name, 'configured')}`
+          : 'No low-res file configured';
+        const highStatus = modelSupportsQuality(typeConfig?.model, 'high')
+          ? `Current high-res file: ${normalizeText(typeConfig?.model?.file_name, 'configured')}`
+          : 'No high-res file configured';
+
+        if (editRobotTypeClearModelField) {
+          editRobotTypeClearModelField.classList.toggle('hidden', !hasModel);
+        }
+        if (editRobotTypeClearModelInput && !hasModel) {
+          editRobotTypeClearModelInput.checked = false;
+        }
+        if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.disabled = clearModel;
+        if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.disabled = clearModel;
+
+        if (clearModel) {
+          if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.value = '';
+          if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.value = '';
+          syncUploadDropzoneLabel(
+            editRobotTypeLowModelFileInput,
+            editRobotTypeLowModelFileName,
+            'Class low-res file will be removed on save',
+          );
+          syncUploadDropzoneLabel(
+            editRobotTypeHighModelFileInput,
+            editRobotTypeHighModelFileName,
+            'Class high-res file will be removed on save',
+          );
+          if (editRobotTypeModelStatus) {
+            editRobotTypeModelStatus.textContent =
+              'Class model will be removed on save. Robots without overrides will use the default viewer.';
+          }
+          return;
+        }
+
+        syncUploadDropzoneLabel(editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, lowStatus);
+        syncUploadDropzoneLabel(editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, highStatus);
+        if (editRobotTypeModelStatus) {
+          editRobotTypeModelStatus.textContent = `Low: ${lowStatus} • High: ${highStatus}`;
+        }
+      }
+
+  function syncRobotModelOverrideVisibility(selectNode, fieldNode, inputNode, labelNode, emptyLabel) {
+        if (!selectNode || !fieldNode) return;
+        const shouldShow = normalizeText(selectNode.value, 'default') === 'override';
+        fieldNode.classList.toggle('hidden', !shouldShow);
+        if (!shouldShow && inputNode) {
+          inputNode.value = '';
+          syncUploadDropzoneLabel(inputNode, labelNode, emptyLabel);
+        }
+      }
+
+  function syncEditRobotModelControls(robot) {
+        const typeConfig = getRobotTypeConfig(robot?.typeId || robot?.type);
+        const robotModel = robot?.model && typeof robot.model === 'object' ? robot.model : null;
+        const typeModel = typeConfig?.model && typeof typeConfig.model === 'object' ? typeConfig.model : null;
+        const hasOverride = Boolean(normalizeText(robotModel?.file_name, ''));
+        const removeOverride = Boolean(editRobotClearOverrideInput?.checked) && hasOverride;
+        const lowUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'low');
+        const highUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'high');
+        const lowStatus = lowUsesOverride
+          ? buildModelUsageLabel(robotModel, 'low', 'Current override')
+          : buildModelUsageLabel(typeModel, 'low', 'Current class model');
+        const highStatus = highUsesOverride
+          ? buildModelUsageLabel(robotModel, 'high', 'Current override')
+          : buildModelUsageLabel(typeModel, 'high', 'Current class model');
+
+        setSelectOptionLabel(
+          editRobotOverrideLowModelSelect,
+          'default',
+          lowUsesOverride ? 'Keep current override' : 'Keep class model',
+        );
+        setSelectOptionLabel(
+          editRobotOverrideHighModelSelect,
+          'default',
+          highUsesOverride ? 'Keep current override' : 'Keep class model',
+        );
+        setSelectOptionLabel(
+          editRobotOverrideLowModelSelect,
+          'override',
+          lowUsesOverride ? 'Replace current override' : 'Upload override',
+        );
+        setSelectOptionLabel(
+          editRobotOverrideHighModelSelect,
+          'override',
+          highUsesOverride ? 'Replace current override' : 'Upload override',
+        );
+
+        if (editRobotModelStatus) {
+          editRobotModelStatus.textContent = removeOverride
+            ? 'Override will be removed on save. This robot will use the class low/high model files.'
+            : `Low: ${lowStatus} • High: ${highStatus}`;
+        }
+        if (editRobotClearOverrideField) {
+          editRobotClearOverrideField.classList.toggle('hidden', !hasOverride);
+        }
+        if (editRobotClearOverrideInput && !hasOverride) {
+          editRobotClearOverrideInput.checked = false;
+        }
+        if (editRobotOverrideLowModelSelect) editRobotOverrideLowModelSelect.disabled = removeOverride;
+        if (editRobotOverrideHighModelSelect) editRobotOverrideHighModelSelect.disabled = removeOverride;
+
+        const lowEmptyLabel = lowUsesOverride
+          ? `Keep current low-res override (${normalizeText(robotModel?.file_name, 'configured')})`
+          : lowStatus;
+        const highEmptyLabel = highUsesOverride
+          ? `Keep current high-res override (${normalizeText(robotModel?.file_name, 'configured')})`
+          : highStatus;
+
+        if (removeOverride) {
+          if (editRobotOverrideLowModelSelect) editRobotOverrideLowModelSelect.value = 'default';
+          if (editRobotOverrideHighModelSelect) editRobotOverrideHighModelSelect.value = 'default';
+        }
+
+        syncRobotModelOverrideVisibility(
+          editRobotOverrideLowModelSelect,
+          editRobotLowModelField,
+          editRobotLowModelFileInput,
+          editRobotLowModelFileName,
+          lowEmptyLabel,
+        );
+        syncRobotModelOverrideVisibility(
+          editRobotOverrideHighModelSelect,
+          editRobotHighModelField,
+          editRobotHighModelFileInput,
+          editRobotHighModelFileName,
+          highEmptyLabel,
+        );
+
+        if (normalizeText(editRobotOverrideLowModelSelect?.value, 'default') !== 'override') {
+          syncUploadDropzoneLabel(editRobotLowModelFileInput, editRobotLowModelFileName, lowEmptyLabel);
+        }
+        if (normalizeText(editRobotOverrideHighModelSelect?.value, 'default') !== 'override') {
+          syncUploadDropzoneLabel(editRobotHighModelFileInput, editRobotHighModelFileName, highEmptyLabel);
+        }
+      }
+
+  function resetRobotOverrideControls({
+        lowSelect,
+        highSelect,
+        lowField,
+        highField,
+        lowInput,
+        highInput,
+        lowLabel,
+        highLabel,
+        lowEmptyLabel,
+        highEmptyLabel,
+        clearOverrideInput,
+        clearOverrideField,
+      }) {
+        if (lowSelect) lowSelect.value = 'default';
+        if (highSelect) highSelect.value = 'default';
+        if (lowInput) lowInput.value = '';
+        if (highInput) highInput.value = '';
+        if (clearOverrideInput) clearOverrideInput.checked = false;
+        if (clearOverrideField) clearOverrideField.classList.add('hidden');
+        if (lowSelect) lowSelect.disabled = false;
+        if (highSelect) highSelect.disabled = false;
+        syncUploadDropzoneLabel(lowInput, lowLabel, lowEmptyLabel);
+        syncUploadDropzoneLabel(highInput, highLabel, highEmptyLabel);
+        syncRobotModelOverrideVisibility(lowSelect, lowField, lowInput, lowLabel, lowEmptyLabel);
+        syncRobotModelOverrideVisibility(highSelect, highField, highInput, highLabel, highEmptyLabel);
+      }
+
+  function initRobotOverrideControls() {
+        bindUploadDropzone(
+          addRobotLowModelDropzone,
+          addRobotLowModelFileInput,
+          addRobotLowModelFileName,
+          'No low-res override selected',
+        );
+        bindUploadDropzone(
+          addRobotHighModelDropzone,
+          addRobotHighModelFileInput,
+          addRobotHighModelFileName,
+          'No high-res override selected',
+        );
+        bindUploadDropzone(
+          editRobotLowModelDropzone,
+          editRobotLowModelFileInput,
+          editRobotLowModelFileName,
+          'Keep class low-res model',
+        );
+        bindUploadDropzone(
+          editRobotHighModelDropzone,
+          editRobotHighModelFileInput,
+          editRobotHighModelFileName,
+          'Keep class high-res model',
+        );
+        addRobotOverrideLowModelSelect?.addEventListener('change', () => {
+          syncRobotModelOverrideVisibility(
+            addRobotOverrideLowModelSelect,
+            addRobotLowModelField,
+            addRobotLowModelFileInput,
+            addRobotLowModelFileName,
+            'No low-res override selected',
+          );
+        });
+        addRobotOverrideHighModelSelect?.addEventListener('change', () => {
+          syncRobotModelOverrideVisibility(
+            addRobotOverrideHighModelSelect,
+            addRobotHighModelField,
+            addRobotHighModelFileInput,
+            addRobotHighModelFileName,
+            'No high-res override selected',
+          );
+        });
+        editRobotOverrideLowModelSelect?.addEventListener('change', () => {
+          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
+        });
+        editRobotOverrideHighModelSelect?.addEventListener('change', () => {
+          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
+        });
+        editRobotClearOverrideInput?.addEventListener('change', () => {
+          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
+        });
+        resetRobotOverrideControls({
+          lowSelect: addRobotOverrideLowModelSelect,
+          highSelect: addRobotOverrideHighModelSelect,
+          lowField: addRobotLowModelField,
+          highField: addRobotHighModelField,
+          lowInput: addRobotLowModelFileInput,
+          highInput: addRobotHighModelFileInput,
+          lowLabel: addRobotLowModelFileName,
+          highLabel: addRobotHighModelFileName,
+          lowEmptyLabel: 'No low-res override selected',
+          highEmptyLabel: 'No high-res override selected',
+        });
+        resetRobotOverrideControls({
+          lowSelect: editRobotOverrideLowModelSelect,
+          highSelect: editRobotOverrideHighModelSelect,
+          lowField: editRobotLowModelField,
+          highField: editRobotHighModelField,
+          lowInput: editRobotLowModelFileInput,
+          highInput: editRobotHighModelFileInput,
+          lowLabel: editRobotLowModelFileName,
+          highLabel: editRobotHighModelFileName,
+          lowEmptyLabel: 'Keep class low-res model',
+          highEmptyLabel: 'Keep class high-res model',
+          clearOverrideInput: editRobotClearOverrideInput,
+          clearOverrideField: editRobotClearOverrideField,
+        });
+      }
+
+  function initRobotTypeUploadInputs() {
+        bindUploadDropzone(addRobotTypeLowModelDropzone, addRobotTypeLowModelFileInput, addRobotTypeLowModelFileName);
+        bindUploadDropzone(addRobotTypeHighModelDropzone, addRobotTypeHighModelFileInput, addRobotTypeHighModelFileName);
+        bindUploadDropzone(
+          editRobotTypeLowModelDropzone,
+          editRobotTypeLowModelFileInput,
+          editRobotTypeLowModelFileName,
+          'Keep existing low-res file',
+        );
+        bindUploadDropzone(
+          editRobotTypeHighModelDropzone,
+          editRobotTypeHighModelFileInput,
+          editRobotTypeHighModelFileName,
+          'Keep existing high-res file',
+        );
+        editRobotTypeClearModelInput?.addEventListener('change', () => {
+          syncEditRobotTypeModelControls(getRobotTypeById(editRobotTypeManageSelect?.value));
+        });
+        resetRobotTypeUploadInputs();
+      }
+
   function hideRecorderReadPopover() {
         if (recorderTerminalPopReadBtn) {
           recorderTerminalPopReadBtn.style.display = 'none';
@@ -901,7 +1331,20 @@ export function registerDetailShellRuntime(runtime, env) {
         }
         if (addRobotTypeForm) {
           addRobotTypeForm.reset();
+          resetRobotTypeUploadInputs();
         }
+        resetRobotOverrideControls({
+          lowSelect: addRobotOverrideLowModelSelect,
+          highSelect: addRobotOverrideHighModelSelect,
+          lowField: addRobotLowModelField,
+          highField: addRobotHighModelField,
+          lowInput: addRobotLowModelFileInput,
+          highInput: addRobotHighModelFileInput,
+          lowLabel: addRobotLowModelFileName,
+          highLabel: addRobotHighModelFileName,
+          lowEmptyLabel: 'No low-res override selected',
+          highEmptyLabel: 'No high-res override selected',
+        });
         detail.classList.remove('active');
         dashboard.classList.remove('active');
         populateAddRobotTypeOptions();
@@ -932,7 +1375,20 @@ export function registerDetailShellRuntime(runtime, env) {
         }
         if (addRobotTypeForm) {
           addRobotTypeForm.reset();
+          resetRobotTypeUploadInputs();
         }
+        resetRobotOverrideControls({
+          lowSelect: addRobotOverrideLowModelSelect,
+          highSelect: addRobotOverrideHighModelSelect,
+          lowField: addRobotLowModelField,
+          highField: addRobotHighModelField,
+          lowInput: addRobotLowModelFileInput,
+          highInput: addRobotHighModelFileInput,
+          lowLabel: addRobotLowModelFileName,
+          highLabel: addRobotHighModelFileName,
+          lowEmptyLabel: 'No low-res override selected',
+          highEmptyLabel: 'No high-res override selected',
+        });
         setAddRobotMessage('', '');
         setEditRobotMessage('', '');
         setAddRobotTypeMessage('', '');
@@ -1409,6 +1865,15 @@ export function registerDetailShellRuntime(runtime, env) {
         if (style) node.classList.add(style);
       }
 
+  function getRobotTypeById(typeId) {
+        return env.ROBOT_TYPE_BY_ID.get(normalizeTypeId(typeId)) || null;
+      }
+
+  function countRobotsForType(typeId) {
+        const typeKey = normalizeTypeId(typeId);
+        return state.robots.filter((robot) => normalizeTypeId(robot?.typeId || robot?.type) === typeKey).length;
+      }
+
   function buildKnownTypeEntries() {
         const seenTypes = new Set();
         return env.ROBOT_TYPES
@@ -1420,6 +1885,9 @@ export function registerDetailShellRuntime(runtime, env) {
             return {
               typeId,
               label: normalizeText(typeConfig?.label, typeId),
+              topics: Array.isArray(typeConfig?.topics) ? typeConfig.topics : [],
+              model: typeConfig?.model && typeof typeConfig.model === 'object' ? typeConfig.model : null,
+              assignedRobotCount: countRobotsForType(typeId),
             };
           })
           .filter(Boolean);
@@ -1475,6 +1943,56 @@ export function registerDetailShellRuntime(runtime, env) {
           }
         }
 
+        populateEditRobotTypeOptions(state.selectedManageRobotTypeId);
+      }
+
+  function populateEditRobotTypeOptions(preferredTypeId = '') {
+        if (!editRobotTypeManageSelect) return;
+        const typeEntries = [...buildKnownTypeEntries()].sort((a, b) => {
+          const aLabel = normalizeText(a?.label, '').toLowerCase();
+          const bLabel = normalizeText(b?.label, '').toLowerCase();
+          return aLabel.localeCompare(bLabel);
+        });
+        editRobotTypeManageSelect.replaceChildren();
+        if (!typeEntries.length) {
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = 'No robot types available';
+          editRobotTypeManageSelect.appendChild(emptyOption);
+          renderManageEntityList({ container: editRobotTypeList, items: [], emptyText: 'No robot types available.' });
+          state.selectedManageRobotTypeId = '';
+          fillEditRobotTypeForm(null);
+          return;
+        }
+        typeEntries.forEach((entry) => {
+          const option = document.createElement('option');
+          option.value = entry.typeId;
+          option.textContent = `${entry.label} (${entry.typeId})`;
+          editRobotTypeManageSelect.appendChild(option);
+        });
+        const nextTypeId = preferredTypeId || state.selectedManageRobotTypeId || normalizeText(typeEntries[0]?.typeId, '');
+        if (nextTypeId) {
+          const option = editRobotTypeManageSelect.querySelector(`option[value="${nextTypeId}"]`)
+            || editRobotTypeManageSelect.querySelector('option');
+          if (option) option.selected = true;
+          state.selectedManageRobotTypeId = normalizeText(option?.value, '');
+        }
+        renderManageEntityList({
+          container: editRobotTypeList,
+          items: typeEntries,
+          emptyText: 'No robot types available.',
+          activeId: state.selectedManageRobotTypeId,
+          getId: (entry) => entry.typeId,
+          getLabel: (entry) => `${entry.label} (${entry.typeId})`,
+          onSelect: (_entry, id) => {
+            state.selectedManageRobotTypeId = id;
+            if (editRobotTypeManageSelect) editRobotTypeManageSelect.value = id;
+            fillEditRobotTypeForm(getRobotTypeById(id));
+            setEditRobotTypeMessage('', '');
+            populateEditRobotTypeOptions(id);
+          },
+        });
+        fillEditRobotTypeForm(getRobotTypeById(state.selectedManageRobotTypeId));
       }
 
   function populateEditRobotSelectOptions(preferredRobotId = '') {
@@ -1530,31 +2048,91 @@ export function registerDetailShellRuntime(runtime, env) {
         fillEditRobotForm(getRobotById(state.selectedManageRobotId));
       }
 
+  function fillEditRobotTypeForm(typeConfig) {
+        if (!editRobotTypeForm) return;
+        if (!typeConfig) {
+          if (editRobotTypeIdInput) editRobotTypeIdInput.value = '';
+          if (editRobotTypeNameInput) editRobotTypeNameInput.value = '';
+          if (editRobotTypeForm) editRobotTypeForm.reset();
+          resetRobotTypeUploadInputs();
+          if (editRobotTypeSummary) editRobotTypeSummary.textContent = 'Select a robot type to view details.';
+          if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = true;
+          if (editRobotTypeDeleteButton) editRobotTypeDeleteButton.disabled = true;
+          return;
+        }
+        const typeId = normalizeText(typeConfig.typeId, '');
+        const assignedRobotCount = countRobotsForType(typeId);
+        if (editRobotTypeForm) editRobotTypeForm.reset();
+        if (editRobotTypeIdInput) editRobotTypeIdInput.value = typeId;
+        if (editRobotTypeNameInput) editRobotTypeNameInput.value = normalizeText(typeConfig.label, typeId);
+        resetRobotTypeUploadInputs();
+        if (editRobotTypeSummary) {
+          const modelFileName = normalizeText(typeConfig?.model?.file_name, 'no model');
+          const lowAvailable = modelSupportsQuality(typeConfig?.model, 'low') ? 'configured' : 'missing';
+          const highAvailable = modelSupportsQuality(typeConfig?.model, 'high') ? 'configured' : 'missing';
+          editRobotTypeSummary.textContent = `Assigned robots: ${assignedRobotCount} • Model: ${modelFileName} • Low: ${lowAvailable} • High: ${highAvailable}`;
+        }
+        syncEditRobotTypeModelControls(typeConfig);
+        if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = false;
+        if (editRobotTypeDeleteButton) {
+          editRobotTypeDeleteButton.disabled = false;
+        }
+      }
+
   function fillEditRobotForm(robot) {
         if (!editRobotForm) return;
         if (!robot) {
           if (editRobotNameInput) editRobotNameInput.value = '';
           if (editRobotIpInput) editRobotIpInput.value = '';
-          if (editRobotModelFileNameInput) editRobotModelFileNameInput.value = '';
-          if (editRobotModelQualityBasePathInput) editRobotModelQualityBasePathInput.value = '';
+          if (editRobotForm) editRobotForm.reset();
+          resetRobotOverrideControls({
+            lowSelect: editRobotOverrideLowModelSelect,
+            highSelect: editRobotOverrideHighModelSelect,
+            lowField: editRobotLowModelField,
+            highField: editRobotHighModelField,
+            lowInput: editRobotLowModelFileInput,
+            highInput: editRobotHighModelFileInput,
+          lowLabel: editRobotLowModelFileName,
+          highLabel: editRobotHighModelFileName,
+          lowEmptyLabel: 'Keep class low-res model',
+          highEmptyLabel: 'Keep class high-res model',
+          clearOverrideInput: editRobotClearOverrideInput,
+          clearOverrideField: editRobotClearOverrideField,
+        });
           if (editRobotUsernameInput) editRobotUsernameInput.value = '';
           if (editRobotPasswordInput) editRobotPasswordInput.value = '';
           if (editRobotSummary) editRobotSummary.textContent = 'Select a robot to view details.';
+          if (editRobotModelStatus) editRobotModelStatus.textContent = 'Robot currently uses the class model.';
           if (editRobotSaveButton) editRobotSaveButton.disabled = true;
           if (editRobotDeleteButton) editRobotDeleteButton.disabled = true;
           return;
         }
+        if (editRobotForm) editRobotForm.reset();
         if (editRobotNameInput) editRobotNameInput.value = normalizeText(robot.name, '');
         if (editRobotTypeSelect) {
           editRobotTypeSelect.value = normalizeText(robot.typeId, normalizeText(robot.type, ''));
         }
         if (editRobotIpInput) editRobotIpInput.value = normalizeText(robot.ip, '');
-        if (editRobotModelFileNameInput) editRobotModelFileNameInput.value = normalizeText(robot?.model?.file_name, '');
-        if (editRobotModelQualityBasePathInput) editRobotModelQualityBasePathInput.value = normalizeText(robot?.model?.path_to_quality_folders, '');
+        resetRobotOverrideControls({
+          lowSelect: editRobotOverrideLowModelSelect,
+          highSelect: editRobotOverrideHighModelSelect,
+          lowField: editRobotLowModelField,
+          highField: editRobotHighModelField,
+          lowInput: editRobotLowModelFileInput,
+          highInput: editRobotHighModelFileInput,
+          lowLabel: editRobotLowModelFileName,
+          highLabel: editRobotHighModelFileName,
+          lowEmptyLabel: 'Keep class low-res model',
+          highEmptyLabel: 'Keep class high-res model',
+          clearOverrideInput: editRobotClearOverrideInput,
+          clearOverrideField: editRobotClearOverrideField,
+        });
+        syncEditRobotModelControls(robot);
         if (editRobotUsernameInput) editRobotUsernameInput.value = normalizeText(robot?.ssh?.username, '');
         if (editRobotPasswordInput) editRobotPasswordInput.value = normalizeText(robot?.ssh?.password, '');
         if (editRobotSummary) {
-          editRobotSummary.textContent = `ID: ${normalizeText(robot.id, 'n/a')} • Type: ${normalizeText(robot.type, 'n/a')} • Host: ${normalizeText(robot.ip, 'n/a')}`;
+          const hasOverride = Boolean(normalizeText(robot?.model?.file_name, ''));
+          editRobotSummary.textContent = `ID: ${normalizeText(robot.id, 'n/a')} • Type: ${normalizeText(robot.type, 'n/a')} • Host: ${normalizeText(robot.ip, 'n/a')} • Override model: ${hasOverride ? normalizeText(robot?.model?.file_name, 'configured') : 'class model only'}`;
         }
         if (editRobotSaveButton) editRobotSaveButton.disabled = false;
         if (editRobotDeleteButton) editRobotDeleteButton.disabled = false;
@@ -1568,8 +2146,24 @@ export function registerDetailShellRuntime(runtime, env) {
         setMessageNode(editRobotStatus, message, style);
       }
 
+  function setEditRobotTypeMessage(message, style = 'warn') {
+        setMessageNode(editRobotTypeStatus, message, style);
+      }
+
   function setAddRobotTypeMessage(message, style = 'warn') {
         setMessageNode(addRobotTypeMessage, message, style);
+      }
+
+  async function parseApiErrorMessage(response, fallbackMessage) {
+        const raw = await response.text();
+        let message = raw;
+        try {
+          const parsed = JSON.parse(raw);
+          message = normalizeText(parsed?.detail, raw);
+        } catch (_error) {
+          // Keep raw text.
+        }
+        return normalizeText(message, fallbackMessage);
       }
 
   function setAddRobotPasswordVisibility(isVisible) {
@@ -1588,13 +2182,23 @@ export function registerDetailShellRuntime(runtime, env) {
         const name = normalizeText(form.get('name'), '');
         const typeId = normalizeText(form.get('type'), '');
         const ip = normalizeText(form.get('ip'), '');
-        const modelFileName = normalizeText(form.get('modelFileName'), '');
-        const modelQualityBasePath = normalizeText(form.get('modelQualityBasePath'), '');
         const username = normalizeText(form.get('username'), '');
         const password = normalizeText(form.get('password'), '');
+        const lowOverrideEnabled = normalizeText(addRobotOverrideLowModelSelect?.value, 'default') === 'override';
+        const highOverrideEnabled = normalizeText(addRobotOverrideHighModelSelect?.value, 'default') === 'override';
+        const lowModelFile = addRobotLowModelFileInput?.files?.[0] || null;
+        const highModelFile = addRobotHighModelFileInput?.files?.[0] || null;
   
         if (!name || !typeId || !ip || !username || !password) {
           setAddRobotMessage('All fields except model fields are required.', 'error');
+          return;
+        }
+        if (lowOverrideEnabled && !lowModelFile) {
+          setAddRobotMessage('Choose a low quality override file or keep the class model.', 'error');
+          return;
+        }
+        if (highOverrideEnabled && !highModelFile) {
+          setAddRobotMessage('Choose a high quality override file or keep the class model.', 'error');
           return;
         }
   
@@ -1605,14 +2209,6 @@ export function registerDetailShellRuntime(runtime, env) {
           setAddRobotMessage('Selected type is invalid. Choose an existing type.', 'error');
           return;
         }
-  
-        const model =
-          modelFileName || modelQualityBasePath
-            ? {
-                file_name: modelFileName || undefined,
-                path_to_quality_folders: modelQualityBasePath || undefined,
-              }
-            : undefined;
 
         state.isCreateRobotInProgress = true;
         const saveButton = addRobotForm.querySelector('button[type="submit"]');
@@ -1627,17 +2223,17 @@ export function registerDetailShellRuntime(runtime, env) {
         }
   
         try {
+          const payload = new FormData();
+          payload.set('name', name);
+          payload.set('type', typeId);
+          payload.set('ip', ip);
+          payload.set('username', username);
+          payload.set('password', password);
+          if (lowOverrideEnabled && lowModelFile) payload.set('lowModelFile', lowModelFile);
+          if (highOverrideEnabled && highModelFile) payload.set('highModelFile', highModelFile);
           const response = await fetch(buildApiUrl('/api/robots'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              type: typeId,
-              ip,
-              model,
-              username,
-              password,
-            }),
+            body: payload,
           });
   
           if (!response.ok) {
@@ -1654,6 +2250,19 @@ export function registerDetailShellRuntime(runtime, env) {
           if (editRobotSelect?.value) {
             setActiveManageTab('robots', { syncHash: false, persist: true });
           }
+          if (addRobotForm) addRobotForm.reset();
+          resetRobotOverrideControls({
+            lowSelect: addRobotOverrideLowModelSelect,
+            highSelect: addRobotOverrideHighModelSelect,
+            lowField: addRobotLowModelField,
+            highField: addRobotHighModelField,
+            lowInput: addRobotLowModelFileInput,
+            highInput: addRobotHighModelFileInput,
+            lowLabel: addRobotLowModelFileName,
+            highLabel: addRobotHighModelFileName,
+            lowEmptyLabel: 'No low-res override selected',
+            highEmptyLabel: 'No high-res override selected',
+          });
         } finally {
           state.isCreateRobotInProgress = false;
           if (saveButton) {
@@ -1673,21 +2282,29 @@ export function registerDetailShellRuntime(runtime, env) {
         const name = normalizeText(editRobotNameInput?.value, '');
         const type = normalizeText(editRobotTypeSelect?.value, '');
         const ip = normalizeText(editRobotIpInput?.value, '');
-        const modelFileName = normalizeText(editRobotModelFileNameInput?.value, '');
-        const modelQualityBasePath = normalizeText(editRobotModelQualityBasePathInput?.value, '');
         const username = normalizeText(editRobotUsernameInput?.value, '');
         const password = normalizeText(editRobotPasswordInput?.value, '');
+        const lowOverrideEnabled = normalizeText(editRobotOverrideLowModelSelect?.value, 'default') === 'override';
+        const highOverrideEnabled = normalizeText(editRobotOverrideHighModelSelect?.value, 'default') === 'override';
+        const clearModelOverride = Boolean(editRobotClearOverrideInput?.checked);
+        const lowModelFile = editRobotLowModelFileInput?.files?.[0] || null;
+        const highModelFile = editRobotHighModelFileInput?.files?.[0] || null;
         if (!name || !type || !ip || !username || !password) {
           setEditRobotMessage('All fields except model fields are required.', 'error');
           return;
         }
-        const model =
-          modelFileName || modelQualityBasePath
-            ? {
-                file_name: modelFileName || undefined,
-                path_to_quality_folders: modelQualityBasePath || undefined,
-              }
-            : undefined;
+        if (clearModelOverride && (lowOverrideEnabled || highOverrideEnabled || lowModelFile || highModelFile)) {
+          setEditRobotMessage('Choose either override removal or replacement uploads, not both.', 'error');
+          return;
+        }
+        if (lowOverrideEnabled && !lowModelFile) {
+          setEditRobotMessage('Choose a low quality override file or keep the class model.', 'error');
+          return;
+        }
+        if (highOverrideEnabled && !highModelFile) {
+          setEditRobotMessage('Choose a high quality override file or keep the class model.', 'error');
+          return;
+        }
         state.isEditRobotInProgress = true;
         if (editRobotSaveButton) {
           setActionButtonLoading(editRobotSaveButton, true, {
@@ -1696,10 +2313,18 @@ export function registerDetailShellRuntime(runtime, env) {
           });
         }
         try {
+          const payload = new FormData();
+          payload.set('name', name);
+          payload.set('type', type);
+          payload.set('ip', ip);
+          payload.set('username', username);
+          payload.set('password', password);
+          if (clearModelOverride) payload.set('clearModelOverride', 'true');
+          if (lowOverrideEnabled && lowModelFile) payload.set('lowModelFile', lowModelFile);
+          if (highOverrideEnabled && highModelFile) payload.set('highModelFile', highModelFile);
           const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(selectedRobotId)}`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, type, ip, model, username, password }),
+            body: payload,
           });
           if (!response.ok) {
             const responseText = await response.text();
@@ -1708,7 +2333,6 @@ export function registerDetailShellRuntime(runtime, env) {
           }
           setEditRobotMessage('Robot updated successfully.', 'ok');
           await refreshRobotsFromBackendSnapshot();
-          populateEditRobotSelectOptions(selectedRobotId);
         } finally {
           state.isEditRobotInProgress = false;
           if (editRobotSaveButton) {
@@ -1752,22 +2376,102 @@ export function registerDetailShellRuntime(runtime, env) {
         }
       }
 
+  async function saveRobotTypeEditsFromForm() {
+        const selectedTypeId = normalizeText(editRobotTypeManageSelect?.value, '');
+        if (!selectedTypeId || state.isEditRobotTypeInProgress) return;
+        const form = new FormData(editRobotTypeForm);
+        const name = normalizeText(form.get('name'), '');
+        const clearModel = Boolean(editRobotTypeClearModelInput?.checked);
+        const lowModelFile = editRobotTypeLowModelFileInput?.files?.[0] || null;
+        const highModelFile = editRobotTypeHighModelFileInput?.files?.[0] || null;
+        if (!name) {
+          setEditRobotTypeMessage('Display name is required.', 'error');
+          return;
+        }
+        if (clearModel && (lowModelFile || highModelFile)) {
+          setEditRobotTypeMessage('Choose either class model removal or replacement uploads, not both.', 'error');
+          return;
+        }
+        state.isEditRobotTypeInProgress = true;
+        if (editRobotTypeSaveButton) {
+          setActionButtonLoading(editRobotTypeSaveButton, true, {
+            loadingLabel: 'Saving...',
+            idleLabel: 'Save type',
+          });
+        }
+        try {
+          const payload = new FormData();
+          payload.set('name', name);
+          if (clearModel) payload.set('clearModel', 'true');
+          if (lowModelFile) payload.set('lowModelFile', lowModelFile);
+          if (highModelFile) payload.set('highModelFile', highModelFile);
+          const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(selectedTypeId)}`), {
+            method: 'PUT',
+            body: payload,
+          });
+          if (!response.ok) {
+            setEditRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to update robot type.'), 'error');
+            return;
+          }
+          setEditRobotTypeMessage('Robot type updated successfully.', 'ok');
+          await refreshRobotsFromBackendSnapshot();
+        } finally {
+          state.isEditRobotTypeInProgress = false;
+          if (editRobotTypeSaveButton) {
+            setActionButtonLoading(editRobotTypeSaveButton, false, { idleLabel: 'Save type' });
+          }
+        }
+      }
+
+  async function deleteSelectedRobotTypeFromForm() {
+        const selectedTypeId = normalizeText(editRobotTypeManageSelect?.value, '');
+        if (!selectedTypeId || state.isDeleteRobotTypeInProgress) return;
+        const typeConfig = getRobotTypeById(selectedTypeId);
+        const label = normalizeText(typeConfig?.label, selectedTypeId);
+        if (!window.confirm(`Delete robot type "${label}"? This cannot be undone.`)) {
+          return;
+        }
+        state.isDeleteRobotTypeInProgress = true;
+        if (editRobotTypeDeleteButton) {
+          setActionButtonLoading(editRobotTypeDeleteButton, true, {
+            loadingLabel: 'Deleting...',
+            idleLabel: 'Delete type',
+          });
+        }
+        try {
+          const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(selectedTypeId)}`), {
+            method: 'DELETE',
+          });
+          if (!response.ok) {
+            setEditRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to delete robot type.'), 'error');
+            return;
+          }
+          setEditRobotTypeMessage('Robot type deleted.', 'ok');
+          await refreshRobotsFromBackendSnapshot();
+        } finally {
+          state.isDeleteRobotTypeInProgress = false;
+          if (editRobotTypeDeleteButton) {
+            setActionButtonLoading(editRobotTypeDeleteButton, false, { idleLabel: 'Delete type' });
+          }
+        }
+      }
+
   async function createRobotTypeFromForm() {
         if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
         const form = new FormData(addRobotTypeForm);
         const name = normalizeText(form.get('name'), '');
-        const modelFileName = normalizeText(form.get('modelFileName'), '');
-        const modelQualityBasePath = normalizeText(form.get('modelQualityBasePath'), '');
         const topics = normalizeText(form.get('topics'), '')
           .split(',')
           .map((topic) => normalizeText(topic, ''))
           .filter(Boolean);
+        const lowModelFile = addRobotTypeLowModelFileInput?.files?.[0] || null;
+        const highModelFile = addRobotTypeHighModelFileInput?.files?.[0] || null;
         if (!name) {
           setAddRobotTypeMessage('Display name is required.', 'error');
           return;
         }
-        if (!modelFileName) {
-          setAddRobotTypeMessage('Model file name is required.', 'error');
+        if (!lowModelFile || !highModelFile) {
+          setAddRobotTypeMessage('Both low and high quality model files are required.', 'error');
           return;
         }
         state.isCreateRobotTypeInProgress = true;
@@ -1778,35 +2482,23 @@ export function registerDetailShellRuntime(runtime, env) {
           });
         }
         try {
+          const payload = new FormData();
+          payload.set('name', name);
+          if (topics.length) payload.set('topics', topics.join(','));
+          payload.set('lowModelFile', lowModelFile);
+          payload.set('highModelFile', highModelFile);
           const response = await fetch(buildApiUrl('/api/robot-types'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              topics,
-              model: {
-                file_name: modelFileName,
-                path_to_quality_folders: modelQualityBasePath || undefined,
-              },
-            }),
+            body: payload,
           });
           if (!response.ok) {
-            const raw = await response.text();
-            let message = raw;
-            try {
-              const parsed = JSON.parse(raw);
-              message = normalizeText(parsed?.detail, raw);
-            } catch (_error) {
-              // keep raw response text
-            }
-            setAddRobotTypeMessage(message || 'Unable to create robot type.', 'error');
+            setAddRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to create robot type.'), 'error');
             return;
           }
           setAddRobotTypeMessage('Robot type created and saved.', 'ok');
-          await loadRobotTypeConfig();
-          populateAddRobotTypeOptions();
-          populateEditRobotSelectOptions(state.selectedManageRobotId);
+          await refreshRobotsFromBackendSnapshot();
           if (addRobotTypeForm) addRobotTypeForm.reset();
+          resetRobotTypeUploadInputs();
         } finally {
           state.isCreateRobotTypeInProgress = false;
           if (addRobotTypeSaveButton) {
@@ -1844,6 +2536,7 @@ export function registerDetailShellRuntime(runtime, env) {
         populateFilters();
         populateAddRobotTypeOptions();
         populateEditRobotSelectOptions(previousManageRobotId);
+        populateEditRobotTypeOptions(state.selectedManageRobotTypeId);
         renderRecorderRobotOptions();
   
         if (dashboard.classList.contains('active')) {
@@ -1880,6 +2573,12 @@ export function registerDetailShellRuntime(runtime, env) {
     parseManageRoute,
     setLocationHash,
     isManageViewActive,
+    normalizeRobotRegistryPanel,
+    setActiveRobotRegistryPanel,
+    initRobotRegistryPanels,
+    initRobotOverrideControls,
+    initRobotTypeUploadInputs,
+    resetRobotTypeUploadInputs,
     hideRecorderReadPopover,
     syncRecorderReadPopoverVisibility,
     closeRecorderTerminalSession,
@@ -1908,15 +2607,20 @@ export function registerDetailShellRuntime(runtime, env) {
     openTestDebugModal,
     populateFilters,
     populateAddRobotTypeOptions,
+    populateEditRobotTypeOptions,
     populateEditRobotSelectOptions,
     fillEditRobotForm,
+    fillEditRobotTypeForm,
     setAddRobotMessage,
     setEditRobotMessage,
+    setEditRobotTypeMessage,
     setAddRobotTypeMessage,
     setAddRobotPasswordVisibility,
     createRobotFromForm,
     saveRobotEditsFromForm,
     deleteSelectedRobotFromForm,
+    saveRobotTypeEditsFromForm,
+    deleteSelectedRobotTypeFromForm,
     createRobotTypeFromForm,
     refreshRobotsFromBackendSnapshot,
     initAddRobotPasswordToggle,

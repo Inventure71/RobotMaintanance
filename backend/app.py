@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
         os.getenv("FIX_DEFINITIONS_DIR", str(DEFAULT_FIX_DEFINITIONS_DIR))
     ).resolve()
     logs_path = Path(os.getenv("BUG_REPORTS_DIR", str(PROJECT_ROOT / "logs"))).resolve()
+    model_assets_root = Path(os.getenv("MODEL_ASSETS_ROOT", str(PROJECT_ROOT / "assets" / "models"))).resolve()
 
     catalog = RobotCatalog.load_from_paths(
         robots_path=config_path,
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
             catalog.robot_types_by_id,
             config_path,
             robot_types_config_path=robot_types_path,
+            robot_models_root=model_assets_root,
             runtime_tests_provider=terminal_manager.get_runtime_tests,
             runtime_activity_provider=terminal_manager.get_runtime_activity,
             runtime_snapshot_provider=terminal_manager.get_runtime_snapshot_since,

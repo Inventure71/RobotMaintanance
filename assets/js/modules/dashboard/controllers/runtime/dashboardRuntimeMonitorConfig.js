@@ -767,11 +767,27 @@ export function registerMonitorConfigRuntime(runtime, env) {
             const rawModel = entry.model && typeof entry.model === 'object' ? entry.model : {};
             const modelFileName = normalizeText(rawModel.file_name, '');
             const modelPath = normalizeText(rawModel.path_to_quality_folders, '');
+            const assetVersion = normalizeText(rawModel.asset_version, '');
+            const availableQualitiesRaw = Array.isArray(rawModel.available_qualities)
+              ? rawModel.available_qualities
+              : Array.isArray(rawModel.availableQualities)
+                ? rawModel.availableQualities
+                : null;
+            const availableQualities = Array.isArray(availableQualitiesRaw)
+              ? availableQualitiesRaw
+                  .map((quality) => normalizeText(quality, '').toLowerCase())
+                  .filter(
+                    (quality, index, list) =>
+                      (quality === 'low' || quality === 'high') && list.indexOf(quality) === index,
+                  )
+              : null;
             const model =
               modelFileName || modelPath
                 ? {
                     file_name: modelFileName,
                     path_to_quality_folders: modelPath,
+                    ...(assetVersion ? { asset_version: assetVersion } : {}),
+                    ...(availableQualities !== null ? { available_qualities: availableQualities } : {}),
                   }
                 : null;
   
@@ -820,7 +836,10 @@ export function registerMonitorConfigRuntime(runtime, env) {
 
   function getRobotDefinitionsForType(typeId) {
         const typeCfg = getRobotTypeConfig(typeId);
-        return typeCfg?.tests && typeCfg.tests.length ? typeCfg.tests : DEFAULT_TEST_DEFINITIONS;
+        if (typeCfg) {
+          return Array.isArray(typeCfg.tests) ? typeCfg.tests : [];
+        }
+        return DEFAULT_TEST_DEFINITIONS;
       }
 
   function getAutoFixesForType(typeId) {
