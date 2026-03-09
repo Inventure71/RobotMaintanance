@@ -59,7 +59,10 @@
     {
       "id": "rosbot-3-pro",
       "name": "Rosbot 3 Pro",
-      "testRefs": [],
+      "testRefs": [
+        "online",
+        "battery"
+      ],
       "fixRefs": [],
       "topics": [],
       "model": {

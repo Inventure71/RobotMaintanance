@@ -279,7 +279,7 @@
                       </div>
                       <p class="muted-copy">Leave blank if this robot type should not run live battery polling.</p>
                       <div id="editRobotTypeBatteryInfo" class="battery-command-help hidden">
-                        <p class="muted-copy">Give ChatGPT the ROS 1 example below and ask for the equivalent battery-check command for the robot you are implementing. Ask it to return one shell command you can paste into this field.</p>
+                        <p class="muted-copy">This is the shell command the app runs to get the current battery voltage each poll. Use one command that prints the voltage immediately (or a numeric value you can parse), and keep it to a single command line. For example, this ROS 1 one-shot read of /battery:</p>
                         <pre class="battery-command-example">source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery</pre>
                       </div>
                       <textarea id="editRobotTypeBatteryCommand" class="form-input manage-json-input" name="batteryCommand" rows="3"
@@ -416,7 +416,7 @@
                         </div>
                         <p class="muted-copy">Leave blank if this type should not run live battery polling.</p>
                         <div id="addRobotTypeBatteryInfo" class="battery-command-help hidden">
-                          <p class="muted-copy">Give ChatGPT the ROS 1 example below and ask for the equivalent battery-check command for the robot you are implementing. Ask it to return one shell command you can paste into this field.</p>
+                          <p class="muted-copy">This is the shell command the app runs to fetch the robot&apos;s current battery voltage each poll. Use one command that returns the instantaneous voltage reading, preferably as a single numeric/string line (or easy to parse output), and keep the command to one line. Example ROS 1 one-shot read:</p>
                           <pre class="battery-command-example">source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery</pre>
                         </div>
                         <textarea id="addRobotTypeBatteryCommand" class="form-input manage-json-input" name="batteryCommand" rows="3"
