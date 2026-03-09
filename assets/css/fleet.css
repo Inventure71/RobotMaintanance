@@ -1177,6 +1177,51 @@
       text-transform: uppercase;
     }
 
+    .battery-command-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .battery-command-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: #d6e2ff;
+      text-transform: uppercase;
+    }
+
+    .battery-command-help {
+      display: grid;
+      gap: 0.45rem;
+      margin-bottom: 0.2rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid rgba(138, 198, 255, 0.24);
+      border-radius: 12px;
+      background: rgba(8, 15, 30, 0.55);
+    }
+
+    .battery-command-help .muted-copy {
+      margin: 0;
+    }
+
+    .battery-command-example {
+      margin: 0;
+      padding: 0.75rem;
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(138, 198, 255, 0.2);
+      background: rgba(4, 10, 24, 0.86);
+      color: #d8e8ff;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.75rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .manage-editor-actions {
       display: flex;
       align-items: center;

@@ -85,6 +85,9 @@ export function registerDetailShellRuntime(runtime, env) {
     addRobotTypeForm,
     addRobotTypeMessage,
     addRobotTypeNameInput,
+    addRobotTypeBatteryCommandInput,
+    addRobotTypeBatteryInfoButton,
+    addRobotTypeBatteryInfo,
     addRobotTypeLowModelDropzone,
     addRobotTypeLowModelFileInput,
     addRobotTypeLowModelFileName,
@@ -141,6 +144,9 @@ export function registerDetailShellRuntime(runtime, env) {
     editRobotTypeForm,
     editRobotTypeIdInput,
     editRobotTypeNameInput,
+    editRobotTypeBatteryCommandInput,
+    editRobotTypeBatteryInfoButton,
+    editRobotTypeBatteryInfo,
     editRobotTypeLowModelDropzone,
     editRobotTypeLowModelFileInput,
     editRobotTypeLowModelFileName,
@@ -1243,6 +1249,8 @@ export function registerDetailShellRuntime(runtime, env) {
         editRobotTypeClearModelInput?.addEventListener('change', () => {
           syncEditRobotTypeModelControls(getRobotTypeById(editRobotTypeManageSelect?.value));
         });
+        bindBatteryInfoToggle(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo);
+        bindBatteryInfoToggle(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo);
         resetRobotTypeUploadInputs();
       }
 
@@ -1332,6 +1340,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (addRobotTypeForm) {
           addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
+          resetRobotTypeBatteryInfoPanels();
         }
         resetRobotOverrideControls({
           lowSelect: addRobotOverrideLowModelSelect,
@@ -1361,7 +1370,12 @@ export function registerDetailShellRuntime(runtime, env) {
           setLocationHash(buildManageHash(activeTab));
         }
         if (refreshDefinitions) {
-          loadDefinitionsSummary();
+          Promise.resolve(loadDefinitionsSummary()).finally(() => {
+            resetRobotTypeBatteryInfoPanels();
+            fillEditRobotTypeForm(getRobotTypeById(state.selectedManageRobotTypeId));
+          });
+        } else {
+          resetRobotTypeBatteryInfoPanels();
         }
       }
 
@@ -1376,6 +1390,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (addRobotTypeForm) {
           addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
+          resetRobotTypeBatteryInfoPanels();
         }
         resetRobotOverrideControls({
           lowSelect: addRobotOverrideLowModelSelect,
@@ -1869,6 +1884,28 @@ export function registerDetailShellRuntime(runtime, env) {
         return env.ROBOT_TYPE_BY_ID.get(normalizeTypeId(typeId)) || null;
       }
 
+  function setBatteryInfoExpanded(buttonNode, panelNode, expanded) {
+        if (!panelNode) return;
+        panelNode.classList.toggle('hidden', !expanded);
+        if (buttonNode) {
+          buttonNode.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        }
+      }
+
+  function bindBatteryInfoToggle(buttonNode, panelNode) {
+        if (!buttonNode || !panelNode || buttonNode.dataset.infoToggleBound === 'true') return;
+        buttonNode.dataset.infoToggleBound = 'true';
+        buttonNode.addEventListener('click', () => {
+          const expanded = buttonNode.getAttribute('aria-expanded') === 'true';
+          setBatteryInfoExpanded(buttonNode, panelNode, !expanded);
+        });
+      }
+
+  function resetRobotTypeBatteryInfoPanels() {
+        setBatteryInfoExpanded(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo, false);
+        setBatteryInfoExpanded(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo, false);
+      }
+
   function countRobotsForType(typeId) {
         const typeKey = normalizeTypeId(typeId);
         return state.robots.filter((robot) => normalizeTypeId(robot?.typeId || robot?.type) === typeKey).length;
@@ -2053,8 +2090,10 @@ export function registerDetailShellRuntime(runtime, env) {
         if (!typeConfig) {
           if (editRobotTypeIdInput) editRobotTypeIdInput.value = '';
           if (editRobotTypeNameInput) editRobotTypeNameInput.value = '';
+          if (editRobotTypeBatteryCommandInput) editRobotTypeBatteryCommandInput.value = '';
           if (editRobotTypeForm) editRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
+          resetRobotTypeBatteryInfoPanels();
           if (editRobotTypeSummary) editRobotTypeSummary.textContent = 'Select a robot type to view details.';
           if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = true;
           if (editRobotTypeDeleteButton) editRobotTypeDeleteButton.disabled = true;
@@ -2065,12 +2104,17 @@ export function registerDetailShellRuntime(runtime, env) {
         if (editRobotTypeForm) editRobotTypeForm.reset();
         if (editRobotTypeIdInput) editRobotTypeIdInput.value = typeId;
         if (editRobotTypeNameInput) editRobotTypeNameInput.value = normalizeText(typeConfig.label, typeId);
+        if (editRobotTypeBatteryCommandInput) {
+          editRobotTypeBatteryCommandInput.value = normalizeText(typeConfig?.batteryCommand, '');
+        }
         resetRobotTypeUploadInputs();
+        resetRobotTypeBatteryInfoPanels();
         if (editRobotTypeSummary) {
           const modelFileName = normalizeText(typeConfig?.model?.file_name, 'no model');
           const lowAvailable = modelSupportsQuality(typeConfig?.model, 'low') ? 'configured' : 'missing';
           const highAvailable = modelSupportsQuality(typeConfig?.model, 'high') ? 'configured' : 'missing';
-          editRobotTypeSummary.textContent = `Assigned robots: ${assignedRobotCount} • Model: ${modelFileName} • Low: ${lowAvailable} • High: ${highAvailable}`;
+          const batteryState = normalizeText(typeConfig?.batteryCommand, '') ? 'configured' : 'off';
+          editRobotTypeSummary.textContent = `Assigned robots: ${assignedRobotCount} • Battery: ${batteryState} • Model: ${modelFileName} • Low: ${lowAvailable} • High: ${highAvailable}`;
         }
         syncEditRobotTypeModelControls(typeConfig);
         if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = false;
@@ -2381,6 +2425,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (!selectedTypeId || state.isEditRobotTypeInProgress) return;
         const form = new FormData(editRobotTypeForm);
         const name = normalizeText(form.get('name'), '');
+        const batteryCommand = normalizeText(form.get('batteryCommand'), '');
         const clearModel = Boolean(editRobotTypeClearModelInput?.checked);
         const lowModelFile = editRobotTypeLowModelFileInput?.files?.[0] || null;
         const highModelFile = editRobotTypeHighModelFileInput?.files?.[0] || null;
@@ -2402,6 +2447,7 @@ export function registerDetailShellRuntime(runtime, env) {
         try {
           const payload = new FormData();
           payload.set('name', name);
+          payload.set('batteryCommand', batteryCommand);
           if (clearModel) payload.set('clearModel', 'true');
           if (lowModelFile) payload.set('lowModelFile', lowModelFile);
           if (highModelFile) payload.set('highModelFile', highModelFile);
@@ -2414,6 +2460,7 @@ export function registerDetailShellRuntime(runtime, env) {
             return;
           }
           setEditRobotTypeMessage('Robot type updated successfully.', 'ok');
+          await loadRobotTypeConfig();
           await refreshRobotsFromBackendSnapshot();
         } finally {
           state.isEditRobotTypeInProgress = false;
@@ -2460,6 +2507,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
         const form = new FormData(addRobotTypeForm);
         const name = normalizeText(form.get('name'), '');
+        const batteryCommand = normalizeText(form.get('batteryCommand'), '');
         const topics = normalizeText(form.get('topics'), '')
           .split(',')
           .map((topic) => normalizeText(topic, ''))
@@ -2484,6 +2532,7 @@ export function registerDetailShellRuntime(runtime, env) {
         try {
           const payload = new FormData();
           payload.set('name', name);
+          payload.set('batteryCommand', batteryCommand);
           if (topics.length) payload.set('topics', topics.join(','));
           payload.set('lowModelFile', lowModelFile);
           payload.set('highModelFile', highModelFile);
@@ -2495,10 +2544,13 @@ export function registerDetailShellRuntime(runtime, env) {
             setAddRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to create robot type.'), 'error');
             return;
           }
+          await response.json();
           setAddRobotTypeMessage('Robot type created and saved.', 'ok');
+          await loadRobotTypeConfig();
           await refreshRobotsFromBackendSnapshot();
           if (addRobotTypeForm) addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
+          resetRobotTypeBatteryInfoPanels();
         } finally {
           state.isCreateRobotTypeInProgress = false;
           if (addRobotTypeSaveButton) {

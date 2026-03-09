@@ -276,6 +276,9 @@ let ROBOT_TYPE_BY_ID = new Map();
     const editRobotTypeForm = $('#editRobotTypeForm');
     const editRobotTypeIdInput = $('#editRobotTypeId');
     const editRobotTypeNameInput = $('#editRobotTypeName');
+    const editRobotTypeBatteryCommandInput = $('#editRobotTypeBatteryCommand');
+    const editRobotTypeBatteryInfoButton = $('#editRobotTypeBatteryInfoButton');
+    const editRobotTypeBatteryInfo = $('#editRobotTypeBatteryInfo');
     const editRobotTypeLowModelDropzone = $('#editRobotTypeLowModelDropzone');
     const editRobotTypeLowModelFileInput = $('#editRobotTypeLowModelFile');
     const editRobotTypeLowModelFileName = $('#editRobotTypeLowModelFileName');
@@ -290,6 +293,9 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotTypeForm = $('#addRobotTypeForm');
     const addRobotTypeMessage = $('#addRobotTypeMessage');
     const addRobotTypeNameInput = $('#addRobotTypeName');
+    const addRobotTypeBatteryCommandInput = $('#addRobotTypeBatteryCommand');
+    const addRobotTypeBatteryInfoButton = $('#addRobotTypeBatteryInfoButton');
+    const addRobotTypeBatteryInfo = $('#addRobotTypeBatteryInfo');
     const addRobotTypeLowModelDropzone = $('#addRobotTypeLowModelDropzone');
     const addRobotTypeLowModelFileInput = $('#addRobotTypeLowModelFile');
     const addRobotTypeLowModelFileName = $('#addRobotTypeLowModelFileName');
@@ -327,6 +333,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
     const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
     const recorderRunAtConnectionInput = $('#recorderRunAtConnectionInput');
+    const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
     const recorderPublishTestButton = $('#recorderPublishTest');
     const recorderStatus = $('#recorderStatus');
     const recorderPublishStatus = $('#recorderPublishStatus');
@@ -472,6 +479,9 @@ const runtimeEnv = {
   addRobotTypeForm,
   addRobotTypeMessage,
   addRobotTypeNameInput,
+  addRobotTypeBatteryCommandInput,
+  addRobotTypeBatteryInfoButton,
+  addRobotTypeBatteryInfo,
   addRobotTypeLowModelDropzone,
   addRobotTypeLowModelFileInput,
   addRobotTypeLowModelFileName,
@@ -528,6 +538,9 @@ const runtimeEnv = {
   editRobotTypeForm,
   editRobotTypeIdInput,
   editRobotTypeNameInput,
+  editRobotTypeBatteryCommandInput,
+  editRobotTypeBatteryInfoButton,
+  editRobotTypeBatteryInfo,
   editRobotTypeLowModelDropzone,
   editRobotTypeLowModelFileInput,
   editRobotTypeLowModelFileName,
@@ -594,6 +607,7 @@ const runtimeEnv = {
   recorderDefinitionIdInput,
   recorderDefinitionLabelInput,
   recorderRunAtConnectionInput,
+  recorderRobotTypeTargets,
   recorderFlowBlocks,
   recorderLastEditingOutputKey,
   recorderLastEditingReadBlockId,

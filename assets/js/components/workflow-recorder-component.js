@@ -183,6 +183,92 @@ export class WorkflowRecorderComponent {
     this.render();
   }
 
+  _expandReadRules(readSpec) {
+    if (!readSpec || typeof readSpec !== 'object') return [];
+    const kind = normalizeText(readSpec.kind, '').toLowerCase();
+    if (kind === 'all_of') {
+      const rules = Array.isArray(readSpec.rules) ? readSpec.rules : [];
+      return rules
+        .filter((rule) => rule && typeof rule === 'object')
+        .map((rule) => ({ ...rule }));
+    }
+    return [{ ...readSpec }];
+  }
+
+  _deriveOutputKey({ definitionId, check, index }) {
+    const normalizedDefinitionId = normalizeToken(definitionId, '');
+    const rawCheckId = normalizeText(check?.id, '');
+    if (normalizedDefinitionId && rawCheckId.startsWith(`${normalizedDefinitionId}__`)) {
+      return normalizeToken(rawCheckId.slice(normalizedDefinitionId.length + 2), `output_${index + 1}`);
+    }
+    return normalizeToken(rawCheckId, normalizeToken(check?.label, `output_${index + 1}`));
+  }
+
+  loadTestDefinition(definition = {}) {
+    const definitionId = normalizeToken(definition?.id, '');
+    const execute = Array.isArray(definition?.execute) ? definition.execute : [];
+    const checks = Array.isArray(definition?.checks) ? definition.checks : [];
+
+    this.started = true;
+    this.outputs = [];
+    this.blocks = [];
+    this.outputEditKey = '';
+    this.readEditBlockId = '';
+    this._writeCount = 0;
+    this._readCount = 0;
+    this.clearTerminal();
+    this.setPublishStatus('', '');
+
+    this.blocks = execute.map((step, index) => ({
+      id: normalizeText(step?.id, `write_${index + 1}`),
+      type: 'write',
+      command: normalizeText(step?.command, ''),
+      saveAs: normalizeToken(step?.saveAs, `out_${index + 1}`),
+      outputText: '',
+    }));
+    this._writeCount = this.blocks.length;
+
+    checks.forEach((check, index) => {
+      const outputKey = this._deriveOutputKey({ definitionId, check, index });
+      if (!this.outputs.some((output) => output.key === outputKey)) {
+        this.outputs.push({
+          key: outputKey,
+          label: normalizeText(check?.label, outputKey),
+          icon: normalizeText(check?.icon, '🧪'),
+          passDetails: normalizeText(check?.pass?.details, `${normalizeText(check?.label, outputKey)} checks passed.`),
+          failDetails: normalizeText(check?.fail?.details, `${normalizeText(check?.label, outputKey)} checks failed.`),
+          runAtConnection: check?.runAtConnection !== false,
+        });
+      }
+
+      this._expandReadRules(check?.read).forEach((rule) => {
+        const kind = normalizeText(rule?.kind, '').toLowerCase();
+        if (!kind) return;
+        this._readCount += 1;
+        this.blocks.push({
+          id: `read_${this._readCount}`,
+          type: 'read',
+          outputKey,
+          read: {
+            ...rule,
+            kind,
+            inputRef: normalizeText(rule?.inputRef, ''),
+          },
+        });
+      });
+    });
+
+    this.setStatus(
+      `Loaded existing test '${normalizeText(definition?.id, 'definition')}' into the flow builder.`,
+      'ok',
+    );
+    this.render();
+    return {
+      outputCount: this.outputs.length,
+      blockCount: this.blocks.length,
+    };
+  }
+
   _nextSaveAs() {
     const used = new Set(this._getWriteBlocks().map((block) => normalizeText(block.saveAs, '')));
     let cursor = this._getWriteBlocks().length + 1;

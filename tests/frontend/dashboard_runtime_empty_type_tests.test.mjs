@@ -167,3 +167,31 @@ test('getConfiguredDefaultTestIds does not inject global tests for known empty t
     ['general'],
   );
 });
+
+test('setRobotTypeDefinitions preserves robot type test refs and battery command metadata', async () => {
+  const registerMonitorConfigRuntime = await loadNamedExport(
+    MONITOR_MODULE_PATH,
+    'registerMonitorConfigRuntime',
+  );
+  const env = makeEnv();
+  const runtime = makeRuntime();
+  const api = registerMonitorConfigRuntime(runtime, env);
+
+  api.setRobotTypeDefinitions([
+    {
+      typeId: 'rosbot-2-pro',
+      label: 'Rosbot 2 Pro',
+      testRefs: ['battery', 'online'],
+      fixRefs: ['flash_fix'],
+      autoMonitor: { batteryCommand: 'echo battery state' },
+      tests: [{ id: 'battery', label: 'Battery' }],
+      autoFixes: [],
+      topics: ['/battery'],
+    },
+  ]);
+
+  const typeConfig = env.ROBOT_TYPE_BY_ID.get('rosbot-2-pro');
+  assert.deepEqual(Array.from(typeConfig.testRefs), ['battery', 'online']);
+  assert.deepEqual(Array.from(typeConfig.fixRefs), ['flash_fix']);
+  assert.equal(typeConfig.batteryCommand, 'echo battery state');
+});

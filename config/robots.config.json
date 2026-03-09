@@ -70,6 +70,16 @@
         "username": "husarion",
         "password": "husarion"
       }
+    },
+    {
+      "id": "icarus",
+      "name": "icarus",
+      "type": "rosbot-3-pro",
+      "ip": "icarus.robotics.lab",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
     }
   ]
 }

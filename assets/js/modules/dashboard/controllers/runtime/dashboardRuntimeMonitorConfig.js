@@ -764,6 +764,13 @@ export function registerMonitorConfigRuntime(runtime, env) {
             const topics = Array.isArray(entry.topics)
               ? entry.topics.map((topic) => normalizeText(topic, '')).filter(Boolean)
               : [];
+            const testRefs = Array.isArray(entry.testRefs)
+              ? entry.testRefs.map((testId) => normalizeText(testId, '')).filter(Boolean)
+              : [];
+            const fixRefs = Array.isArray(entry.fixRefs)
+              ? entry.fixRefs.map((fixId) => normalizeText(fixId, '')).filter(Boolean)
+              : [];
+            const batteryCommand = normalizeText(entry?.autoMonitor?.batteryCommand, '');
             const rawModel = entry.model && typeof entry.model === 'object' ? entry.model : {};
             const modelFileName = normalizeText(rawModel.file_name, '');
             const modelPath = normalizeText(rawModel.path_to_quality_folders, '');
@@ -796,6 +803,9 @@ export function registerMonitorConfigRuntime(runtime, env) {
               typeKey: normalizeTypeId(typeId),
               label: normalizeText(entry.label, normalizeText(entry.name, typeId)),
               topics,
+              testRefs,
+              fixRefs,
+              batteryCommand,
               tests,
               autoFixes,
               model,

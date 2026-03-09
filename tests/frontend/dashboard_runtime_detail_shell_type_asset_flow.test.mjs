@@ -59,6 +59,8 @@ function makeClassList(initial = []) {
 }
 
 function makeNode(value = '') {
+  const attributes = new Map();
+  const listeners = new Map();
   return {
     value,
     textContent: '',
@@ -66,9 +68,21 @@ function makeNode(value = '') {
     classList: makeClassList(),
     replaceChildren: () => {},
     appendChild: () => {},
+    append: () => {},
     querySelector: () => null,
     querySelectorAll: () => [],
-    setAttribute: () => {},
+    addEventListener: (event, handler) => {
+      listeners.set(event, handler);
+    },
+    click: () => {
+      const handler = listeners.get('click');
+      if (handler) handler();
+    },
+    setAttribute: (name, nextValue) => {
+      attributes.set(name, String(nextValue));
+    },
+    getAttribute: (name) => attributes.get(name) ?? null,
+    dataset: {},
   };
 }
 
@@ -97,7 +111,7 @@ async function loadApi(fetchImpl) {
       clearInterval,
     },
     document: {
-      createElement: () => ({ classList: makeClassList() }),
+      createElement: () => makeNode(),
     },
   };
   vm.runInNewContext(transformed, context, { filename: MODULE_PATH });
@@ -106,6 +120,10 @@ async function loadApi(fetchImpl) {
 
 function makeRuntime(calls, env) {
   const runtime = {
+    loadRobotTypeConfig: async () => {
+      calls.loadRobotTypeConfig += 1;
+      return [];
+    },
     loadRobotsFromBackend: async () => {
       calls.loadRobotsFromBackend += 1;
       return [];
@@ -113,6 +131,8 @@ function makeRuntime(calls, env) {
     setRobots: (robots) => {
       env.state.robots = robots;
     },
+    normalizeIdList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
+    normalizeDefinitionsSummary: (value) => value,
     getRobotById: () => null,
     getRobotTypeConfig: () => null,
   };
@@ -125,10 +145,38 @@ function makeRuntime(calls, env) {
 }
 
 function makeEnv() {
-  const editRobotTypeForm = { __formEntries: [['name', 'Rosbot 2 Pro Updated']], resetCalled: 0 };
+  const addRobotTypeLowModelDropzone = makeNode();
+  const addRobotTypeLowModelFileInput = makeNode();
+  addRobotTypeLowModelFileInput.files = [];
+  const addRobotTypeHighModelDropzone = makeNode();
+  const addRobotTypeHighModelFileInput = makeNode();
+  addRobotTypeHighModelFileInput.files = [];
+  const editRobotTypeLowModelDropzone = makeNode();
+  const editRobotTypeLowModelFileInput = makeNode();
+  editRobotTypeLowModelFileInput.files = [];
+  const editRobotTypeHighModelDropzone = makeNode();
+  const editRobotTypeHighModelFileInput = makeNode();
+  editRobotTypeHighModelFileInput.files = [];
+  const editRobotTypeClearModelInput = makeNode();
+  editRobotTypeClearModelInput.checked = false;
+  const editRobotTypeForm = {
+    __formEntries: [
+      ['name', 'Rosbot 2 Pro Updated'],
+      ['batteryCommand', ''],
+    ],
+    resetCalled: 0,
+  };
   editRobotTypeForm.reset = () => {
     editRobotTypeForm.resetCalled += 1;
   };
+  const editRobotTypeBatteryInfoButton = makeNode();
+  editRobotTypeBatteryInfoButton.setAttribute('aria-expanded', 'false');
+  const addRobotTypeBatteryInfoButton = makeNode();
+  addRobotTypeBatteryInfoButton.setAttribute('aria-expanded', 'false');
+  const editRobotTypeBatteryInfo = makeNode();
+  editRobotTypeBatteryInfo.classList.add('hidden');
+  const addRobotTypeBatteryInfo = makeNode();
+  addRobotTypeBatteryInfo.classList.add('hidden');
   return {
     normalizeText,
     normalizeTypeId,
@@ -151,9 +199,14 @@ function makeEnv() {
     detail: { classList: makeClassList() },
     editRobotTypeManageSelect: makeNode('rosbot-2-pro'),
     editRobotTypeForm,
-    editRobotTypeLowModelFileInput: { files: [] },
-    editRobotTypeHighModelFileInput: { files: [] },
-    editRobotTypeClearModelInput: { checked: false },
+    editRobotTypeBatteryCommandInput: makeNode(''),
+    editRobotTypeBatteryInfoButton,
+    editRobotTypeBatteryInfo,
+    editRobotTypeLowModelDropzone,
+    editRobotTypeLowModelFileInput,
+    editRobotTypeHighModelDropzone,
+    editRobotTypeHighModelFileInput,
+    editRobotTypeClearModelInput,
     editRobotTypeClearModelField: makeNode(),
     editRobotTypeModelStatus: makeNode(),
     editRobotTypeSaveButton: {},
@@ -161,10 +214,15 @@ function makeEnv() {
     editRobotSelect: makeNode(),
     addRobotTypeSelect: makeNode(),
     addRobotTypeForm: { reset: () => {} },
+    addRobotTypeBatteryCommandInput: makeNode(''),
+    addRobotTypeBatteryInfoButton,
+    addRobotTypeBatteryInfo,
     addRobotTypeMessage: makeNode(),
-    addRobotTypeLowModelFileInput: { files: [] },
+    addRobotTypeLowModelDropzone,
+    addRobotTypeLowModelFileInput,
     addRobotTypeLowModelFileName: makeNode(),
-    addRobotTypeHighModelFileInput: { files: [] },
+    addRobotTypeHighModelDropzone,
+    addRobotTypeHighModelFileInput,
     addRobotTypeHighModelFileName: makeNode(),
     editRobotTypeLowModelFileName: makeNode(),
     editRobotTypeHighModelFileName: makeNode(),
@@ -189,6 +247,10 @@ function makeEnv() {
     editRobotModelStatus: makeNode(),
     ROBOT_TYPES: [],
     ROBOT_TYPE_BY_ID: new Map(),
+    TEST_DEFINITIONS: [
+      { id: 'battery', label: 'Battery' },
+      { id: 'online', label: 'Online' },
+    ],
     setActionButtonLoading: () => {},
   };
 }
@@ -204,6 +266,7 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
     };
   });
   const calls = {
+    loadRobotTypeConfig: 0,
     loadRobotsFromBackend: 0,
   };
   const env = makeEnv();
@@ -214,6 +277,38 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
 
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].url, 'http://localhost/api/robot-types/rosbot-2-pro');
+  assert.equal(calls.loadRobotTypeConfig, 1);
   assert.equal(calls.loadRobotsFromBackend, 1);
   assert.equal(env.editRobotTypeStatus.textContent, 'Robot type updated successfully.');
+});
+
+test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
+  const fetchCalls = [];
+  const registerDetailShellRuntime = await loadApi(async (url, init = {}) => {
+    fetchCalls.push({ url: String(url), init });
+    return {
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    };
+  });
+  const calls = {
+    loadRobotTypeConfig: 0,
+    loadRobotsFromBackend: 0,
+  };
+  const env = makeEnv();
+  const runtime = makeRuntime(calls, env);
+  const api = registerDetailShellRuntime(runtime, env);
+
+  api.initRobotTypeUploadInputs();
+  env.addRobotTypeBatteryInfoButton.click();
+
+  assert.equal(fetchCalls.length, 0);
+  assert.equal(env.addRobotTypeBatteryInfoButton.getAttribute('aria-expanded'), 'true');
+  assert.equal(env.addRobotTypeBatteryInfo.classList.contains('hidden'), false);
+
+  env.addRobotTypeBatteryInfoButton.click();
+
+  assert.equal(env.addRobotTypeBatteryInfoButton.getAttribute('aria-expanded'), 'false');
+  assert.equal(env.addRobotTypeBatteryInfo.classList.contains('hidden'), true);
 });

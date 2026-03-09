@@ -273,6 +273,20 @@
                       Display name
                       <input id="editRobotTypeName" class="form-input" name="name" type="text" autocomplete="off" required />
                     </label>
+                    <div class="form-field">
+                      <div class="battery-command-heading">
+                        <label for="editRobotTypeBatteryCommand" class="battery-command-label">Battery check command</label>
+                        <button id="editRobotTypeBatteryInfoButton" class="button test-info-btn" type="button"
+                          data-button-intent="utility" aria-expanded="false" aria-controls="editRobotTypeBatteryInfo">Info</button>
+                      </div>
+                      <p class="muted-copy">Leave blank if this robot type should not run live battery polling.</p>
+                      <div id="editRobotTypeBatteryInfo" class="battery-command-help hidden">
+                        <p class="muted-copy">Give ChatGPT the ROS 1 example below and ask for the equivalent battery-check command for the robot you are implementing. Ask it to return one shell command you can paste into this field.</p>
+                        <pre class="battery-command-example">source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery</pre>
+                      </div>
+                      <textarea id="editRobotTypeBatteryCommand" class="form-input manage-json-input" name="batteryCommand" rows="3"
+                        placeholder="source /opt/ros/noetic/setup.bash ..."></textarea>
+                    </div>
                     <div class="robot-type-create-grid">
                       <label class="form-field upload-dropzone-field">
                         Low quality model (optional)
@@ -388,7 +402,7 @@
                 </div>
                 <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
                   <h3 class="add-robot-side-title">Create a new robot type</h3>
-                  <p class="muted-copy">Upload both model variants. The server will rename them and place them in the low/high model folders automatically.</p>
+                  <p class="muted-copy">Upload both model variants and set the battery command in the same form.</p>
                   <div id="addRobotTypeMessage" class="add-robot-message" aria-live="polite"></div>
                   <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
                     <div class="robot-type-create-grid">
@@ -396,6 +410,20 @@
                         Display name
                         <input id="addRobotTypeName" class="form-input" name="name" type="text" placeholder="Rosbot 2 Pro V2" required />
                       </label>
+                      <div class="form-field robot-type-create-name-field">
+                        <div class="battery-command-heading">
+                          <label for="addRobotTypeBatteryCommand" class="battery-command-label">Battery check command</label>
+                          <button id="addRobotTypeBatteryInfoButton" class="button test-info-btn" type="button"
+                            data-button-intent="utility" aria-expanded="false" aria-controls="addRobotTypeBatteryInfo">Info</button>
+                        </div>
+                        <p class="muted-copy">Leave blank if this type should not run live battery polling.</p>
+                        <div id="addRobotTypeBatteryInfo" class="battery-command-help hidden">
+                          <p class="muted-copy">Give ChatGPT the ROS 1 example below and ask for the equivalent battery-check command for the robot you are implementing. Ask it to return one shell command you can paste into this field.</p>
+                          <pre class="battery-command-example">source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; timeout 6s rostopic echo -n 1 /battery</pre>
+                        </div>
+                        <textarea id="addRobotTypeBatteryCommand" class="form-input manage-json-input" name="batteryCommand" rows="3"
+                          placeholder="source /opt/ros/noetic/setup.bash ..."></textarea>
+                      </div>
                       <label class="form-field upload-dropzone-field">
                         Low quality model
                         <div id="addRobotTypeLowModelDropzone" class="upload-dropzone" data-upload-dropzone="low">

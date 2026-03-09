@@ -313,6 +313,7 @@ def test_create_robot_type_generates_id_from_name(tmp_path):
         "/api/robot-types",
         data={
             "name": "Rosbot 2 Pro V2",
+            "batteryCommand": "echo battery state",
         },
         files={
             "lowModelFile": ("low.glb", b"low-model", "model/gltf-binary"),
@@ -324,6 +325,7 @@ def test_create_robot_type_generates_id_from_name(tmp_path):
     assert payload["typeId"] == "rosbot-2-pro-v2"
     assert payload["testRefs"] == []
     assert payload["fixRefs"] == []
+    assert payload["autoMonitor"] == {"batteryCommand": "echo battery state"}
     assert payload["model"]["file_name"] == "rosbot-2-pro-v2.glb"
     assert (robot_models_root / "LowRes" / "rosbot-2-pro-v2.glb").read_bytes() == b"low-model"
     assert (robot_models_root / "HighRes" / "rosbot-2-pro-v2.glb").read_bytes() == b"high-model"
@@ -333,6 +335,7 @@ def test_create_robot_type_generates_id_from_name(tmp_path):
     assert "rosbot-2-pro-v2" in ids
     created_entry = next(entry for entry in config_payload["robotTypes"] if entry.get("id") == "rosbot-2-pro-v2")
     assert created_entry["model"]["file_name"] == "rosbot-2-pro-v2.glb"
+    assert created_entry["autoMonitor"]["batteryCommand"] == "echo battery state"
 
 
 def test_create_robot_type_requires_both_model_uploads(tmp_path):
@@ -379,6 +382,7 @@ def test_update_and_delete_robot_type_persists_config(tmp_path):
                         "testRefs": ["online"],
                         "fixRefs": [],
                         "topics": ["/battery"],
+                        "autoMonitor": {"batteryCommand": "echo initial battery"},
                         "model": {
                             "file_name": "rosbot-2-pro.glb",
                             "path_to_quality_folders": "assets/models",
@@ -405,7 +409,7 @@ def test_update_and_delete_robot_type_persists_config(tmp_path):
                     "fixRefs": [],
                     "tests": [{"id": "online"}],
                     "autoFixes": [],
-                    "autoMonitor": {},
+                    "autoMonitor": {"batteryCommand": "echo initial battery"},
                     "model": {
                         "file_name": "rosbot-2-pro.glb",
                         "path_to_quality_folders": "assets/models",
@@ -423,6 +427,7 @@ def test_update_and_delete_robot_type_persists_config(tmp_path):
         "/api/robot-types/rosbot-2-pro",
         data={
             "name": "Rosbot 2 Pro Updated",
+            "batteryCommand": "echo updated battery",
         },
         files={
             "lowModelFile": ("low.glb", b"low-updated", "model/gltf-binary"),
@@ -432,12 +437,14 @@ def test_update_and_delete_robot_type_persists_config(tmp_path):
     update_payload = update_response.json()
     assert update_payload["label"] == "Rosbot 2 Pro Updated"
     assert update_payload["topics"] == ["/battery"]
+    assert update_payload["autoMonitor"] == {"batteryCommand": "echo updated battery"}
     assert (robot_models_root / "LowRes" / "rosbot-2-pro.glb").read_bytes() == b"low-updated"
     assert (robot_models_root / "HighRes" / "rosbot-2-pro.glb").read_bytes() == b"high"
 
     config_payload = json.loads(robot_types_config_path.read_text(encoding="utf-8"))
     assert config_payload["robotTypes"][0]["name"] == "Rosbot 2 Pro Updated"
     assert config_payload["robotTypes"][0]["topics"] == ["/battery"]
+    assert config_payload["robotTypes"][0]["autoMonitor"]["batteryCommand"] == "echo updated battery"
 
     delete_response = client.delete("/api/robot-types/rosbot-2-pro")
     assert delete_response.status_code == 200
@@ -446,6 +453,79 @@ def test_update_and_delete_robot_type_persists_config(tmp_path):
     assert config_payload_after_delete["robotTypes"] == []
     assert not (robot_models_root / "LowRes" / "rosbot-2-pro.glb").exists()
     assert not (robot_models_root / "HighRes" / "rosbot-2-pro.glb").exists()
+
+
+def test_update_robot_type_can_clear_battery_command(tmp_path):
+    robot_types_config_path = tmp_path / "robot-types.config.json"
+    robot_models_root = tmp_path / "assets" / "models"
+    (robot_models_root / "LowRes").mkdir(parents=True)
+    (robot_models_root / "HighRes").mkdir(parents=True)
+    (robot_models_root / "LowRes" / "rosbot-2-pro.glb").write_bytes(b"low")
+    (robot_models_root / "HighRes" / "rosbot-2-pro.glb").write_bytes(b"high")
+    robot_types_config_path.write_text(
+        json.dumps(
+            {
+                "version": "3.0",
+                "robotTypes": [
+                    {
+                        "id": "rosbot-2-pro",
+                        "name": "Rosbot 2 Pro",
+                        "testRefs": ["battery"],
+                        "fixRefs": [],
+                        "topics": ["/battery"],
+                        "autoMonitor": {"batteryCommand": "echo initial battery"},
+                        "model": {
+                            "file_name": "rosbot-2-pro.glb",
+                            "path_to_quality_folders": "assets/models",
+                        },
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id={},
+            robot_types_by_id={
+                "rosbot-2-pro": {
+                    "typeId": "rosbot-2-pro",
+                    "typeKey": "rosbot-2-pro",
+                    "label": "Rosbot 2 Pro",
+                    "topics": ["/battery"],
+                    "testRefs": ["battery"],
+                    "fixRefs": [],
+                    "tests": [{"id": "battery"}],
+                    "autoFixes": [],
+                    "autoMonitor": {"batteryCommand": "echo initial battery"},
+                    "model": {
+                        "file_name": "rosbot-2-pro.glb",
+                        "path_to_quality_folders": "assets/models",
+                    },
+                }
+            },
+            robots_config_path=tmp_path / "robots.config.json",
+            robot_types_config_path=robot_types_config_path,
+            robot_models_root=robot_models_root,
+        )
+    )
+    client = TestClient(app)
+
+    response = client.put(
+        "/api/robot-types/rosbot-2-pro",
+        data={
+            "name": "Rosbot 2 Pro",
+            "batteryCommand": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["autoMonitor"] == {}
+    config_payload = json.loads(robot_types_config_path.read_text(encoding="utf-8"))
+    assert "autoMonitor" not in config_payload["robotTypes"][0]
 
 
 def test_update_robot_type_replacement_honors_existing_model_subpath(tmp_path):

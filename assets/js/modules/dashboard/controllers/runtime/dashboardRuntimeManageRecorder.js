@@ -141,6 +141,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     recorderDefinitionIdInput,
     recorderDefinitionLabelInput,
     recorderRunAtConnectionInput,
+    recorderRobotTypeTargets,
     recorderFlowBlocks,
     recorderLastEditingOutputKey: initialRecorderLastEditingOutputKey,
     recorderLastEditingReadBlockId: initialRecorderLastEditingReadBlockId,
@@ -681,6 +682,7 @@ export function registerManageRecorderRuntime(runtime, env) {
               }
             }
             renderTestRobotTypeTargets(id);
+            loadExistingTestIntoRecorder(testDefinition);
             if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'inline-block';
             if (!manageTestRunAtConnectionInput || inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true) !== null) {
               setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
@@ -1144,6 +1146,28 @@ export function registerManageRecorderRuntime(runtime, env) {
         syncRecorderReadKindFields();
       }
 
+  function loadExistingTestIntoRecorder(testDefinition) {
+        if (!state.workflowRecorder || !testDefinition) return;
+        const definitionId = normalizeText(testDefinition?.id, '');
+        const definitionLabel = normalizeText(testDefinition?.label, definitionId);
+        state.workflowRecorder.loadTestDefinition(testDefinition);
+        clearRecorderOutputForm();
+        clearRecorderReadForm();
+        if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = definitionId;
+        if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = definitionLabel;
+        if (recorderRunAtConnectionInput) {
+          const uniform = inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true);
+          recorderRunAtConnectionInput.checked = uniform !== null ? uniform : true;
+        }
+        renderRecorderRobotTypeTargets();
+        syncRecorderUiState();
+        setActiveManageTab('recorder', { syncHash: true, persist: true });
+        state.workflowRecorder.setPublishStatus(
+          `Loaded '${definitionId}' into the full flow builder. Outputs and read blocks are now editable.`,
+          'ok',
+        );
+      }
+
   function syncRecorderReadKindFields() {
         const kind = normalizeText(recorderReadKindSelect?.value, 'contains_string');
         const isString = kind === 'contains_string';
@@ -1208,7 +1232,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           );
         }
         if (recorderPublishTestButton) {
-          recorderPublishTestButton.disabled = !(recorderState.publishReady && robotSelected);
+          recorderPublishTestButton.disabled = !recorderState.publishReady;
         }
   
         if (recorderState.editingOutputKey !== recorderLastEditingOutputKey) {
@@ -1605,6 +1629,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     applyRecorderMappings,
     clearRecorderOutputForm,
     clearRecorderReadForm,
+    loadExistingTestIntoRecorder,
     syncRecorderReadKindFields,
     syncRecorderUiState,
     runRecorderCommandAndCapture,

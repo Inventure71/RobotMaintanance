@@ -134,6 +134,11 @@ def create_robots_router(
         existing = robot_types_by_id.get(type_key) if type_key else {}
         if not isinstance(existing, dict):
             existing = {}
+        raw_auto_monitor = raw_entry.get("autoMonitor") if isinstance(raw_entry.get("autoMonitor"), dict) else {}
+        battery_command = normalize_text(raw_auto_monitor.get("batteryCommand"), "")
+        auto_monitor = {}
+        if battery_command:
+            auto_monitor["batteryCommand"] = battery_command
         return {
             "typeId": type_id,
             "typeKey": type_key,
@@ -143,7 +148,7 @@ def create_robots_router(
             "fixRefs": list(raw_entry.get("fixRefs")) if isinstance(raw_entry.get("fixRefs"), list) else [],
             "tests": list(existing.get("tests")) if isinstance(existing.get("tests"), list) else [],
             "autoFixes": list(existing.get("autoFixes")) if isinstance(existing.get("autoFixes"), list) else [],
-            "autoMonitor": dict(existing.get("autoMonitor")) if isinstance(existing.get("autoMonitor"), dict) else {},
+            "autoMonitor": auto_monitor,
             "model": _build_response_model(raw_entry.get("model")),
         }
 
@@ -701,6 +706,7 @@ def create_robots_router(
         type_id: str,
         name: str = Form(...),
         topics: str | None = Form(default=None),
+        battery_command: str | None = Form(default=None, alias="batteryCommand"),
         clear_model: str | None = Form(default=None, alias="clearModel"),
         low_model_file: UploadFile | None = File(default=None, alias="lowModelFile"),
         high_model_file: UploadFile | None = File(default=None, alias="highModelFile"),
@@ -729,6 +735,17 @@ def create_robots_router(
         raw_entry["name"] = normalized_name
         if topics is not None:
             raw_entry["topics"] = _normalize_topics(topics)
+        if battery_command is not None:
+            normalized_battery_command = normalize_text(battery_command, "")
+            auto_monitor = dict(raw_entry.get("autoMonitor")) if isinstance(raw_entry.get("autoMonitor"), dict) else {}
+            if normalized_battery_command:
+                auto_monitor["batteryCommand"] = normalized_battery_command
+            else:
+                auto_monitor.pop("batteryCommand", None)
+            if auto_monitor:
+                raw_entry["autoMonitor"] = auto_monitor
+            else:
+                raw_entry.pop("autoMonitor", None)
         existing_model = raw_entry.get("model") if isinstance(raw_entry.get("model"), dict) else existing.get("model")
         should_clear_model = to_bool(clear_model) if clear_model is not None else False
         if should_clear_model and (low_model_file is not None or high_model_file is not None):
@@ -790,6 +807,7 @@ def create_robots_router(
     def create_robot_type(
         name: str = Form(...),
         topics: str | None = Form(default=None),
+        battery_command: str | None = Form(default=None, alias="batteryCommand"),
         requested_id: str | None = Form(default=None, alias="id"),
         low_model_file: UploadFile | None = File(default=None, alias="lowModelFile"),
         high_model_file: UploadFile | None = File(default=None, alias="highModelFile"),
@@ -812,6 +830,7 @@ def create_robots_router(
             high_model_file=high_model_file,
         )
         normalized_topics = _normalize_topics(topics)
+        normalized_battery_command = normalize_text(battery_command, "")
 
         raw_entry: dict[str, Any] = {
             "id": type_id,
@@ -821,6 +840,10 @@ def create_robots_router(
             "topics": normalized_topics,
             "model": model,
         }
+        if normalized_battery_command:
+            raw_entry["autoMonitor"] = {
+                "batteryCommand": normalized_battery_command,
+            }
 
         root_payload, entries = _load_robot_types_document()
         entries.append(raw_entry)
