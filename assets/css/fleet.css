@@ -1359,19 +1359,37 @@
       gap: 0.65rem;
     }
 
-    .flow-builder-topbar-main {
+.flow-builder-topbar-main {
       display: grid;
-      grid-template-columns: auto minmax(180px, 240px) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+      grid-template-columns: repeat(5, minmax(180px, 1fr));
       gap: 0.55rem;
       align-items: end;
     }
 
-    .flow-builder-topbar-main .button {
-      border-radius: var(--radius-sm);
-      min-height: 2.2rem;
-      padding: 0.56rem 0.8rem;
-      font-size: 0.9rem;
-    }
+.flow-builder-topbar-main .button {
+  border-radius: var(--radius-sm);
+  min-height: 2.2rem;
+  padding: 0.56rem 0.8rem;
+  font-size: 0.9rem;
+  height: 2.2rem;
+}
+
+.flow-builder-topbar-main .form-field {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: 0.2rem;
+}
+
+.flow-builder-topbar-main .form-input {
+  min-height: 2.2rem;
+  height: 2.2rem;
+  padding-top: 0.56rem;
+  padding-bottom: 0.56rem;
+  font-size: 0.9rem;
+  line-height: 1;
+}
 
     .flow-builder-summary {
       display: flex;
@@ -2072,6 +2090,10 @@
   min-height: 2.05rem;
   border-radius: 999px;
   padding-inline: 0.82rem;
+}
+
+.flow-editor-switcher .manage-tabs .button {
+  border-radius: var(--radius-sm);
 }
 
 .manage-tabs .button.active {
