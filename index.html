@@ -146,11 +146,9 @@
               <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
                 data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
               <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
-                data-button-intent="navigation" title="Record terminal sessions into reusable test flows">Flow Recorder</button>
-              <button id="manageTabButtonTests" class="button button-compact" type="button" data-tab="tests"
-                data-button-intent="navigation" title="Create and edit test definitions">Test Definitions</button>
-              <button id="manageTabButtonFixes" class="button button-compact" type="button" data-tab="fixes"
-                data-button-intent="navigation" title="Create and edit automated repair actions">Fix Definitions</button>
+                data-button-intent="navigation" title="Create and edit test or fix flows">Flow Editor</button>
+              <button id="manageTabButtonDefinitions" class="button button-compact" type="button" data-tab="definitions"
+                data-button-intent="navigation" title="Browse and manage test and fix definitions">Definitions</button>
             </div>
             <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
           </div>
@@ -448,83 +446,210 @@
             </div>
           </div>
 
-          <div id="manageTabPanelTests" class="manage-tab-panel" data-tab-panel="tests">
-            <div class="manage-grid two-cols">
-              <div class="panel manage-list-panel">
-                <h2>Test Definitions</h2>
-                <div id="manageTestsList" class="manage-entity-list"></div>
+          <div id="manageTabPanelDefinitions" class="manage-tab-panel" data-tab-panel="definitions">
+            <div class="panel manage-list-panel definitions-library-panel">
+              <div class="definitions-library-header">
+                <div>
+                  <h2>Definitions Library</h2>
+                  <p class="muted-copy">Browse tests and fixes together, then open the selected item in the flow editor.</p>
+                </div>
+                <div class="definitions-library-actions">
+                  <button id="manageNewTestDefinitionButton" class="button" type="button"
+                    data-button-intent="create">New test</button>
+                  <button id="manageNewFixDefinitionButton" class="button" type="button"
+                    data-button-intent="create">New fix</button>
+                </div>
               </div>
-              <div class="panel manage-editor-panel">
-                <h2>Create or update test</h2>
-                <form id="manageTestEditorForm" class="manage-editor-form" novalidate>
-                  <label class="form-field">
-                    Test definition ID
-                    <input id="manageTestId" class="form-input" type="text" placeholder="e.g. topics_snapshot_v2"
-                      required />
-                  </label>
-                  <label class="form-field">
-                    Label
-                    <input id="manageTestLabel" class="form-input" type="text" placeholder="Topics Snapshot V2" />
-                  </label>
-                  <div class="form-field" style="display:none;">
-                    Execute steps JSON
-                    <textarea id="manageTestExecuteJson" class="form-input manage-json-input" rows="8"
-                      placeholder='[{"id":"topics","command":"$rostopic_list$","saveAs":"topics_raw"}]'></textarea>
-                  </div>
-                  <div class="form-field" style="display:none;">
-                    Checks JSON
-                    <textarea id="manageTestChecksJson" class="form-input manage-json-input" rows="10"
-                      placeholder='[{"id":"battery","label":"Battery","read":{"kind":"contains_lines_unordered","inputRef":"topics_raw","lines":["/battery"],"requireAll":true},"pass":{"status":"ok","value":"present","details":"Battery present"},"fail":{"status":"error","value":"missing","details":"Battery missing"}}]'></textarea>
-                  </div>
-                  <div class="form-field">
-                    Test Flow Blocks
-                    <p class="muted-copy" style="margin: 0 0 8px 0;">Each read block includes a <strong>Run at connection</strong> toggle used by the auto connection retry system.</p>
-                    <div id="manageTestVisualFlow" class="flow-block-container"
-                      style="min-height: 80px; background: rgba(9, 15, 34, 0.4); border-radius: 12px; padding: 10px;">
-                    </div>
-                    <div class="recorder-check-actions" style="margin-top: 10px;">
-                      <button id="manageTestAddWriteBtn" class="button button-compact" type="button"
-                        data-button-intent="utility">Add Write Block</button>
-                      <button id="manageTestAddReadBtn" class="button button-compact" type="button"
-                        data-button-intent="utility">Add Read Block</button>
-                    </div>
-                  </div>
-                  <section class="definition-assignment" aria-label="Assignment">
-                    <div class="definition-assignment-header">
-                      <h3>Assignment</h3>
-                      <p class="muted-copy">Map this definition to robot types and choose connection behavior.</p>
-                    </div>
-                    <div class="definition-assignment-grid">
-                      <label class="recorder-primitive-toggle">
-                        <input id="manageTestRunAtConnectionInput" type="checkbox" checked />
-                        Run test at connection
-                      </label>
-                    </div>
-                    <div class="form-field">
-                      <h4 class="definition-assignment-subtitle">Map to robot types</h4>
-                      <div id="manageTestRobotTypeTargets" class="recorder-type-targets"></div>
-                    </div>
-                  </section>
-                  <div class="manage-editor-actions">
-                    <button id="manageSaveTestButton" class="button" type="submit" data-button-intent="create">Save test
-                      definition</button>
-                    <button id="manageDeleteTestButton" class="button button-danger" type="button"
-                      data-button-intent="danger" style="display:none;">Delete test</button>
-                  </div>
-                  <div id="manageTestEditorStatus" class="manage-editor-status" aria-live="polite"></div>
-                </form>
+              <div class="definitions-filter-row" role="toolbar" aria-label="Definition filters">
+                <button class="button button-compact active" type="button" data-definition-filter="all"
+                  data-button-intent="navigation">All</button>
+                <button class="button button-compact" type="button" data-definition-filter="tests"
+                  data-button-intent="navigation">Tests</button>
+                <button class="button button-compact" type="button" data-definition-filter="fixes"
+                  data-button-intent="navigation">Fixes</button>
               </div>
+              <div id="manageDefinitionsList" class="manage-entity-list" aria-label="Definitions library"></div>
             </div>
           </div>
 
-          <div id="manageTabPanelFixes" class="manage-tab-panel" data-tab-panel="fixes">
-            <div class="manage-grid two-cols">
-              <div class="panel manage-list-panel">
-                <h2>Fix Definitions</h2>
-                <div id="manageFixesList" class="manage-entity-list"></div>
+          <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
+            <div class="flow-editor-switcher">
+              <div class="manage-tabs" role="tablist" aria-label="Flow definition type">
+                <button id="manageFlowModeTestButton" class="button button-compact active" type="button"
+                  data-flow-mode="test" data-button-intent="navigation">Test flow</button>
+                <button id="manageFlowModeFixButton" class="button button-compact" type="button"
+                  data-flow-mode="fix" data-button-intent="navigation">Fix flow</button>
               </div>
+              <div id="manageFlowModeHint" class="manage-tab-status" aria-live="polite">Open a definition from the
+                library or start a new draft.</div>
+            </div>
+
+            <div id="manageRecorderTestEditorPanel" class="flow-editor-mode-panel active" data-flow-editor-panel="test">
+              <div class="panel flow-builder-topbar">
+                <div class="flow-builder-topbar-main">
+              <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
+                draft</button>
+                  <label class="form-field">
+                    Robot
+                    <select id="recorderRobotSelect" class="form-input">
+                      <option value="">Select robot</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    Definition ID
+                    <input id="recorderDefinitionId" class="form-input" type="text"
+                      placeholder="e.g. topics_snapshot_custom" />
+                  </label>
+                  <label class="form-field">
+                    Label
+                    <input id="recorderDefinitionLabel" class="form-input" type="text"
+                      placeholder="Topics Snapshot Custom" />
+                  </label>
+              <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
+                test</button>
+                </div>
+                <div class="flow-builder-summary">
+                  <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
+                  <span id="recorderStepCount" class="recorder-summary-pill">0 write blocks</span>
+                  <span id="recorderCheckCount" class="recorder-summary-pill">0 read blocks</span>
+                  <span id="recorderOutputCount" class="recorder-summary-pill">0 outputs</span>
+                </div>
+                <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
+              </div>
+
+              <div class="manage-grid two-cols flow-builder-grid">
+                <div class="panel flow-builder-workflow-panel">
+                  <h2>1. Outputs</h2>
+                  <div class="flow-builder-output-form" style="display:none;">
+                    <label class="form-field">
+                      Output key
+                      <input id="recorderOutputKey" class="form-input" type="text" placeholder="e.g. battery" />
+                    </label>
+                    <label class="form-field">
+                      Output label
+                      <input id="recorderOutputLabel" class="form-input" type="text" placeholder="Battery" />
+                    </label>
+                    <label class="form-field">
+                      Icon
+                      <input id="recorderOutputIcon" class="form-input" type="text" placeholder="🔋" />
+                    </label>
+                    <label class="form-field">
+                      Pass details
+                      <input id="recorderOutputPassDetails" class="form-input" type="text"
+                        placeholder="Battery topic present" />
+                    </label>
+                    <label class="form-field">
+                      Fail details
+                      <input id="recorderOutputFailDetails" class="form-input" type="text"
+                        placeholder="Battery topic missing" />
+                    </label>
+                  </div>
+                  <div class="recorder-check-actions" style="margin-bottom: 12px;">
+                    <button id="recorderAddOutputBtn" class="button button-compact" type="button"
+                      data-button-intent="create">Add Output Block</button>
+                  </div>
+                  <div id="recorderOutputs" class="manage-entity-list"></div>
+
+                  <h2>2. Flow</h2>
+                  <p class="recorder-flow-hint">Write blocks execute immediately in terminal. Read blocks validate
+                    captured write outputs and bind to one output.</p>
+                  <div class="recorder-command-row">
+                    <input id="recorderCommandInput" class="form-input" type="text"
+                      placeholder="Type command to run..." />
+                    <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
+                      block</button>
+                  </div>
+
+                  <div class="flow-builder-read-form" style="display:none;">
+                    <label class="form-field">
+                      Output
+                      <select id="recorderReadOutputKey" class="form-input">
+                        <option value="">Select output</option>
+                      </select>
+                    </label>
+                    <label class="form-field">
+                      Input ref
+                      <select id="recorderReadInputRef" class="form-input">
+                        <option value="">Select write output</option>
+                      </select>
+                    </label>
+                    <label class="form-field">
+                      Matcher
+                      <select id="recorderReadKind" class="form-input">
+                        <option value="contains_string">Contains string</option>
+                        <option value="contains_any_string">Contains any string</option>
+                        <option value="contains_lines_unordered">Contains lines unordered</option>
+                      </select>
+                    </label>
+                    <label class="form-field">
+                      Needle
+                      <input id="recorderReadNeedle" class="form-input" type="text" placeholder="e.g. /battery" />
+                    </label>
+                    <label class="form-field">
+                      Needles (comma separated)
+                      <input id="recorderReadNeedles" class="form-input" type="text" placeholder="/battery,/scan" />
+                    </label>
+                    <label class="form-field">
+                      Lines (one per line)
+                      <textarea id="recorderReadLines" class="form-input manage-json-input"
+                        placeholder="/battery&#10;/scan"></textarea>
+                    </label>
+                    <label class="recorder-primitive-toggle">
+                      <input id="recorderReadRequireAll" type="checkbox" checked />
+                      Require all lines
+                    </label>
+                  </div>
+                  <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
+                    <button id="recorderAddReadBtn" class="button button-compact" type="button"
+                      data-button-intent="create">Add Read Block</button>
+                  </div>
+
+                  <div id="recorderFlowBlocks" class="manage-entity-list"></div>
+                </div>
+
+                <div class="panel flow-builder-terminal-panel">
+                  <h2>Terminal (SSH)</h2>
+                  <p class="recorder-section-hint">Select a robot to connect an interactive SSH session. Highlight text to
+                    automatically populate read blocks.</p>
+                  <div class="terminal-shell" style="height: 400px; position:relative; overflow:hidden;">
+                    <button id="recorderTerminalPopReadBtn" class="button button-compact floating-action-btn"
+                      style="position: absolute; top: 10px; right: 10px; z-index: 10; display: none;">+ Add Read
+                      Block</button>
+                    <div id="recorderTerminalActivationOverlay" class="terminal-activation-overlay">
+                      <button class="button terminal-activate-btn" id="activateRecorderTerminal" type="button"
+                        data-button-intent="terminal">Activate terminal</button>
+                    </div>
+                    <div id="recorderTerminalToolbar" class="terminal-toolbar">
+                      <span class="terminal-status warn" id="recorderTerminalBadge">Terminal pending...</span>
+                      <span class="terminal-status" id="recorderTerminalHint">Select robot first.</span>
+                    </div>
+                    <div id="recorderTerminalDisplay" class="fallback" aria-live="polite"
+                      style="height: calc(100% - 40px); background:#060912; overflow-y:auto; padding: 0.5rem;"></div>
+                  </div>
+
+                  <section class="definition-assignment" aria-label="Assignment">
+                    <div class="definition-assignment-header">
+                      <h3>Assignment</h3>
+                      <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
+                    </div>
+                    <div class="definition-assignment-grid">
+                      <label class="recorder-primitive-toggle">
+                        <input id="recorderRunAtConnectionInput" type="checkbox" checked />
+                        Run test at connection
+                      </label>
+                    </div>
+                    <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                    <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                  </section>
+                  <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+
+            <div id="manageRecorderFixEditorPanel" class="flow-editor-mode-panel hidden" data-flow-editor-panel="fix">
               <div class="panel manage-editor-panel">
-                <h2>Create or update fix</h2>
+                <h2>Fix flow editor</h2>
+                <p class="muted-copy">Open a fix from the definitions library or start a new draft here.</p>
                 <form id="manageFixEditorForm" class="manage-editor-form" novalidate>
                   <label class="form-field">
                     Fix ID
@@ -581,168 +706,6 @@
                   </div>
                   <div id="manageFixEditorStatus" class="manage-editor-status" aria-live="polite"></div>
                 </form>
-              </div>
-            </div>
-          </div>
-
-          <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
-            <div class="panel flow-builder-topbar">
-              <div class="flow-builder-topbar-main">
-                <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Create new
-                  test</button>
-                <label class="form-field">
-                  Robot
-                  <select id="recorderRobotSelect" class="form-input">
-                    <option value="">Select robot</option>
-                  </select>
-                </label>
-                <label class="form-field">
-                  Definition ID
-                  <input id="recorderDefinitionId" class="form-input" type="text"
-                    placeholder="e.g. topics_snapshot_custom" />
-                </label>
-                <label class="form-field">
-                  Label
-                  <input id="recorderDefinitionLabel" class="form-input" type="text"
-                    placeholder="Topics Snapshot Custom" />
-                </label>
-                <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
-                  test</button>
-              </div>
-              <div class="flow-builder-summary">
-                <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
-                <span id="recorderStepCount" class="recorder-summary-pill">0 write blocks</span>
-                <span id="recorderCheckCount" class="recorder-summary-pill">0 read blocks</span>
-                <span id="recorderOutputCount" class="recorder-summary-pill">0 outputs</span>
-              </div>
-              <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
-            </div>
-
-            <div class="manage-grid two-cols flow-builder-grid">
-              <div class="panel flow-builder-workflow-panel">
-                <h2>1. Outputs</h2>
-                <div class="flow-builder-output-form" style="display:none;">
-                  <label class="form-field">
-                    Output key
-                    <input id="recorderOutputKey" class="form-input" type="text" placeholder="e.g. battery" />
-                  </label>
-                  <label class="form-field">
-                    Output label
-                    <input id="recorderOutputLabel" class="form-input" type="text" placeholder="Battery" />
-                  </label>
-                  <label class="form-field">
-                    Icon
-                    <input id="recorderOutputIcon" class="form-input" type="text" placeholder="🔋" />
-                  </label>
-                  <label class="form-field">
-                    Pass details
-                    <input id="recorderOutputPassDetails" class="form-input" type="text"
-                      placeholder="Battery topic present" />
-                  </label>
-                  <label class="form-field">
-                    Fail details
-                    <input id="recorderOutputFailDetails" class="form-input" type="text"
-                      placeholder="Battery topic missing" />
-                  </label>
-                </div>
-                <div class="recorder-check-actions" style="margin-bottom: 12px;">
-                  <button id="recorderAddOutputBtn" class="button button-compact" type="button"
-                    data-button-intent="create">Add Output Block</button>
-                </div>
-                <div id="recorderOutputs" class="manage-entity-list"></div>
-
-                <h2>2. Flow</h2>
-                <p class="recorder-flow-hint">Write blocks execute immediately in terminal. Read blocks validate
-                  captured write outputs and bind to one output.</p>
-                <div class="recorder-command-row">
-                  <input id="recorderCommandInput" class="form-input" type="text"
-                    placeholder="Type command to run..." />
-                  <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
-                    block</button>
-                </div>
-
-                <div class="flow-builder-read-form" style="display:none;">
-                  <label class="form-field">
-                    Output
-                    <select id="recorderReadOutputKey" class="form-input">
-                      <option value="">Select output</option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    Input ref
-                    <select id="recorderReadInputRef" class="form-input">
-                      <option value="">Select write output</option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    Matcher
-                    <select id="recorderReadKind" class="form-input">
-                      <option value="contains_string">Contains string</option>
-                      <option value="contains_any_string">Contains any string</option>
-                      <option value="contains_lines_unordered">Contains lines unordered</option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    Needle
-                    <input id="recorderReadNeedle" class="form-input" type="text" placeholder="e.g. /battery" />
-                  </label>
-                  <label class="form-field">
-                    Needles (comma separated)
-                    <input id="recorderReadNeedles" class="form-input" type="text" placeholder="/battery,/scan" />
-                  </label>
-                  <label class="form-field">
-                    Lines (one per line)
-                    <textarea id="recorderReadLines" class="form-input manage-json-input"
-                      placeholder="/battery&#10;/scan"></textarea>
-                  </label>
-                  <label class="recorder-primitive-toggle">
-                    <input id="recorderReadRequireAll" type="checkbox" checked />
-                    Require all lines
-                  </label>
-                </div>
-                <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
-                  <button id="recorderAddReadBtn" class="button button-compact" type="button"
-                    data-button-intent="create">Add Read Block</button>
-                </div>
-
-                <div id="recorderFlowBlocks" class="manage-entity-list"></div>
-              </div>
-
-              <div class="panel flow-builder-terminal-panel">
-                <h2>Terminal (SSH)</h2>
-                <p class="recorder-section-hint">Select a robot to connect an interactive SSH session. Highlight text to
-                  automatically populate read blocks.</p>
-                <div class="terminal-shell" style="height: 400px; position:relative; overflow:hidden;">
-                  <button id="recorderTerminalPopReadBtn" class="button button-compact floating-action-btn"
-                    style="position: absolute; top: 10px; right: 10px; z-index: 10; display: none;">+ Add Read
-                    Block</button>
-                  <div id="recorderTerminalActivationOverlay" class="terminal-activation-overlay">
-                    <button class="button terminal-activate-btn" id="activateRecorderTerminal" type="button"
-                      data-button-intent="terminal">Activate terminal</button>
-                  </div>
-                  <div id="recorderTerminalToolbar" class="terminal-toolbar">
-                    <span class="terminal-status warn" id="recorderTerminalBadge">Terminal pending...</span>
-                    <span class="terminal-status" id="recorderTerminalHint">Select robot first.</span>
-                  </div>
-                  <div id="recorderTerminalDisplay" class="fallback" aria-live="polite"
-                    style="height: calc(100% - 40px); background:#060912; overflow-y:auto; padding: 0.5rem;"></div>
-                </div>
-
-                <section class="definition-assignment" aria-label="Assignment">
-                  <div class="definition-assignment-header">
-                    <h3>Assignment</h3>
-                    <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
-                  </div>
-                  <div class="definition-assignment-grid">
-                    <label class="recorder-primitive-toggle">
-                      <input id="recorderRunAtConnectionInput" type="checkbox" checked />
-                      Run test at connection
-                    </label>
-                  </div>
-                  <h4 class="definition-assignment-subtitle">Map to robot types</h4>
-                  <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
-                </section>
-                <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
               </div>
             </div>
           </div>

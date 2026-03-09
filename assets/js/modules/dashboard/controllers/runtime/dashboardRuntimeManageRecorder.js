@@ -1,5 +1,3 @@
-import { renderManageEntityList } from '../../features/manage/manageEntityList.js';
-
 export function registerManageRecorderRuntime(runtime, env) {
   const {
     $,
@@ -98,6 +96,8 @@ export function registerManageRecorderRuntime(runtime, env) {
     hydrateActionButtons,
     initThemeSwitcher,
     initVisualFlows,
+    manageDefinitionFilterButtons,
+    manageDefinitionsList,
     manageDeleteFixButton,
     manageDeleteTestButton,
     manageFixDescriptionInput,
@@ -110,6 +110,12 @@ export function registerManageRecorderRuntime(runtime, env) {
     manageFixRunAtConnectionInput,
     manageFixRobotTypeTargets,
     manageFixesList,
+    manageFlowModeButtons,
+    manageFlowModeHint,
+    manageNewFixDefinitionButton,
+    manageNewTestDefinitionButton,
+    manageRecorderFixEditorPanel,
+    manageRecorderTestEditorPanel,
     manageTabButtons,
     manageTabPanels,
     manageTabStatus,
@@ -632,105 +638,199 @@ export function registerManageRecorderRuntime(runtime, env) {
           .filter(Boolean);
       }
 
-  function renderManageTestsList() {
-        if (!manageTestsList) return;
-        const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
-        const sorted = tests
-          .slice()
-          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')));
-        renderManageEntityList({
-          container: manageTestsList,
-          items: sorted,
-          emptyText: 'No test definitions found.',
-          getId: (testDefinition) => normalizeText(testDefinition?.id, ''),
-          getLabel: (testDefinition) => {
-            const id = normalizeText(testDefinition?.id, '');
-            const label = normalizeText(testDefinition?.label, id);
-            const checkCount = Array.isArray(testDefinition?.checks) ? testDefinition.checks.length : 0;
-            return `${label} (${id}) • ${checkCount} check(s)`;
-          },
-          onSelect: (testDefinition) => {
-            const id = normalizeText(testDefinition?.id, '');
-            const label = normalizeText(testDefinition?.label, id);
-            if (manageTestIdInput) manageTestIdInput.value = id;
-            if (manageTestLabelInput) manageTestLabelInput.value = label;
-            if (manageTestExecuteJsonInput) {
-              const execute = Array.isArray(testDefinition?.execute) ? testDefinition.execute : [];
-              manageTestExecuteJsonInput.value = JSON.stringify(execute, null, 2);
-            }
-            if (manageTestChecksJsonInput) {
-              const checks = Array.isArray(testDefinition?.checks) ? testDefinition.checks : [];
-              const editableChecks = checks.map((check) => ({
-                id: normalizeText(check?.id, ''),
-                label: normalizeText(check?.label, ''),
-                icon: normalizeText(check?.icon, ''),
-                runAtConnection: resolveCheckRunAtConnection(check, true),
-                read: check?.read || {},
-                pass: check?.pass || { status: 'ok', value: 'present', details: 'Check passed.' },
-                fail: check?.fail || { status: 'error', value: 'missing', details: 'Check failed.' },
-              }));
-              manageTestChecksJsonInput.value = JSON.stringify(editableChecks, null, 2);
-              if (manageTestRunAtConnectionInput) {
-                const uniform = inferUniformRunAtConnection(editableChecks, true);
-                manageTestRunAtConnectionInput.checked = uniform !== null ? uniform : true;
-                if (uniform === null) {
-                  setManageTabStatus(
-                    `Loaded ${id} into editor with mixed run-at-connection values. Saving will normalize to the test toggle.`,
-                    'warn',
-                  );
-                }
-              }
-            }
-            renderTestRobotTypeTargets(id);
-            loadExistingTestIntoRecorder(testDefinition);
-            if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'inline-block';
-            if (!manageTestRunAtConnectionInput || inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true) !== null) {
-              setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
-            }
-          },
+  function getManageDefinitionsFilter() {
+        const value = normalizeText(state.manageDefinitionsFilter, '').toLowerCase();
+        return value === 'tests' || value === 'fixes' ? value : 'all';
+      }
+
+  function syncManageDefinitionsFilterButtons() {
+        const activeFilter = getManageDefinitionsFilter();
+        manageDefinitionFilterButtons?.forEach((button) => {
+          const value = normalizeText(button?.dataset?.definitionFilter, 'all').toLowerCase();
+          button.classList.toggle('active', value === activeFilter);
         });
       }
 
-  function renderManageFixesList() {
-        if (!manageFixesList) return;
-        const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
-        const sorted = fixes
-          .slice()
-          .sort((a, b) => normalizeText(a?.id, '').localeCompare(normalizeText(b?.id, '')));
-        renderManageEntityList({
-          container: manageFixesList,
-          items: sorted,
-          emptyText: 'No fix definitions found.',
-          getId: (fixDefinition) => normalizeText(fixDefinition?.id, ''),
-          getLabel: (fixDefinition) => {
-            const id = normalizeText(fixDefinition?.id, '');
-            const label = normalizeText(fixDefinition?.label, id);
-            return `${label} (${id})`;
-          },
-          onSelect: (fixDefinition) => {
-            const id = normalizeText(fixDefinition?.id, '');
-            const label = normalizeText(fixDefinition?.label, id);
-            if (manageFixIdInput) manageFixIdInput.value = id;
-            if (manageFixLabelInput) manageFixLabelInput.value = label;
-            if (manageFixDescriptionInput) {
-              manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
-            }
-            if (manageFixExecuteJsonInput) {
-              const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
-              manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
-            }
-            if (manageFixPostTestsInput) {
-              const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
-              manageFixPostTestsInput.value = postTests.join(', ');
-            }
-            if (manageFixRunAtConnectionInput) {
-              manageFixRunAtConnectionInput.checked = Boolean(fixDefinition?.runAtConnection);
-            }
-            renderFixRobotTypeTargets(id);
-            if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'inline-block';
-            setManageTabStatus(`Loaded ${id} into editor.`, 'ok');
-          },
+  function setManageDefinitionsFilter(filter = 'all') {
+        const normalized = normalizeText(filter, 'all').toLowerCase();
+        state.manageDefinitionsFilter = normalized === 'tests' || normalized === 'fixes' ? normalized : 'all';
+        syncManageDefinitionsFilterButtons();
+        renderManageDefinitionsList();
+      }
+
+  function setFlowEditorMode(mode = 'test', { announce = true } = {}) {
+        const normalizedMode = normalizeText(mode, 'test').toLowerCase() === 'fix' ? 'fix' : 'test';
+        state.manageFlowEditorMode = normalizedMode;
+        manageFlowModeButtons?.forEach((button) => {
+          const buttonMode = normalizeText(button?.dataset?.flowMode, 'test').toLowerCase();
+          button.classList.toggle('active', buttonMode === normalizedMode);
         });
+        if (manageRecorderTestEditorPanel) {
+          manageRecorderTestEditorPanel.classList.toggle('hidden', normalizedMode !== 'test');
+          manageRecorderTestEditorPanel.classList.toggle('active', normalizedMode === 'test');
+        }
+        if (manageRecorderFixEditorPanel) {
+          manageRecorderFixEditorPanel.classList.toggle('hidden', normalizedMode !== 'fix');
+          manageRecorderFixEditorPanel.classList.toggle('active', normalizedMode === 'fix');
+        }
+        if (manageFlowModeHint) {
+          manageFlowModeHint.textContent = normalizedMode === 'fix'
+            ? 'Fix flow editor active. Adjust metadata, write blocks, and mappings here.'
+            : 'Test flow editor active. Use the terminal capture workflow to build or modify tests.';
+        }
+        if (announce) {
+          setManageTabStatus(
+            normalizedMode === 'fix' ? 'Fix flow editor ready.' : 'Test flow editor ready.',
+            'ok',
+          );
+        }
+        if (normalizedMode === 'test') {
+          syncRecorderUiState();
+        } else {
+          hideRecorderReadPopover();
+        }
+      }
+
+  function buildManageDefinitionsListItems() {
+        const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
+        const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
+        const items = [
+          ...tests.map((definition) => ({ kind: 'test', definition })),
+          ...fixes.map((definition) => ({ kind: 'fix', definition })),
+        ];
+        const activeFilter = getManageDefinitionsFilter();
+        const filtered = items.filter((item) => (
+          activeFilter === 'all'
+            || (activeFilter === 'tests' && item.kind === 'test')
+            || (activeFilter === 'fixes' && item.kind === 'fix')
+        ));
+        return filtered.sort((left, right) => {
+          const leftLabel = normalizeText(left?.definition?.label, normalizeText(left?.definition?.id, ''));
+          const rightLabel = normalizeText(right?.definition?.label, normalizeText(right?.definition?.id, ''));
+          const byLabel = leftLabel.localeCompare(rightLabel);
+          if (byLabel !== 0) return byLabel;
+          return normalizeText(left?.definition?.id, '').localeCompare(normalizeText(right?.definition?.id, ''));
+        });
+      }
+
+  function buildManageDefinitionMeta(item) {
+        const definition = item?.definition || {};
+        if (item?.kind === 'fix') {
+          const stepCount = Array.isArray(definition?.execute) ? definition.execute.length : 0;
+          const postTests = Array.isArray(definition?.postTestIds) ? definition.postTestIds.length : 0;
+          return `${stepCount} step(s) • ${postTests} post-test(s)`;
+        }
+        const checkCount = Array.isArray(definition?.checks) ? definition.checks.length : 0;
+        return `${checkCount} check(s)`;
+      }
+
+  function renderManageDefinitionRow(item) {
+        const definition = item?.definition || {};
+        const id = normalizeText(definition?.id, '');
+        if (!id) return null;
+        const kind = item?.kind === 'fix' ? 'fix' : 'test';
+
+        const row = document.createElement('div');
+        row.className = 'manage-definition-row manage-list-item';
+
+        const summary = document.createElement('div');
+        summary.className = 'manage-definition-summary';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'manage-definition-title-row';
+
+        const typeChip = document.createElement('span');
+        typeChip.className = `manage-definition-chip ${kind}`;
+        typeChip.textContent = kind === 'fix' ? 'Fix' : 'Test';
+
+        const title = document.createElement('strong');
+        title.className = 'manage-definition-title';
+        title.textContent = normalizeText(definition?.label, id);
+
+        titleRow.append(typeChip, title);
+
+        const meta = document.createElement('div');
+        meta.className = 'manage-definition-meta';
+        meta.textContent = `${id} • ${buildManageDefinitionMeta({ kind, definition })}`;
+
+        summary.append(titleRow, meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'manage-definition-actions';
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'button button-compact';
+        editButton.textContent = 'Edit/View';
+        editButton.setAttribute('aria-label', `Edit or view ${kind} definition ${id}`);
+        editButton.addEventListener('click', () => {
+          if (kind === 'fix') {
+            loadExistingFixIntoFlow(definition);
+          } else {
+            loadExistingTestIntoRecorder(definition);
+          }
+        });
+
+        const duplicateButton = document.createElement('button');
+        duplicateButton.type = 'button';
+        duplicateButton.className = 'button button-compact';
+        duplicateButton.textContent = 'Duplicate';
+        duplicateButton.setAttribute('aria-label', `Duplicate ${kind} definition ${id}`);
+        duplicateButton.addEventListener('click', () => {
+          if (kind === 'fix') {
+            duplicateManageFixDefinition(definition);
+          } else {
+            duplicateManageTestDefinition(definition);
+          }
+        });
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'button button-compact button-danger';
+        removeButton.textContent = 'Remove';
+        removeButton.setAttribute('aria-label', `Remove ${kind} definition ${id}`);
+        removeButton.addEventListener('click', async () => {
+          if (kind === 'fix') {
+            await deleteManageFixDefinition(id);
+          } else {
+            await deleteManageTestDefinition(id);
+          }
+        });
+
+        actions.append(editButton, duplicateButton, removeButton);
+        row.append(summary, actions);
+        return row;
+      }
+
+  function renderManageDefinitionsList() {
+        if (!manageDefinitionsList) return;
+        manageDefinitionsList.replaceChildren();
+        syncManageDefinitionsFilterButtons();
+        const items = buildManageDefinitionsListItems();
+        if (!items.length) {
+          const empty = document.createElement('div');
+          empty.className = 'manage-list-empty';
+          const activeFilter = getManageDefinitionsFilter();
+          empty.textContent = activeFilter === 'fixes'
+            ? 'No fix definitions found.'
+            : activeFilter === 'tests'
+              ? 'No test definitions found.'
+              : 'No definitions found.';
+          manageDefinitionsList.appendChild(empty);
+          return;
+        }
+        items.forEach((item) => {
+          const row = renderManageDefinitionRow(item);
+          if (row) manageDefinitionsList.appendChild(row);
+        });
+      }
+
+  function renderManageTestsList() {
+        renderManageDefinitionsList();
+      }
+
+  function renderManageFixesList() {
+        renderManageDefinitionsList();
       }
 
   function renderRecorderRobotOptions() {
@@ -756,8 +856,7 @@ export function registerManageRecorderRuntime(runtime, env) {
       }
 
   function renderManageDefinitions() {
-        renderManageTestsList();
-        renderManageFixesList();
+        renderManageDefinitionsList();
         renderRecorderRobotTypeTargets();
         renderRecorderRobotOptions();
         if (manageTestRunAtConnectionInput) {
@@ -766,6 +865,10 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (recorderRunAtConnectionInput) {
           recorderRunAtConnectionInput.checked = Boolean(recorderRunAtConnectionInput.checked);
         }
+        if (manageFixRunAtConnectionInput) {
+          manageFixRunAtConnectionInput.checked = Boolean(manageFixRunAtConnectionInput.checked);
+        }
+        setFlowEditorMode(state.manageFlowEditorMode || 'test', { announce: false });
       }
 
   async function loadDefinitionsSummary() {
@@ -916,9 +1019,8 @@ export function registerManageRecorderRuntime(runtime, env) {
         }
       }
 
-  async function deleteManageTestDefinition() {
-        if (!manageTestIdInput) return;
-        const testId = normalizeText(manageTestIdInput.value, '');
+  async function deleteManageTestDefinition(testIdOverride = '') {
+        const testId = normalizeText(testIdOverride, '') || normalizeText(manageTestIdInput?.value, '');
         if (!testId) return;
         if (!confirm(`Are you sure you want to delete test definition '${testId}'? This will also remove it from all robot type mappings.`)) {
           return;
@@ -935,7 +1037,16 @@ export function registerManageRecorderRuntime(runtime, env) {
           state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
-          if (manageTestIdInput) manageTestIdInput.value = '';
+          const loadedRecorderId = normalizeText(recorderDefinitionIdInput?.value, '');
+          if (loadedRecorderId === testId) {
+            state.workflowRecorder?.reset?.();
+            clearRecorderOutputForm();
+            clearRecorderReadForm();
+            if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = '';
+            if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = '';
+            renderRecorderRobotTypeTargets();
+          }
+          if (manageTestIdInput && normalizeText(manageTestIdInput.value, '') === testId) manageTestIdInput.value = '';
           if (manageTestLabelInput) manageTestLabelInput.value = '';
           if (manageTestExecuteJsonInput) manageTestExecuteJsonInput.value = '';
           if (manageTestChecksJsonInput) manageTestChecksJsonInput.value = '';
@@ -1048,9 +1159,8 @@ export function registerManageRecorderRuntime(runtime, env) {
         }
       }
 
-  async function deleteManageFixDefinition() {
-        if (!manageFixIdInput) return;
-        const fixId = normalizeText(manageFixIdInput.value, '');
+  async function deleteManageFixDefinition(fixIdOverride = '') {
+        const fixId = normalizeText(fixIdOverride, '') || normalizeText(manageFixIdInput?.value, '');
         if (!fixId) return;
         if (!confirm(`Are you sure you want to delete fix definition '${fixId}'? This will also remove it from all robot type mappings.`)) {
           return;
@@ -1067,7 +1177,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           state.definitionsSummary = normalizeDefinitionsSummary(body?.summary || body);
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
-          if (manageFixIdInput) manageFixIdInput.value = '';
+          if (manageFixIdInput && normalizeText(manageFixIdInput.value, '') === fixId) manageFixIdInput.value = '';
           if (manageFixLabelInput) manageFixLabelInput.value = '';
           if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
           if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
@@ -1146,10 +1256,30 @@ export function registerManageRecorderRuntime(runtime, env) {
         syncRecorderReadKindFields();
       }
 
+  function clearCheckedMappings(container) {
+        if (!container) return;
+        Array.from(container.querySelectorAll('input[type="checkbox"]')).forEach((input) => {
+          input.checked = false;
+        });
+      }
+
+  function clearManageFixEditor() {
+        if (manageFixIdInput) manageFixIdInput.value = '';
+        if (manageFixLabelInput) manageFixLabelInput.value = '';
+        if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
+        if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
+        if (manageFixPostTestsInput) manageFixPostTestsInput.value = '';
+        if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
+        if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
+        if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
+        setManageEditorStatus(manageFixEditorStatus, '', '');
+      }
+
   function loadExistingTestIntoRecorder(testDefinition) {
         if (!state.workflowRecorder || !testDefinition) return;
         const definitionId = normalizeText(testDefinition?.id, '');
         const definitionLabel = normalizeText(testDefinition?.label, definitionId);
+        setFlowEditorMode('test', { announce: false });
         state.workflowRecorder.loadTestDefinition(testDefinition);
         clearRecorderOutputForm();
         clearRecorderReadForm();
@@ -1166,6 +1296,107 @@ export function registerManageRecorderRuntime(runtime, env) {
           `Loaded '${definitionId}' into the full flow builder. Outputs and read blocks are now editable.`,
           'ok',
         );
+      }
+
+  function loadExistingFixIntoFlow(fixDefinition, { duplicate = false } = {}) {
+        if (!fixDefinition) return;
+        const sourceId = normalizeText(fixDefinition?.id, '');
+        const nextId = duplicate
+          ? slugifyRecorderValue(`${sourceId}_copy`, 'copied_fix')
+          : sourceId;
+        const nextLabel = duplicate
+          ? `${normalizeText(fixDefinition?.label, sourceId)} Copy`
+          : normalizeText(fixDefinition?.label, sourceId);
+        setFlowEditorMode('fix', { announce: false });
+        setActiveManageTab('recorder', { syncHash: true, persist: true });
+        if (manageFixIdInput) manageFixIdInput.value = nextId;
+        if (manageFixLabelInput) manageFixLabelInput.value = nextLabel;
+        if (manageFixDescriptionInput) {
+          manageFixDescriptionInput.value = normalizeText(fixDefinition?.description, '');
+        }
+        if (manageFixExecuteJsonInput) {
+          const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
+          manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
+        }
+        if (manageFixPostTestsInput) {
+          const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
+          manageFixPostTestsInput.value = postTests.join(', ');
+        }
+        if (manageFixRunAtConnectionInput) {
+          manageFixRunAtConnectionInput.checked = Boolean(fixDefinition?.runAtConnection);
+        }
+        renderFixRobotTypeTargets(nextId);
+        if (duplicate) {
+          clearCheckedMappings(manageFixRobotTypeTargets);
+          if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
+          setManageEditorStatus(
+            manageFixEditorStatus,
+            `Duplicated '${sourceId}' into a new fix draft. Review the ID and mappings before saving.`,
+            'ok',
+          );
+          setManageTabStatus(`Duplicating fix '${sourceId}' in the flow editor.`, 'ok');
+          return;
+        }
+        if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'inline-block';
+        setManageEditorStatus(manageFixEditorStatus, `Loaded fix definition '${sourceId}'.`, 'ok');
+        setManageTabStatus(`Loaded ${sourceId} into the flow editor.`, 'ok');
+      }
+
+  function duplicateManageTestDefinition(testDefinition) {
+        if (!testDefinition || !state.workflowRecorder) return;
+        const sourceId = normalizeText(testDefinition?.id, '');
+        const nextId = slugifyRecorderValue(`${sourceId}_copy`, 'copied_test');
+        loadExistingTestIntoRecorder(testDefinition);
+        if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = nextId;
+        if (recorderDefinitionLabelInput) {
+          recorderDefinitionLabelInput.value = `${normalizeText(testDefinition?.label, sourceId)} Copy`;
+        }
+        renderRecorderRobotTypeTargets();
+        clearCheckedMappings(recorderRobotTypeTargets);
+        state.workflowRecorder.setPublishStatus(
+          `Duplicated '${sourceId}' into a new test draft. Review the ID and mappings before publishing.`,
+          'ok',
+        );
+        setManageTabStatus(`Duplicating test '${sourceId}' in the flow editor.`, 'ok');
+      }
+
+  function duplicateManageFixDefinition(fixDefinition) {
+        loadExistingFixIntoFlow(fixDefinition, { duplicate: true });
+      }
+
+  function startNewTestDraft() {
+        if (!state.workflowRecorder) return;
+        setFlowEditorMode('test', { announce: false });
+        setActiveManageTab('recorder', { syncHash: true, persist: true });
+        state.workflowRecorder.createNewTest();
+        clearRecorderOutputForm();
+        clearRecorderReadForm();
+        const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+        const suggestedId = robotIdValue
+          ? slugifyRecorderValue(`${robotIdValue}_flow`, 'recorded_workflow')
+          : 'recorded_workflow';
+        if (recorderDefinitionIdInput) {
+          recorderDefinitionIdInput.value = suggestedId;
+        }
+        if (recorderDefinitionLabelInput) {
+          recorderDefinitionLabelInput.value = robotIdValue ? `Flow workflow (${robotIdValue})` : 'Recorded workflow';
+        }
+        renderRecorderRobotTypeTargets();
+        if (!robotIdValue) {
+          clearCheckedMappings(recorderRobotTypeTargets);
+        }
+        setManageTabStatus('New test draft ready.', 'ok');
+      }
+
+  function startNewFixDraft() {
+        clearManageFixEditor();
+        setFlowEditorMode('fix', { announce: false });
+        setActiveManageTab('recorder', { syncHash: true, persist: true });
+        if (manageFixIdInput) manageFixIdInput.value = 'new_fix';
+        if (manageFixLabelInput) manageFixLabelInput.value = 'New Fix';
+        renderFixRobotTypeTargets('');
+        clearCheckedMappings(manageFixRobotTypeTargets);
+        setManageTabStatus('New fix draft ready.', 'ok');
       }
 
   function syncRecorderReadKindFields() {
@@ -1432,6 +1663,24 @@ export function registerManageRecorderRuntime(runtime, env) {
             setActiveManageTab(normalizeText(button?.dataset?.tab, 'robots'), { syncHash: true, persist: true });
           });
         });
+        manageDefinitionFilterButtons?.forEach((button) => {
+          button.addEventListener('click', () => {
+            setManageDefinitionsFilter(normalizeText(button?.dataset?.definitionFilter, 'all'));
+          });
+        });
+        manageFlowModeButtons?.forEach((button) => {
+          button.addEventListener('click', () => {
+            const mode = normalizeText(button?.dataset?.flowMode, 'test');
+            setFlowEditorMode(mode);
+            setActiveManageTab('recorder', { syncHash: true, persist: true });
+          });
+        });
+        manageNewTestDefinitionButton?.addEventListener('click', () => {
+          startNewTestDraft();
+        });
+        manageNewFixDefinitionButton?.addEventListener('click', () => {
+          startNewFixDraft();
+        });
         if (manageTestRunAtConnectionInput) {
           manageTestRunAtConnectionInput.checked = Boolean(manageTestRunAtConnectionInput.checked);
         }
@@ -1542,21 +1791,7 @@ export function registerManageRecorderRuntime(runtime, env) {
         });
   
         recorderCreateNewTestButton?.addEventListener('click', () => {
-          const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
-          if (!robotIdValue) {
-            state.workflowRecorder.setStatus('Select a robot first.', 'error');
-            return;
-          }
-          state.workflowRecorder.createNewTest();
-          clearRecorderOutputForm();
-          clearRecorderReadForm();
-          if (recorderDefinitionIdInput) {
-            recorderDefinitionIdInput.value = slugifyRecorderValue(`${robotIdValue}_flow`, 'recorded_workflow');
-          }
-          if (recorderDefinitionLabelInput) {
-            recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
-          }
-          renderRecorderRobotTypeTargets();
+          startNewTestDraft();
         });
         recorderRunCaptureButton?.addEventListener('click', () => {
           runRecorderCommandAndCapture();
@@ -1591,6 +1826,8 @@ export function registerManageRecorderRuntime(runtime, env) {
         });
         clearRecorderOutputForm();
         clearRecorderReadForm();
+        setManageDefinitionsFilter(state.manageDefinitionsFilter || 'all');
+        setFlowEditorMode(state.manageFlowEditorMode || 'test', { announce: false });
         syncRecorderUiState();
       }
 
@@ -1612,6 +1849,10 @@ export function registerManageRecorderRuntime(runtime, env) {
     renderTestRobotTypeTargets,
     renderFixRobotTypeTargets,
     getSelectedMappingTypeIds,
+    getManageDefinitionsFilter,
+    setManageDefinitionsFilter,
+    setFlowEditorMode,
+    renderManageDefinitionsList,
     renderManageTestsList,
     renderManageFixesList,
     renderRecorderRobotOptions,
@@ -1629,7 +1870,13 @@ export function registerManageRecorderRuntime(runtime, env) {
     applyRecorderMappings,
     clearRecorderOutputForm,
     clearRecorderReadForm,
+    clearManageFixEditor,
     loadExistingTestIntoRecorder,
+    loadExistingFixIntoFlow,
+    duplicateManageTestDefinition,
+    duplicateManageFixDefinition,
+    startNewTestDraft,
+    startNewFixDraft,
     syncRecorderReadKindFields,
     syncRecorderUiState,
     runRecorderCommandAndCapture,

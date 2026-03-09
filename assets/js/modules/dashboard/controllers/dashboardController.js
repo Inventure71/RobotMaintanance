@@ -86,7 +86,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const FIX_JOB_POLL_INTERVAL_MS = 1000;
     const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
     const MANAGE_VIEW_HASH = 'manage-robots';
-    const MANAGE_TABS = ['robots', 'tests', 'fixes', 'recorder'];
+    const MANAGE_TABS = ['robots', 'definitions', 'recorder'];
     const MANAGE_TAB_STORAGE_KEY = 'dashboard.manageTab';
     const FORCE_TEXT_TEST_ICONS = (() => {
       try {
@@ -307,6 +307,10 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageTabStatus = $('#manageTabStatus');
     const manageTabButtons = $$('[data-tab]');
     const manageTabPanels = $$('[data-tab-panel]');
+    const manageDefinitionsList = $('#manageDefinitionsList');
+    const manageDefinitionFilterButtons = $$('[data-definition-filter]');
+    const manageNewTestDefinitionButton = $('#manageNewTestDefinitionButton');
+    const manageNewFixDefinitionButton = $('#manageNewFixDefinitionButton');
     const manageTestsList = $('#manageTestsList');
     const manageFixesList = $('#manageFixesList');
     const manageTestEditorForm = $('#manageTestEditorForm');
@@ -328,6 +332,10 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageDeleteFixButton = $('#manageDeleteFixButton');
     const manageTestRobotTypeTargets = $('#manageTestRobotTypeTargets');
     const manageFixRobotTypeTargets = $('#manageFixRobotTypeTargets');
+    const manageFlowModeButtons = $$('[data-flow-mode]');
+    const manageFlowModeHint = $('#manageFlowModeHint');
+    const manageRecorderTestEditorPanel = $('#manageRecorderTestEditorPanel');
+    const manageRecorderFixEditorPanel = $('#manageRecorderFixEditorPanel');
     const recorderCreateNewTestButton = $('#recorderCreateNewTest');
     const recorderRobotSelect = $('#recorderRobotSelect');
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
@@ -564,6 +572,8 @@ const runtimeEnv = {
   hydrateActionButtons,
   initThemeSwitcher,
   initVisualFlows,
+  manageDefinitionFilterButtons,
+  manageDefinitionsList,
   manageDeleteFixButton,
   manageDeleteTestButton,
   manageFixDescriptionInput,
@@ -576,6 +586,12 @@ const runtimeEnv = {
   manageFixRunAtConnectionInput,
   manageFixRobotTypeTargets,
   manageFixesList,
+  manageFlowModeButtons,
+  manageFlowModeHint,
+  manageNewFixDefinitionButton,
+  manageNewTestDefinitionButton,
+  manageRecorderFixEditorPanel,
+  manageRecorderTestEditorPanel,
   manageTabButtons,
   manageTabPanels,
   manageTabStatus,

@@ -808,6 +808,9 @@ export function registerDetailShellRuntime(runtime, env) {
 
   function normalizeManageTab(tabId) {
         const normalized = normalizeText(tabId, '').toLowerCase();
+        if (normalized === 'tests' || normalized === 'fixes') {
+          return 'definitions';
+        }
         return MANAGE_TABS.includes(normalized) ? normalized : '';
       }
 
@@ -931,12 +934,6 @@ export function registerDetailShellRuntime(runtime, env) {
         if (option) option.textContent = label;
       }
 
-  function buildModelUsageLabel(model, quality, sourceLabel) {
-        const fileName = normalizeText(model?.file_name, '');
-        if (!fileName) return `${sourceLabel}: no ${quality}-res file`;
-        return `${sourceLabel}: ${quality}-res ${fileName}`;
-      }
-
   function bindUploadDropzone(dropzone, input, labelNode, emptyLabel = 'No file selected') {
         if (!dropzone || !input) return;
         input.addEventListener('change', () => {
@@ -986,10 +983,10 @@ export function registerDetailShellRuntime(runtime, env) {
         const hasModel = Boolean(normalizeText(typeConfig?.model?.file_name, ''));
         const clearModel = Boolean(editRobotTypeClearModelInput?.checked) && hasModel;
         const lowStatus = modelSupportsQuality(typeConfig?.model, 'low')
-          ? `Current low-res file: ${normalizeText(typeConfig?.model?.file_name, 'configured')}`
+          ? normalizeText(typeConfig?.model?.file_name, 'configured')
           : 'No low-res file configured';
         const highStatus = modelSupportsQuality(typeConfig?.model, 'high')
-          ? `Current high-res file: ${normalizeText(typeConfig?.model?.file_name, 'configured')}`
+          ? normalizeText(typeConfig?.model?.file_name, 'configured')
           : 'No high-res file configured';
 
         if (editRobotTypeClearModelField) {
@@ -1024,7 +1021,7 @@ export function registerDetailShellRuntime(runtime, env) {
         syncUploadDropzoneLabel(editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, lowStatus);
         syncUploadDropzoneLabel(editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, highStatus);
         if (editRobotTypeModelStatus) {
-          editRobotTypeModelStatus.textContent = `Low: ${lowStatus} • High: ${highStatus}`;
+          editRobotTypeModelStatus.textContent = '';
         }
       }
 
@@ -1047,11 +1044,15 @@ export function registerDetailShellRuntime(runtime, env) {
         const lowUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'low');
         const highUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'high');
         const lowStatus = lowUsesOverride
-          ? buildModelUsageLabel(robotModel, 'low', 'Current override')
-          : buildModelUsageLabel(typeModel, 'low', 'Current class model');
+          ? normalizeText(robotModel?.file_name, 'configured')
+          : modelSupportsQuality(typeModel, 'low')
+            ? normalizeText(typeModel?.file_name, 'configured')
+            : 'No low-res file configured';
         const highStatus = highUsesOverride
-          ? buildModelUsageLabel(robotModel, 'high', 'Current override')
-          : buildModelUsageLabel(typeModel, 'high', 'Current class model');
+          ? normalizeText(robotModel?.file_name, 'configured')
+          : modelSupportsQuality(typeModel, 'high')
+            ? normalizeText(typeModel?.file_name, 'configured')
+            : 'No high-res file configured';
 
         setSelectOptionLabel(
           editRobotOverrideLowModelSelect,
@@ -1077,7 +1078,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (editRobotModelStatus) {
           editRobotModelStatus.textContent = removeOverride
             ? 'Override will be removed on save. This robot will use the class low/high model files.'
-            : `Low: ${lowStatus} • High: ${highStatus}`;
+            : '';
         }
         if (editRobotClearOverrideField) {
           editRobotClearOverrideField.classList.toggle('hidden', !hasOverride);
@@ -2114,7 +2115,7 @@ export function registerDetailShellRuntime(runtime, env) {
           const lowAvailable = modelSupportsQuality(typeConfig?.model, 'low') ? 'configured' : 'missing';
           const highAvailable = modelSupportsQuality(typeConfig?.model, 'high') ? 'configured' : 'missing';
           const batteryState = normalizeText(typeConfig?.batteryCommand, '') ? 'configured' : 'off';
-          editRobotTypeSummary.textContent = `Assigned robots: ${assignedRobotCount} • Battery: ${batteryState} • Model: ${modelFileName} • Low: ${lowAvailable} • High: ${highAvailable}`;
+          editRobotTypeSummary.textContent = '';
         }
         syncEditRobotTypeModelControls(typeConfig);
         if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = false;
@@ -2176,7 +2177,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (editRobotPasswordInput) editRobotPasswordInput.value = normalizeText(robot?.ssh?.password, '');
         if (editRobotSummary) {
           const hasOverride = Boolean(normalizeText(robot?.model?.file_name, ''));
-          editRobotSummary.textContent = `ID: ${normalizeText(robot.id, 'n/a')} • Type: ${normalizeText(robot.type, 'n/a')} • Host: ${normalizeText(robot.ip, 'n/a')} • Override model: ${hasOverride ? normalizeText(robot?.model?.file_name, 'configured') : 'class model only'}`;
+          editRobotSummary.textContent = '';
         }
         if (editRobotSaveButton) editRobotSaveButton.disabled = false;
         if (editRobotDeleteButton) editRobotDeleteButton.disabled = false;
