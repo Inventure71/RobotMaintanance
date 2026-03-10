@@ -379,6 +379,13 @@ export function registerFleetViewRuntime(runtime, env) {
         return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
       }
 
+  function getRobotBatteryState(robot) {
+        if (robot?.battery && typeof robot.battery === 'object') {
+          return robot.battery;
+        }
+        return robot?.tests?.battery && typeof robot.tests.battery === 'object' ? robot.tests.battery : {};
+      }
+
   function nonBatteryTestEntries(robot) {
         return Object.entries(robot?.tests || {}).filter(([testId]) => normalizeText(testId, '').toLowerCase() !== 'battery');
       }
@@ -409,8 +416,8 @@ export function registerFleetViewRuntime(runtime, env) {
           if (byStatus !== 0) return byStatus;
           return normalizeText(a?.name, '').localeCompare(normalizeText(b?.name, ''), undefined, { sensitivity: 'base' });
         }
-        const aBattery = normalizeBatteryPercentForSort(a?.tests?.battery?.value);
-        const bBattery = normalizeBatteryPercentForSort(b?.tests?.battery?.value);
+        const aBattery = normalizeBatteryPercentForSort(getRobotBatteryState(a)?.value);
+        const bBattery = normalizeBatteryPercentForSort(getRobotBatteryState(b)?.value);
         if (aBattery !== bBattery) return aBattery - bBattery;
         return normalizeText(a?.name, '').localeCompare(normalizeText(b?.name, ''), undefined, { sensitivity: 'base' });
       }
@@ -522,6 +529,12 @@ export function registerFleetViewRuntime(runtime, env) {
           const modelUrl = resolveRobotBaseModelUrl(bot, typeConfig, MODEL_RESOLUTION_LOW);
           const robotModel = normalizeModelConfig(bot?.model);
           const activity = normalizeRobotActivity(bot?.activity);
+          const battery =
+            bot?.battery && typeof bot.battery === 'object'
+              ? { ...bot.battery }
+              : bot?.tests?.battery && typeof bot.tests.battery === 'object'
+                ? { ...bot.tests.battery }
+                : null;
           return {
             id: bot?.id || `robot-${Math.random().toString(16).slice(2, 7)}`,
             name: normalizeText(bot?.name, `robot-${Math.random().toString(16).slice(2, 7)}`),
@@ -533,6 +546,7 @@ export function registerFleetViewRuntime(runtime, env) {
             modelUrl,
             model: robotModel,
             tests,
+            battery,
             testDefinitions: definitions,
             topics: typeConfig?.topics || [],
             autoFixes: typeConfig?.autoFixes || [],
@@ -874,7 +888,7 @@ export function registerFleetViewRuntime(runtime, env) {
             }
           }
   
-          const batteryTest = tests.battery;
+          const batteryTest = getRobotBatteryState(robot);
           if (
             normalizeText(batteryTest?.source, '') === MONITOR_SOURCE &&
             batteryTest?.checkedAt !== undefined
@@ -1362,7 +1376,7 @@ export function registerFleetViewRuntime(runtime, env) {
   
         const title = robot.name;
         const tests = issueSummary(robot).join(', ') || 'No active errors';
-        const batteryState = robot?.tests?.battery || {};
+        const batteryState = getRobotBatteryState(robot);
         const lastFullTestLabel = buildLastFullTestPillLabel(robot);
   
         card.innerHTML = `
@@ -1528,6 +1542,7 @@ export function registerFleetViewRuntime(runtime, env) {
 
   return {
     normalizeBatteryPercentForSort,
+    getRobotBatteryState,
     nonBatteryTestEntries,
     statusFromScore,
     statusSortRank,

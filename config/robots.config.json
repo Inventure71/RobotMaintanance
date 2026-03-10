@@ -80,6 +80,16 @@
         "username": "husarion",
         "password": "husarion"
       }
+    },
+    {
+      "id": "rosbot-h-e-r-m-e-s-1",
+      "name": "ROSbot H.E.R.M.E.S 1",
+      "type": "rosbot-3-pro",
+      "ip": "hermes.robotics.lab",
+      "ssh": {
+        "username": "husarion",
+        "password": "husarion"
+      }
     }
   ]
 }

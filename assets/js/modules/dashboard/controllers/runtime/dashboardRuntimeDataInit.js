@@ -529,17 +529,23 @@ export function registerDataInitRuntime(runtime, env) {
         const id = normalizeText(raw.id, '');
         if (!id) return null;
         const tests = {};
+        let battery = null;
         Object.entries(raw.tests || {}).forEach(([testId, payload]) => {
           const update = normalizeRuntimeTestUpdate(testId, payload);
           if (!update) return;
+          if (normalizeText(testId, '').toLowerCase() === 'battery' && normalizeText(update.source, '') === MONITOR_SOURCE) {
+            battery = update;
+            return;
+          }
           tests[testId] = update;
         });
         const activity = normalizeRobotActivity(raw.activity);
         return {
           id,
           tests,
+          battery,
           activity,
-          hasRuntimeData: Object.keys(tests).length > 0 || runtimeActivityHasSignal(activity),
+          hasRuntimeData: Object.keys(tests).length > 0 || Boolean(battery) || runtimeActivityHasSignal(activity),
         };
       }
 
@@ -602,12 +608,25 @@ export function registerDataInitRuntime(runtime, env) {
           const baseTests = shouldClearRuntime
             ? normalizeRobotTests({}, currentRobot?.typeId).tests
             : currentRobot?.tests || {};
+          const previousBattery =
+            currentRobot?.battery && typeof currentRobot.battery === 'object'
+              ? currentRobot.battery
+              : null;
           const nextTests = hasLocalPriorityActivity
             ? currentRobot?.tests || {}
             : {
                 ...baseTests,
                 ...(runtimeEntry.tests || {}),
               };
+          const nextBattery = hasLocalPriorityActivity
+            ? previousBattery
+            : shouldClearRuntime
+              ? null
+              : runtimeEntry.battery
+                ? runtimeEntry.battery
+                : fullSnapshot
+                  ? null
+                  : previousBattery;
           const nextActivity = hasLocalPriorityActivity
             ? previousActivity
             : shouldClearRuntime
@@ -622,15 +641,23 @@ export function registerDataInitRuntime(runtime, env) {
             normalizeText(previousActivity.lastFullTestSource, '') !== normalizeText(nextActivity.lastFullTestSource, '') ||
             Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt);
           const testsChanged = haveRuntimeTestsChanged(currentRobot?.tests || {}, nextTests);
-  
-          if (!activityChanged && !testsChanged) {
+          const batteryChanged =
+            normalizeStatus(previousBattery?.status) !== normalizeStatus(nextBattery?.status) ||
+            normalizeText(previousBattery?.value, '') !== normalizeText(nextBattery?.value, '') ||
+            normalizeText(previousBattery?.details, '') !== normalizeText(nextBattery?.details, '') ||
+            normalizeText(previousBattery?.reason, '') !== normalizeText(nextBattery?.reason, '') ||
+            normalizeText(previousBattery?.source, '') !== normalizeText(nextBattery?.source, '') ||
+            Number(previousBattery?.checkedAt || 0) !== Number(nextBattery?.checkedAt || 0);
+
+          if (!activityChanged && !testsChanged && !batteryChanged) {
             return currentRobot;
           }
-  
+
           changedRobotIds.add(id);
           return {
             ...currentRobot,
             tests: nextTests,
+            battery: nextBattery,
             activity: nextActivity,
           };
         });

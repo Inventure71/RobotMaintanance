@@ -86,18 +86,20 @@ function makeNode(value = '') {
   };
 }
 
-async function loadApi(fetchImpl) {
+async function loadApi(fetchImpl, options = {}) {
+  const renderManageEntityListStub = options.renderManageEntityListStub || (() => {});
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source
     .replace(
       "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",
-      'const renderManageEntityList = () => {};',
+      'const renderManageEntityList = globalThis.__renderManageEntityListStub;',
     )
     .replace('export function registerDetailShellRuntime', 'function registerDetailShellRuntime')}\nmodule.exports = { registerDetailShellRuntime };\n`;
   const context = {
     console,
     fetch: fetchImpl,
     FormData: FakeFormData,
+    __renderManageEntityListStub: renderManageEntityListStub,
     module: { exports: {} },
     exports: {},
     window: {
@@ -311,4 +313,45 @@ test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
 
   assert.equal(env.addRobotTypeBatteryInfoButton.getAttribute('aria-expanded'), 'false');
   assert.equal(env.addRobotTypeBatteryInfo.classList.contains('hidden'), true);
+});
+
+test('populateEditRobotSelectOptions passes split robot name and type metadata to the Robot Catalog list', async () => {
+  const manageListCalls = [];
+  const registerDetailShellRuntime = await loadApi(
+    async () => ({
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    }),
+    {
+      renderManageEntityListStub: (payload) => {
+        manageListCalls.push(payload);
+      },
+    },
+  );
+  const calls = {
+    loadRobotTypeConfig: 0,
+    loadRobotsFromBackend: 0,
+  };
+  const env = makeEnv();
+  env.state.robots = [
+    {
+      id: 'robot-01',
+      name: 'Atlas',
+      type: 'Inspector',
+      typeId: 'inspector',
+    },
+  ];
+  const runtime = makeRuntime(calls, env);
+  runtime.getRobotById = (id) => env.state.robots.find((robot) => robot.id === id) || null;
+  const api = registerDetailShellRuntime(runtime, env);
+
+  api.populateEditRobotSelectOptions('robot-01');
+
+  assert.ok(manageListCalls.length >= 1);
+  const lastCall = manageListCalls.at(-1);
+  const label = lastCall.getLabel(env.state.robots[0]);
+  assert.equal(label.title, 'Atlas');
+  assert.equal(label.meta, 'Inspector');
+  assert.equal(label.ariaLabel, 'Atlas Inspector');
 });

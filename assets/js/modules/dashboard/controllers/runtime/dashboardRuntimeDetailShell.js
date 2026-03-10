@@ -310,6 +310,7 @@ export function registerDetailShellRuntime(runtime, env) {
   const getMonitorTopicsIntervalMs = (...args) => runtime.getMonitorTopicsIntervalMs(...args);
   const getOnlineCheckCountdownMs = (...args) => runtime.getOnlineCheckCountdownMs(...args);
   const getReachableRobotIds = (...args) => runtime.getReachableRobotIds(...args);
+  const getRobotBatteryState = (...args) => runtime.getRobotBatteryState(...args);
   const getRobotById = (...args) => runtime.getRobotById(...args);
   const getRobotDefinitionsForType = (...args) => runtime.getRobotDefinitionsForType(...args);
   const getRobotIdsForRun = (...args) => runtime.getRobotIdsForRun(...args);
@@ -474,7 +475,7 @@ export function registerDetailShellRuntime(runtime, env) {
         const stateKey = statusFromScore(robot);
         const normalizedRobotId = robotId(robot);
         const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => t.status !== 'ok').length;
-        const batteryState = robot?.tests?.battery || {};
+        const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
         const isTesting = isRobotTesting(normalizedRobotId);
         const isSearching = isRobotSearching(normalizedRobotId);
         const isFixing = isRobotFixing(normalizedRobotId);
@@ -1533,7 +1534,11 @@ export function registerDetailShellRuntime(runtime, env) {
       const friendly = map[commandId]?.label || commandText;
       appendTerminalLine(`Simulating output for ${friendly}.`, 'warn');
       const generalState = robot.tests.general || { status: 'warning', value: 'n/a', details: 'No detail available' };
-      const batteryState = robot.tests.battery || { status: 'warning', value: 'n/a', details: 'No detail available' };
+      const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {
+        status: 'warning',
+        value: 'n/a',
+        details: 'No detail available',
+      };
       appendTerminalLine(
         formatConsoleLine('general', generalState.status, generalState.value, generalState.details),
         generalState.status === 'error' ? 'err' : generalState.status === 'warning' ? 'warn' : 'ok',
@@ -2023,7 +2028,11 @@ export function registerDetailShellRuntime(runtime, env) {
           emptyText: 'No robot types available.',
           activeId: state.selectedManageRobotTypeId,
           getId: (entry) => entry.typeId,
-          getLabel: (entry) => `${entry.label} (${entry.typeId})`,
+          getLabel: (entry) => ({
+            title: normalizeText(entry?.label, normalizeText(entry?.typeId, 'Unnamed type')),
+            meta: normalizeText(entry?.typeId, ''),
+            ariaLabel: `${normalizeText(entry?.label, normalizeText(entry?.typeId, 'Unnamed type'))} ${normalizeText(entry?.typeId, '')}`.trim(),
+          }),
           onSelect: (_entry, id) => {
             state.selectedManageRobotTypeId = id;
             if (editRobotTypeManageSelect) editRobotTypeManageSelect.value = id;
@@ -2075,7 +2084,13 @@ export function registerDetailShellRuntime(runtime, env) {
           getId: (robot) => robotId(robot),
           getLabel: (robot) => {
             const id = robotId(robot);
-            return `${normalizeText(robot?.name, id)} (${id})`;
+            const typeLabel = normalizeText(robot?.type, normalizeText(robot?.typeId, 'n/a'));
+            const name = normalizeText(robot?.name, id);
+            return {
+              title: name,
+              meta: typeLabel,
+              ariaLabel: `${name} ${typeLabel}`.trim(),
+            };
           },
           onSelect: (_robot, id) => {
             state.selectedManageRobotId = id;

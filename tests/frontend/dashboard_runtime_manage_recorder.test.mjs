@@ -390,3 +390,20 @@ test('duplicate test action opens a copied recorder draft', async () => {
     tone: 'ok',
   });
 });
+
+test('setFlowEditorMode initializes fix robot type targets from definitions summary', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  assert.equal(env.manageFixRobotTypeTargets.children.length, 0);
+
+  api.setFlowEditorMode('fix', { announce: false });
+
+  assert.equal(env.state.manageFlowEditorMode, 'fix');
+  assert.equal(env.manageFixRobotTypeTargets.children.length, 1);
+  assert.equal(env.manageFixRobotTypeTargets.children[0].children[1].textContent, 'Rosbot');
+  assert.equal(env.manageRecorderFixEditorPanel.classList.contains('active'), true);
+  assert.equal(env.manageRecorderTestEditorPanel.classList.contains('hidden'), true);
+});

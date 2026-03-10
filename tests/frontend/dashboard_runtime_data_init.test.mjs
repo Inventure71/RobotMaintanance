@@ -77,6 +77,7 @@ function makeEnv(state) {
   return {
     FLEET_RUNTIME_ENDPOINT: '/api/fleet/runtime',
     FLEET_STATIC_ENDPOINT: '/api/fleet/static',
+    MONITOR_SOURCE: 'auto-monitor',
     ROBOTS_CONFIG_URL: '/robots.config.json',
     ROBOT_TYPES_CONFIG_URL: '/robot-types.config.json',
     RUNTIME_ALLOWED_SOURCES: new Set(['live', 'manual', 'auto-monitor', 'auto-monitor-topics']),
@@ -235,4 +236,84 @@ test('loadRobotsFromBackend preserves empty fleet snapshots', async () => {
 
   const robots = await api.loadRobotsFromBackend();
   assert.deepEqual(robots, []);
+});
+
+test('mergeRuntimeRobotsIntoList keeps auto-monitor battery out of live test rows', async () => {
+  const registerDataInitRuntime = await loadApi(async () => ({ ok: false }));
+  const state = {
+    fixingRobotIds: new Set(),
+    robots: [],
+    runtimeVersion: 0,
+    searchingRobotIds: new Set(),
+    testingRobotIds: new Set(),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(env);
+  const api = registerDataInitRuntime(runtime, env);
+
+  const existingRobot = {
+    id: 'r-1',
+    typeId: 'picker',
+    tests: {
+      online: {
+        status: 'ok',
+        value: 'online',
+        details: 'Connected',
+        reason: '',
+        source: 'live',
+        checkedAt: 100,
+      },
+    },
+    battery: null,
+    activity: normalizeRobotActivity({}),
+  };
+
+  const autoBatteryResult = api.mergeRuntimeRobotsIntoList(
+    [existingRobot],
+    [
+      {
+        id: 'r-1',
+        tests: {
+          battery: {
+            status: 'ok',
+            value: '81%',
+            details: 'Auto monitor battery',
+            reason: 'BATTERY_OK',
+            source: 'auto-monitor',
+            checkedAt: 200,
+          },
+        },
+        activity: {},
+      },
+    ],
+    { fullSnapshot: false, respectLocalPriority: true },
+  );
+
+  assert.equal(autoBatteryResult.merged[0].battery?.value, '81%');
+  assert.equal(autoBatteryResult.merged[0].tests.battery, undefined);
+
+  const liveBatteryResult = api.mergeRuntimeRobotsIntoList(
+    [autoBatteryResult.merged[0]],
+    [
+      {
+        id: 'r-1',
+        tests: {
+          battery: {
+            status: 'warning',
+            value: 'needs_attention',
+            details: 'Battery test executed',
+            reason: '',
+            source: 'live',
+            checkedAt: 300,
+          },
+        },
+        activity: {},
+      },
+    ],
+    { fullSnapshot: false, respectLocalPriority: true },
+  );
+
+  assert.equal(liveBatteryResult.merged[0].battery?.value, '81%');
+  assert.equal(liveBatteryResult.merged[0].tests.battery?.value, 'needs_attention');
+  assert.equal(liveBatteryResult.merged[0].tests.battery?.source, 'live');
 });

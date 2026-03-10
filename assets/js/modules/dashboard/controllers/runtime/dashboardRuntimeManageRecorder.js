@@ -609,6 +609,14 @@ export function registerManageRecorderRuntime(runtime, env) {
           ? state.definitionsSummary.robotTypes
           : [];
         const fixIdKey = normalizeText(fixId, '');
+
+        if (!robotTypes.length) {
+          const empty = document.createElement('div');
+          empty.className = 'manage-list-empty';
+          empty.textContent = 'No robot types available.';
+          manageFixRobotTypeTargets.appendChild(empty);
+          return;
+        }
         
         robotTypes.forEach((typePayload) => {
           const typeId = normalizeText(typePayload?.id, '');
@@ -628,6 +636,13 @@ export function registerManageRecorderRuntime(runtime, env) {
           row.append(input, text);
           manageFixRobotTypeTargets.appendChild(row);
         });
+      }
+
+  function ensureFixRobotTypeTargetsRendered({ force = false } = {}) {
+        if (!manageFixRobotTypeTargets) return;
+        const hasRenderedOptions = manageFixRobotTypeTargets.querySelectorAll('input[type="checkbox"]').length > 0;
+        if (hasRenderedOptions && !force) return;
+        renderFixRobotTypeTargets(normalizeText(manageFixIdInput?.value, ''));
       }
 
   function getSelectedMappingTypeIds(container) {
@@ -687,6 +702,7 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (normalizedMode === 'test') {
           syncRecorderUiState();
         } else {
+          ensureFixRobotTypeTargetsRendered();
           hideRecorderReadPopover();
         }
       }
@@ -906,6 +922,9 @@ export function registerManageRecorderRuntime(runtime, env) {
             throw new Error('Definitions summary response was not JSON.');
           }
           state.definitionsSummary = normalizeDefinitionsSummary(payload);
+          if (state.manageFlowEditorMode === 'fix') {
+            ensureFixRobotTypeTargetsRendered({ force: true });
+          }
           renderManageDefinitions();
           setManageTabStatus('Definitions loaded.', 'ok');
         } catch (error) {

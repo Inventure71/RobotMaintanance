@@ -241,6 +241,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
   const getOnlineCheckCountdownMs = (...args) => runtime.getOnlineCheckCountdownMs(...args);
   const getPersistedManageTab = (...args) => runtime.getPersistedManageTab(...args);
   const getReachableRobotIds = (...args) => runtime.getReachableRobotIds(...args);
+  const getRobotBatteryState = (...args) => runtime.getRobotBatteryState(...args);
   const getRobotById = (...args) => runtime.getRobotById(...args);
   const getRobotDefinitionsForType = (...args) => runtime.getRobotDefinitionsForType(...args);
   const getRobotTypeConfig = (...args) => runtime.getRobotTypeConfig(...args);
@@ -420,7 +421,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
         const isCountingDown = isTesting || isSearching || isFixing;
         const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
-        const batteryState = robot?.tests?.battery || {};
+        const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
         const issues = issueSummary(robot);
         const issueText = issues.join(', ') || 'No active errors';
   
@@ -522,7 +523,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         const testList = $('#testList');
         const modelHost = $('#detailModel');
         const stateKey = statusFromScore(robot);
-        const batteryState = robot?.tests?.battery || {};
+        const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
         const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => normalizeStatus(t?.status) !== 'ok').length;
         const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
         const normalizedRobotId = robotId(robot);
