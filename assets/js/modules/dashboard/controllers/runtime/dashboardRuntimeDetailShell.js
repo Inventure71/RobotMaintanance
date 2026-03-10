@@ -1321,7 +1321,12 @@ export function registerDetailShellRuntime(runtime, env) {
         }
       }
 
-  function showAddRobotPage({ tabId = '', syncHash = true, refreshDefinitions = true } = {}) {
+  function showAddRobotPage({
+        tabId = '',
+        syncHash = true,
+        refreshDefinitions = true,
+        robotRegistryPanelId = '',
+      } = {}) {
         closeTestDebugModal();
         closeBugReportModal();
         closeTerminalSession();
@@ -1362,7 +1367,11 @@ export function registerDetailShellRuntime(runtime, env) {
         populateEditRobotSelectOptions(state.selectedManageRobotId);
         renderRecorderRobotOptions();
         const activeTab = resolveManageTab(tabId);
+        const requestedRobotRegistryPanel = normalizeText(robotRegistryPanelId, '');
         setActiveManageTab(activeTab, { syncHash: false, persist: true });
+        if (activeTab === 'robots' && requestedRobotRegistryPanel) {
+          setActiveRobotRegistryPanel(requestedRobotRegistryPanel);
+        }
         addRobotSection.classList.add('active');
         if (!state.robots.length) {
           refreshRobotsFromBackendSnapshot();

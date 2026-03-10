@@ -49,7 +49,10 @@
       </div>
 
       <details class="dashboard-controls">
-        <summary>Fleet controls and filters</summary>
+        <summary>
+          <span class="dashboard-controls-summary-label">Fleet controls and filters</span>
+          <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
+        </summary>
         <div class="dashboard-controls-body">
           <div class="filters">
             <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
@@ -141,24 +144,33 @@
       </div>
       <div class="manage-robots-shell">
         <div class="panel manage-tabs-panel">
-          <div class="manage-tabs-row">
-            <div class="manage-tabs" role="tablist" aria-label="Robot management sections">
-              <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
-                data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
-              <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
-                data-button-intent="navigation" title="Create and edit test or fix flows">Flow Editor</button>
-              <button id="manageTabButtonDefinitions" class="button button-compact" type="button" data-tab="definitions"
-                data-button-intent="navigation" title="Browse and manage test and fix definitions">Definitions</button>
+          <div class="manage-tabs-row manage-tabs-row-primary">
+            <div class="manage-tab-bar manage-tab-bar-primary">
+              <span class="manage-tab-bar-label">Primary navigation</span>
+              <div class="manage-tabs" role="tablist" aria-label="Robot management sections">
+                <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
+                  data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
+                <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
+                  data-button-intent="navigation" title="Create and edit test or fix flows">Flow Editor</button>
+                <button id="manageTabButtonDefinitions" class="button button-compact" type="button" data-tab="definitions"
+                  data-button-intent="navigation" title="Browse and manage test and fix definitions">Definitions</button>
+              </div>
             </div>
             <div id="manageTabStatus" class="manage-tab-status" aria-live="polite"></div>
           </div>
 
           <div id="manageTabPanelRobots" class="manage-tab-panel active robot-registry-panel" data-tab-panel="robots">
-            <div class="registry-submenu-row" role="tablist" aria-label="Robot registry actions">
-              <button id="robotRegistryManageButton" class="button button-compact active" type="button"
-                data-robot-registry-panel-button="manage" data-button-intent="navigation">Manage existing</button>
-              <button id="robotRegistryAddButton" class="button button-compact" type="button"
-                data-robot-registry-panel-button="add" data-button-intent="navigation">Add new</button>
+            <div class="manage-subnav-panel">
+              <div class="manage-subnav-header">
+                <span class="manage-subnav-label">Robot Registry view</span>
+                <span class="manage-subnav-copy">Choose whether to update existing robots or register a new one.</span>
+              </div>
+              <div class="registry-submenu-row" role="tablist" aria-label="Robot registry actions">
+                <button id="robotRegistryManageButton" class="button button-compact active" type="button"
+                  data-robot-registry-panel-button="manage" data-button-intent="navigation">Manage existing</button>
+                <button id="robotRegistryAddButton" class="button button-compact" type="button"
+                  data-robot-registry-panel-button="add" data-button-intent="navigation">Add new</button>
+              </div>
             </div>
 
             <div class="registry-subpanel active" data-robot-registry-panel="manage">
@@ -274,8 +286,9 @@
                     <div class="form-field">
                       <div class="battery-command-heading">
                         <label for="editRobotTypeBatteryCommand" class="battery-command-label">Battery check command</label>
-                        <button id="editRobotTypeBatteryInfoButton" class="button test-info-btn" type="button"
-                          data-button-intent="utility" aria-expanded="false" aria-controls="editRobotTypeBatteryInfo">Info</button>
+                        <button id="editRobotTypeBatteryInfoButton" class="button test-info-btn battery-command-info-button" type="button"
+                          data-button-intent="utility" aria-expanded="false" aria-controls="editRobotTypeBatteryInfo"
+                          aria-label="Show battery check command help" title="Show battery check command help">?</button>
                       </div>
                       <p class="muted-copy">Leave blank if this robot type should not run live battery polling.</p>
                       <div id="editRobotTypeBatteryInfo" class="battery-command-help hidden">
@@ -411,8 +424,9 @@
                       <div class="form-field robot-type-create-name-field">
                         <div class="battery-command-heading">
                           <label for="addRobotTypeBatteryCommand" class="battery-command-label">Battery check command</label>
-                          <button id="addRobotTypeBatteryInfoButton" class="button test-info-btn" type="button"
-                            data-button-intent="utility" aria-expanded="false" aria-controls="addRobotTypeBatteryInfo">Info</button>
+                          <button id="addRobotTypeBatteryInfoButton" class="button test-info-btn battery-command-info-button" type="button"
+                            data-button-intent="utility" aria-expanded="false" aria-controls="addRobotTypeBatteryInfo"
+                            aria-label="Show battery check command help" title="Show battery check command help">?</button>
                         </div>
                         <p class="muted-copy">Leave blank if this type should not run live battery polling.</p>
                         <div id="addRobotTypeBatteryInfo" class="battery-command-help hidden">
@@ -473,7 +487,11 @@
           </div>
 
           <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
-            <div class="flow-editor-switcher">
+            <div class="flow-editor-switcher manage-subnav-panel">
+              <div class="manage-subnav-header">
+                <span class="manage-subnav-label">Flow Editor mode</span>
+                <span class="manage-subnav-copy">Switch the editor between test and fix workflows.</span>
+              </div>
               <div class="manage-tabs" role="tablist" aria-label="Flow definition type">
                 <button id="manageFlowModeTestButton" class="button button-compact active" type="button"
                   data-flow-mode="test" data-button-intent="navigation">Test flow</button>

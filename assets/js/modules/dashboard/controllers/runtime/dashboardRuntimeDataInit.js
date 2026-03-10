@@ -747,6 +747,13 @@ export function registerDataInitRuntime(runtime, env) {
         if (id) openDetail(id, { syncHash: false });
       }
 
+  function openManageRobotsFromDashboard() {
+        showAddRobotPage({
+          tabId: 'robots',
+          robotRegistryPanelId: 'manage',
+        });
+      }
+
   function initDashboardController() {
         hydrateActionButtons(document);
         initThemeControls();
@@ -828,7 +835,7 @@ export function registerDataInitRuntime(runtime, env) {
           cycleOnlineSortMode();
         });
         $('#backToFleet').addEventListener('click', showDashboard);
-        $('#openAddRobot')?.addEventListener('click', showAddRobotPage);
+        $('#openAddRobot')?.addEventListener('click', openManageRobotsFromDashboard);
         $('#openBugReport')?.addEventListener('click', openBugReportModal);
         $('#openBugReportFloating')?.addEventListener('click', openBugReportModal);
         $('#backFromAddRobot')?.addEventListener('click', showDashboard);

@@ -1342,6 +1342,58 @@ export function registerFleetViewRuntime(runtime, env) {
           .map(([id]) => getDefinitionLabel(testDefinitions, id));
       }
 
+  function groupRobotsByType(list = []) {
+        const groupsByKey = new Map();
+        list.forEach((robot) => {
+          const typeId = normalizeText(robot?.typeId, normalizeText(robot?.type, ''));
+          const label = normalizeText(robot?.type, normalizeText(robot?.typeId, 'Unassigned type'));
+          const key = normalizeTypeId(typeId || label || 'unassigned-type');
+          if (!groupsByKey.has(key)) {
+            groupsByKey.set(key, {
+              key,
+              label,
+              typeId,
+              robots: [],
+            });
+          }
+          groupsByKey.get(key).robots.push(robot);
+        });
+        return Array.from(groupsByKey.values()).sort((left, right) => {
+          const byLabel = left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+          if (byLabel !== 0) return byLabel;
+          return left.typeId.localeCompare(right.typeId, undefined, { sensitivity: 'base' });
+        });
+      }
+
+  function buildRobotTypeDivider(group) {
+        const divider = document.createElement('div');
+        divider.className = 'robot-type-divider';
+        divider.setAttribute('data-robot-type-group', group.key);
+
+        const label = document.createElement('span');
+        label.className = 'robot-type-divider-label';
+        label.textContent = group.label;
+
+        const count = document.createElement('span');
+        count.className = 'robot-type-divider-count';
+        count.textContent = `${group.robots.length} robot${group.robots.length === 1 ? '' : 's'}`;
+
+        divider.appendChild(label);
+        divider.appendChild(count);
+        return divider;
+      }
+
+  function renderRobotTypeGroups(container, robots) {
+        if (!container) return;
+        container.replaceChildren();
+        groupRobotsByType(robots).forEach((group) => {
+          container.appendChild(buildRobotTypeDivider(group));
+          group.robots.forEach((robot) => {
+            container.appendChild(renderCard(robot));
+          });
+        });
+      }
+
   function renderCard(robot) {
         const stateKey = statusFromScore(robot);
         const isCritical = stateKey === 'critical';
@@ -1487,14 +1539,8 @@ export function registerFleetViewRuntime(runtime, env) {
         }
   
         if (onlineGrid && offlineGrid) {
-          onlineGrid.replaceChildren();
-          offlineGrid.replaceChildren();
-          onlineRobots.forEach((robot) => {
-            onlineGrid.appendChild(renderCard(robot));
-          });
-          offlineRobots.forEach((robot) => {
-            offlineGrid.appendChild(renderCard(robot));
-          });
+          renderRobotTypeGroups(onlineGrid, onlineRobots);
+          renderRobotTypeGroups(offlineGrid, offlineRobots);
         }
         invalidateCountdownNodeCache();
   
@@ -1610,6 +1656,9 @@ export function registerFleetViewRuntime(runtime, env) {
     buildRobotModelMarkup,
     buildRobotModelContainer,
     issueSummary,
+    groupRobotsByType,
+    buildRobotTypeDivider,
+    renderRobotTypeGroups,
     renderCard,
     applyFilters,
     updateKPIs,
