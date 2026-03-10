@@ -1931,10 +1931,11 @@ export function registerDetailShellRuntime(runtime, env) {
           .filter(Boolean);
       }
 
-  function populateAddRobotTypeOptions() {
+  function populateAddRobotTypeOptions(preferredTypeId = '') {
         const typeEntries = buildKnownTypeEntries();
 
         if (addRobotTypeSelect) {
+          const selectedType = normalizeText(preferredTypeId || addRobotTypeSelect.value, '');
           addRobotTypeSelect.replaceChildren();
           if (!typeEntries.length) {
             const emptyOption = document.createElement('option');
@@ -1954,13 +1955,14 @@ export function registerDetailShellRuntime(runtime, env) {
               option.textContent = entry.label;
               addRobotTypeSelect.appendChild(option);
             });
-            const firstOption = addRobotTypeSelect.querySelector('option:not([value=""])');
-            if (firstOption) firstOption.selected = true;
+            const preferred = addRobotTypeSelect.querySelector(`option[value="${selectedType}"]`)
+              || addRobotTypeSelect.querySelector('option:not([value=""])');
+            if (preferred) preferred.selected = true;
           }
         }
 
         if (editRobotTypeSelect) {
-          const selectedType = normalizeText(editRobotTypeSelect.value, '');
+          const selectedType = normalizeText(preferredTypeId || editRobotTypeSelect.value, '');
           editRobotTypeSelect.replaceChildren();
           if (!typeEntries.length) {
             const emptyOption = document.createElement('option');
@@ -1981,7 +1983,7 @@ export function registerDetailShellRuntime(runtime, env) {
           }
         }
 
-        populateEditRobotTypeOptions(state.selectedManageRobotTypeId);
+        populateEditRobotTypeOptions(preferredTypeId || state.selectedManageRobotTypeId);
       }
 
   function populateEditRobotTypeOptions(preferredTypeId = '') {
@@ -2462,7 +2464,7 @@ export function registerDetailShellRuntime(runtime, env) {
           }
           setEditRobotTypeMessage('Robot type updated successfully.', 'ok');
           await loadRobotTypeConfig();
-          await refreshRobotsFromBackendSnapshot();
+          await refreshRobotsFromBackendSnapshot({ preferredTypeId: selectedTypeId });
         } finally {
           state.isEditRobotTypeInProgress = false;
           if (editRobotTypeSaveButton) {
@@ -2494,6 +2496,10 @@ export function registerDetailShellRuntime(runtime, env) {
             setEditRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to delete robot type.'), 'error');
             return;
           }
+          if (normalizeText(state.selectedManageRobotTypeId, '') === selectedTypeId) {
+            state.selectedManageRobotTypeId = '';
+          }
+          await loadRobotTypeConfig();
           setEditRobotTypeMessage('Robot type deleted.', 'ok');
           await refreshRobotsFromBackendSnapshot();
         } finally {
@@ -2504,15 +2510,11 @@ export function registerDetailShellRuntime(runtime, env) {
         }
       }
 
-  async function createRobotTypeFromForm() {
+      async function createRobotTypeFromForm() {
         if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
         const form = new FormData(addRobotTypeForm);
         const name = normalizeText(form.get('name'), '');
         const batteryCommand = normalizeText(form.get('batteryCommand'), '');
-        const topics = normalizeText(form.get('topics'), '')
-          .split(',')
-          .map((topic) => normalizeText(topic, ''))
-          .filter(Boolean);
         const lowModelFile = addRobotTypeLowModelFileInput?.files?.[0] || null;
         const highModelFile = addRobotTypeHighModelFileInput?.files?.[0] || null;
         if (!name) {
@@ -2534,7 +2536,6 @@ export function registerDetailShellRuntime(runtime, env) {
           const payload = new FormData();
           payload.set('name', name);
           payload.set('batteryCommand', batteryCommand);
-          if (topics.length) payload.set('topics', topics.join(','));
           payload.set('lowModelFile', lowModelFile);
           payload.set('highModelFile', highModelFile);
           const response = await fetch(buildApiUrl('/api/robot-types'), {
@@ -2545,10 +2546,11 @@ export function registerDetailShellRuntime(runtime, env) {
             setAddRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to create robot type.'), 'error');
             return;
           }
-          await response.json();
+          const createdType = await response.json();
+          const createdTypeId = normalizeText(createdType?.typeId || createdType?.id, '');
           setAddRobotTypeMessage('Robot type created and saved.', 'ok');
           await loadRobotTypeConfig();
-          await refreshRobotsFromBackendSnapshot();
+          await refreshRobotsFromBackendSnapshot({ preferredTypeId: createdTypeId });
           if (addRobotTypeForm) addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
           resetRobotTypeBatteryInfoPanels();
@@ -2560,7 +2562,9 @@ export function registerDetailShellRuntime(runtime, env) {
         }
       }
 
-  async function refreshRobotsFromBackendSnapshot() {
+  async function refreshRobotsFromBackendSnapshot(options = {}) {
+        const preferredManageRobotId = normalizeText(options?.preferredManageRobotId, '');
+        const preferredTypeId = normalizeText(options?.preferredTypeId, '');
         const previousSelectedIds = Array.from(state.selectedRobotIds || []);
         const previousDetailRobotId = normalizeText(state.detailRobotId, '');
         const previousManageRobotId = normalizeText(state.selectedManageRobotId, '');
@@ -2587,9 +2591,9 @@ export function registerDetailShellRuntime(runtime, env) {
         syncAutomatedRobotActivityFromState();
         syncAutoMonitorRefreshState();
         populateFilters();
-        populateAddRobotTypeOptions();
-        populateEditRobotSelectOptions(previousManageRobotId);
-        populateEditRobotTypeOptions(state.selectedManageRobotTypeId);
+        populateAddRobotTypeOptions(preferredTypeId);
+        populateEditRobotSelectOptions(preferredManageRobotId || previousManageRobotId);
+        populateEditRobotTypeOptions(preferredTypeId || state.selectedManageRobotTypeId);
         renderRecorderRobotOptions();
   
         if (dashboard.classList.contains('active')) {

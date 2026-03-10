@@ -1490,18 +1490,15 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
           Array.isArray(robot?.testDefinitions)
             ? robot.testDefinitions
             : env.TEST_DEFINITIONS;
-        const fromDefinitions = byDefinition
-          .map((item) => normalizeText(item?.id, ''))
-          .filter(Boolean);
-  
-        const fromCurrentTests = Object.keys(robot?.tests || {}).map((id) => normalizeText(id, ''));
-        const candidates = new Set([...fromDefinitions, ...fromCurrentTests]);
-        const testIds = Array.from(candidates).filter((id) => id && (includeOnline || id !== 'online'));
-        if (testIds.length) return testIds;
-        if (Array.isArray(robot?.testDefinitions)) return [];
-        return env.TEST_DEFINITIONS
+        const testIds = byDefinition
+          .filter((item) => item && typeof item === 'object' && item.runAtConnection === true)
           .map((item) => normalizeText(item?.id, ''))
           .filter((id) => id && (includeOnline || id !== 'online'));
+        if (includeOnline) {
+          const candidates = new Set(['online', ...testIds]);
+          return Array.from(candidates).filter(Boolean);
+        }
+        return testIds;
       }
 
   function normalizeStepDebug(step) {

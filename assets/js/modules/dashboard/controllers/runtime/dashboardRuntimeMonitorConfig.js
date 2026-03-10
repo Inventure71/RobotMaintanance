@@ -692,6 +692,7 @@ export function registerMonitorConfigRuntime(runtime, env) {
           icon: normalizeText(raw.icon, '⚙️'),
           okText: normalizeText(raw.okText, 'Healthy'),
           failText: normalizeText(raw.failText, 'Needs attention'),
+          runAtConnection: raw.runAtConnection === true,
           possibleResults,
           defaultStatus: normalizeStatus(raw.defaultStatus),
           defaultValue: normalizeText(raw.defaultValue, fallback.value),

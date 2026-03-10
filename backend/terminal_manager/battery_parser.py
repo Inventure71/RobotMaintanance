@@ -36,14 +36,14 @@ class BatteryParserMixin:
         ratio = (float(voltage_value) - empty) / (full - empty)
         return max(0.0, min(100.0, ratio * 100.0))
 
-    def _battery_command_for_robot(self, robot_id: str) -> str:
+    def _battery_command_for_robot(self, robot_id: str) -> str | None:
         robot_type = self._resolve_robot_type(robot_id)
         auto_monitor = robot_type.get("autoMonitor") if isinstance(robot_type, dict) else {}
         if isinstance(auto_monitor, dict):
             configured = normalize_text(auto_monitor.get("batteryCommand"), "")
             if configured:
                 return configured
-        return self.AUTO_MONITOR_BATTERY_COMMAND
+        return None
 
     def _parse_battery_output(self, raw_output: str, elapsed_ms: int) -> dict[str, Any]:
         checked_at = time.time()
@@ -162,6 +162,22 @@ class BatteryParserMixin:
     def _refresh_battery_state(self, robot_id: str) -> None:
         started_ms = int(time.time() * 1000)
         battery_command = self._battery_command_for_robot(robot_id)
+        if not battery_command:
+            self._record_runtime_tests(
+                robot_id,
+                {
+                    "battery": {
+                        "status": "ok",
+                        "value": "disabled",
+                        "reason": "BATTERY_MONITOR_DISABLED",
+                        "details": "Battery monitoring disabled for this robot type.",
+                        "ms": 0,
+                        "checkedAt": time.time(),
+                        "source": "auto-monitor",
+                    },
+                },
+            )
+            return
         try:
             output = self.run_command(
                 page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,

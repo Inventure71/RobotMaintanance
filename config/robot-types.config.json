@@ -61,7 +61,13 @@
       "name": "Rosbot 3 Pro",
       "testRefs": [
         "online",
-        "battery"
+        "battery",
+        "topics_snapshot_ros2__battery",
+        "topics_snapshot_ros2__camera",
+        "topics_snapshot_ros2__general",
+        "topics_snapshot_ros2__lidar",
+        "topics_snapshot_ros2__movement",
+        "topics_snapshot_ros2__proximity"
       ],
       "fixRefs": [],
       "topics": [],

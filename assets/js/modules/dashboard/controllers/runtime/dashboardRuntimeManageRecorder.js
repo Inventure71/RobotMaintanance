@@ -999,6 +999,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           state.definitionsSummary = normalizeDefinitionsSummary(
             mappingResult?.summary || body?.summary || body,
           );
+          await loadRobotTypeConfig();
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
           setManageEditorStatus(manageTestEditorStatus, `Saved test definition '${testId}' and updated mappings.`, 'ok');
@@ -1599,6 +1600,8 @@ export function registerManageRecorderRuntime(runtime, env) {
             checkIds: state.workflowRecorder.getCheckIdsForDefinition(definitionId),
             fixId: '',
           });
+          await loadRobotTypeConfig();
+          await refreshRobotsFromBackendSnapshot();
           renderManageDefinitions();
           state.workflowRecorder.setPublishStatus('Test definition published and mapped to selected robot types.', 'ok');
           setManageTabStatus('Recorder test published.', 'ok');

@@ -376,9 +376,13 @@ export class WorkflowRecorderComponent {
     this.render();
   }
 
-  updateWriteSaveAs(blockId, saveAs) {
+  updateWriteBlock(blockId, { command, saveAs }) {
     const normalizedBlockId = normalizeText(blockId, '');
+    const normalizedCommand = normalizeText(command, '');
     const normalizedSaveAs = normalizeToken(saveAs, '');
+    if (!normalizedCommand) {
+      throw new Error('Command is required.');
+    }
     if (!normalizedSaveAs) {
       throw new Error('saveAs is required.');
     }
@@ -392,11 +396,38 @@ export class WorkflowRecorderComponent {
     if (index === -1) {
       throw new Error('Write block not found.');
     }
+    const previousSaveAs = normalizeText(this.blocks[index].saveAs, '');
     this.blocks[index] = {
       ...this.blocks[index],
+      command: normalizedCommand,
       saveAs: normalizedSaveAs,
     };
+    if (previousSaveAs && previousSaveAs !== normalizedSaveAs) {
+      this.blocks = this.blocks.map((block) => {
+        if (block.type !== 'read' || normalizeText(block.read?.inputRef, '') !== previousSaveAs) {
+          return block;
+        }
+        return {
+          ...block,
+          read: {
+            ...block.read,
+            inputRef: normalizedSaveAs,
+          },
+        };
+      });
+    }
     this.render();
+  }
+
+  updateWriteSaveAs(blockId, saveAs) {
+    const existing = this.blocks.find((block) => block.id === normalizeText(blockId, '') && block.type === 'write');
+    if (!existing) {
+      throw new Error('Write block not found.');
+    }
+    this.updateWriteBlock(blockId, {
+      command: normalizeText(existing.command, ''),
+      saveAs,
+    });
   }
 
   addWriteBlock({ command, outputPayload }) {
@@ -723,7 +754,7 @@ export class WorkflowRecorderComponent {
           if (isWrite) {
             editor.innerHTML = `
               <label class="form-field">Command
-                <input type="text" class="form-input cmd-input" value="${block.command || ''}" disabled title="Command executed in terminal cannot be modified here. Delete and re-run.">
+                <input type="text" class="form-input cmd-input" value="${block.command || ''}">
               </label>
               <label class="form-field">Save As
                 <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
@@ -735,10 +766,14 @@ export class WorkflowRecorderComponent {
             const saveBtn = editor.querySelector('.save-btn');
             saveBtn.addEventListener('click', (event) => {
               event.stopPropagation();
-              const nextValue = editor.querySelector('.save-input').value.trim();
+              const nextCommand = editor.querySelector('.cmd-input').value.trim();
+              const nextSaveAs = editor.querySelector('.save-input').value.trim();
               try {
-                this.updateWriteSaveAs(block.id, nextValue);
-                this.setStatus(`Updated ${block.id} saveAs.`, 'ok');
+                this.updateWriteBlock(block.id, {
+                  command: nextCommand,
+                  saveAs: nextSaveAs,
+                });
+                this.setStatus(`Updated ${block.id}.`, 'ok');
               } catch (error) {
                 this.setStatus(error instanceof Error ? error.message : String(error), 'error');
               }
