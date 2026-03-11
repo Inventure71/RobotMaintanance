@@ -1890,9 +1890,24 @@ export function registerDetailShellRuntime(runtime, env) {
 
   function setMessageNode(node, message, style = '') {
         if (!node) return;
-        node.textContent = message || '';
+        const normalizedMessage = normalizeText(message, '');
+        node.textContent = normalizedMessage;
         node.classList.remove('error', 'ok', 'warn');
+        node.classList.toggle('is-empty', !normalizedMessage);
+        node.style.display = normalizedMessage ? '' : 'none';
+        node.style.minHeight = normalizedMessage ? '' : '0';
+        node.style.margin = normalizedMessage ? '' : '0';
         if (style) node.classList.add(style);
+      }
+
+  function setCollapsibleTextNode(node, message) {
+        if (!node) return;
+        const normalizedMessage = normalizeText(message, '');
+        node.textContent = normalizedMessage;
+        node.classList.toggle('is-empty', !normalizedMessage);
+        node.style.display = normalizedMessage ? '' : 'none';
+        node.style.minHeight = normalizedMessage ? '' : '0';
+        node.style.margin = normalizedMessage ? '' : '0';
       }
 
   function getRobotTypeById(typeId) {
@@ -2121,7 +2136,7 @@ export function registerDetailShellRuntime(runtime, env) {
           if (editRobotTypeForm) editRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
           resetRobotTypeBatteryInfoPanels();
-          if (editRobotTypeSummary) editRobotTypeSummary.textContent = 'Select a robot type to view details.';
+          setCollapsibleTextNode(editRobotTypeSummary, 'Select a robot type to view details.');
           if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = true;
           if (editRobotTypeDeleteButton) editRobotTypeDeleteButton.disabled = true;
           return;
@@ -2141,7 +2156,7 @@ export function registerDetailShellRuntime(runtime, env) {
           const lowAvailable = modelSupportsQuality(typeConfig?.model, 'low') ? 'configured' : 'missing';
           const highAvailable = modelSupportsQuality(typeConfig?.model, 'high') ? 'configured' : 'missing';
           const batteryState = normalizeText(typeConfig?.batteryCommand, '') ? 'configured' : 'off';
-          editRobotTypeSummary.textContent = '';
+          setCollapsibleTextNode(editRobotTypeSummary, '');
         }
         syncEditRobotTypeModelControls(typeConfig);
         if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = false;
@@ -2172,7 +2187,7 @@ export function registerDetailShellRuntime(runtime, env) {
         });
           if (editRobotUsernameInput) editRobotUsernameInput.value = '';
           if (editRobotPasswordInput) editRobotPasswordInput.value = '';
-          if (editRobotSummary) editRobotSummary.textContent = 'Select a robot to view details.';
+          setCollapsibleTextNode(editRobotSummary, 'Select a robot to view details.');
           if (editRobotModelStatus) editRobotModelStatus.textContent = 'Robot currently uses the class model.';
           if (editRobotSaveButton) editRobotSaveButton.disabled = true;
           if (editRobotDeleteButton) editRobotDeleteButton.disabled = true;
@@ -2203,7 +2218,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (editRobotPasswordInput) editRobotPasswordInput.value = normalizeText(robot?.ssh?.password, '');
         if (editRobotSummary) {
           const hasOverride = Boolean(normalizeText(robot?.model?.file_name, ''));
-          editRobotSummary.textContent = '';
+          setCollapsibleTextNode(editRobotSummary, '');
         }
         if (editRobotSaveButton) editRobotSaveButton.disabled = false;
         if (editRobotDeleteButton) editRobotDeleteButton.disabled = false;

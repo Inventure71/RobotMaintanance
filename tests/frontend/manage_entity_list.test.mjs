@@ -100,3 +100,25 @@ test('renderManageEntityList keeps legacy string labels working', () => {
     assert.equal(row.children[0].textContent, 'Legacy Label');
   });
 });
+
+test('renderManageEntityList preserves scroll position when rerendering the list', () => {
+  withFakeDocument(() => {
+    const container = new FakeElement('div');
+    container.scrollTop = 184;
+    container.scrollLeft = 12;
+
+    renderManageEntityList({
+      container,
+      items: [
+        { id: 'robot-01', name: 'Atlas' },
+        { id: 'robot-02', name: 'Bolt' },
+      ],
+      getId: (item) => item.id,
+      getLabel: (item) => item.name,
+      activeId: 'robot-02',
+    });
+
+    assert.equal(container.scrollTop, 184);
+    assert.equal(container.scrollLeft, 12);
+  });
+});

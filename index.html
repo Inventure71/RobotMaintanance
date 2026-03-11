@@ -44,7 +44,7 @@
                     tests</button>
                   <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix
                     mode</button>
-                  <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
+                  <button class="button dashboard-manage-robots-button" id="openAddRobot" type="button" data-button-intent="navigation">Manage robots</button>
                 </div>
               </div>
             </details>
@@ -205,12 +205,12 @@
                       <option value="">No robots available</option>
                     </select>
                   </label>
-                  <div id="editRobotSummary" class="muted-copy" style="margin-top: 8px;">Select a robot to view details.</div>
+                  <div id="editRobotSummary" class="muted-copy manage-panel-summary">Select a robot to view details.</div>
                   <div id="editRobotList" class="manage-entity-list" aria-label="Robot catalog list"></div>
                 </div>
                 <div class="panel manage-editor-panel">
                   <h2>Modify selected robot</h2>
-                  <div id="editRobotStatus" class="add-robot-message" aria-live="polite"></div>
+                  <div id="editRobotStatus" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
                   <form id="editRobotForm" class="manage-editor-form" novalidate>
                     <label class="form-field">
                       Robot name
@@ -289,12 +289,12 @@
                       <option value="">No robot types available</option>
                     </select>
                   </label>
-                  <div id="editRobotTypeSummary" class="muted-copy" style="margin-top: 8px;">Select a robot type to view details.</div>
+                  <div id="editRobotTypeSummary" class="muted-copy manage-panel-summary">Select a robot type to view details.</div>
                   <div id="editRobotTypeList" class="manage-entity-list" aria-label="Robot type list"></div>
                 </div>
                 <div class="panel manage-editor-panel">
                   <h2>Modify selected robot type</h2>
-                  <div id="editRobotTypeStatus" class="add-robot-message" aria-live="polite"></div>
+                  <div id="editRobotTypeStatus" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
                   <form id="editRobotTypeForm" class="manage-editor-form" novalidate>
                     <label class="form-field">
                       Type ID
@@ -360,7 +360,7 @@
                     <h2>Register a new robot</h2>
                     <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
                   </div>
-                  <div id="addRobotMessage" class="add-robot-message" aria-live="polite"></div>
+                  <div id="addRobotMessage" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
                   <form id="addRobotForm" class="add-robot-form" novalidate>
                     <div class="form-grid">
                       <label class="form-field">
@@ -435,7 +435,7 @@
                 <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
                   <h3 class="add-robot-side-title">Create a new robot type</h3>
                   <p class="muted-copy">Upload both model variants and set the battery command in the same form.</p>
-                  <div id="addRobotTypeMessage" class="add-robot-message" aria-live="polite"></div>
+                  <div id="addRobotTypeMessage" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
                   <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
                     <div class="robot-type-create-grid">
                       <label class="form-field robot-type-create-name-field">

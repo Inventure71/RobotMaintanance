@@ -20,6 +20,8 @@ export function renderManageEntityList({
   activeId = '',
 }) {
   if (!container) return;
+  const previousScrollTop = Number(container.scrollTop || 0);
+  const previousScrollLeft = Number(container.scrollLeft || 0);
   container.replaceChildren();
 
   const list = Array.isArray(items) ? items : [];
@@ -58,4 +60,7 @@ export function renderManageEntityList({
     }
     container.appendChild(row);
   });
+
+  container.scrollTop = previousScrollTop;
+  container.scrollLeft = previousScrollLeft;
 }
