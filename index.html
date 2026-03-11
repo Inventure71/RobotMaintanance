@@ -18,120 +18,132 @@
 <body>
   <div class="shell">
     <section id="dashboard" class="view active">
-      <div class="status-bar dashboard-kpis-bar">
-        <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
-        <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
-        <div class="kpi err"><span>Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
-        <button class="button button-compact" id="runFleetOnline" type="button" data-button-intent="monitor"
-          title="Refresh online state">Refresh online</button>
-      </div>
-      <div id="fleetOnlineSummary" class="panel dashboard-online-summary"
-        style="display: none; padding: 0.65rem 0.8rem;"></div>
+      <div class="dashboard-shell">
+        <div class="dashboard-layout">
+          <aside class="dashboard-sidebar" aria-label="Fleet controls">
+            <section class="dashboard-sidebar-section panel">
+              <div class="dashboard-sidebar-heading">
+                <h2 class="dashboard-sidebar-title">Fleet health</h2>
+                <p class="dashboard-sidebar-copy">High-level fleet status across all registered robots.</p>
+              </div>
+              <div class="status-bar dashboard-kpis-bar">
+                <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
+                <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
+                <div class="kpi err"><span>Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
+              </div>
+            </section>
 
-      <div class="status-bar dashboard-quickbar">
-        <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all
-          robots</button>
-        <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected
-          tests</button>
-        <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix
-          mode</button>
-        <div id="selectionSummary" class="panel" style="padding: 0.55rem 0.7rem; min-width: 180px;">0 robot(s) selected
+            <details class="dashboard-controls dashboard-sidebar-section" open>
+              <summary>
+                <span class="dashboard-controls-summary-label">Filters &amp; control</span>
+                <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="dashboard-controls-body">
+                <div class="filters">
+                  <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
+                  <select id="filterType" class="filter-item"></select>
+                  <select id="filterError" class="filter-item"></select>
+                </div>
+
+                <div id="selectionSummary" class="panel dashboard-selection-summary">0 robot(s) selected</div>
+
+                <div class="status-bar dashboard-quickbar dashboard-sidebar-actions">
+                  <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all
+                    robots</button>
+                  <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected
+                    tests</button>
+                  <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix
+                    mode</button>
+                  <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
+                </div>
+              </div>
+            </details>
+
+            <section class="dashboard-sidebar-section panel">
+              <div class="dashboard-sidebar-heading">
+                <h2 class="dashboard-sidebar-title">Auto monitor</h2>
+                <p class="dashboard-sidebar-copy">Tune background checks and dashboard behavior.</p>
+              </div>
+              <div class="dashboard-sidebar-stack">
+                <div class="panel monitor-config-control">
+                  <div class="monitor-config-head">
+                    <label class="fleet-parallelism-label" for="monitorMode">Auto monitor mode:</label>
+                  </div>
+                  <div class="monitor-config-row">
+                    <select id="monitorMode" class="filter-item monitor-config-select">
+                      <option value="online_battery">Online + Battery</option>
+                      <option value="online_battery_topics">Online + Battery + Topics</option>
+                    </select>
+                    <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval (seconds):</label>
+                    <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5"
+                      max="300" step="1" value="30" />
+                    <button class="button button-compact" id="applyMonitorConfig" type="button"
+                      data-button-intent="monitor">Apply</button>
+                  </div>
+                  <div class="monitor-config-hint-row">
+                    <p class="fleet-parallelism-hint monitor-config-hint">Global backend setting. Topics mode runs a shared
+                      snapshot command once
+                      per robot interval.</p>
+                    <span id="monitorConfigStatus" class="monitor-config-status" aria-live="polite"></span>
+                  </div>
+                </div>
+
+                <div class="panel fleet-parallelism-control">
+                  <label class="fleet-parallelism-label" for="fleetParallelism">
+                    Fleet parallelism:
+                    <span id="fleetParallelismValue" class="fleet-parallelism-value">8</span>
+                  </label>
+                  <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
+                  <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected"
+                    and "Refresh online" increases speed at the cost of overhead.</p>
+                </div>
+              </div>
+            </section>
+          </aside>
+
+          <div class="dashboard-main">
+            <div id="fleetOnlineSummary" class="panel dashboard-online-summary"
+              style="display: none; padding: 0.65rem 0.8rem;"></div>
+
+            <div id="dashboardFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
+              <div class="fix-mode-header">
+                <h3>Fix mode</h3>
+                <span id="dashboardFixModeSummary" class="fix-mode-summary">Select one or more robots to see available
+                  fixes.</span>
+              </div>
+              <div id="dashboardFixModeActions" class="fix-mode-actions"></div>
+              <div id="dashboardFixModeStatus" class="fix-mode-status"></div>
+            </div>
+
+            <div class="fleet-sections">
+              <section class="fleet-section" id="onlineSection">
+                <div class="fleet-section-head">
+                  <h2 class="fleet-section-title" id="onlineSectionTitle">Online (0)</h2>
+                  <div class="fleet-section-actions">
+                    <button class="button button-compact dashboard-sort-button" id="cycleOnlineSort" type="button" data-button-intent="utility">
+                      Sort robots: Battery
+                    </button>
+                    <button class="button button-compact" id="runFleetOnline" type="button" data-button-intent="monitor"
+                      title="Refresh online state">Refresh online</button>
+                    <button class="button button-compact" id="selectAllOnlineRobots" type="button"
+                      data-button-intent="selection">Select all online</button>
+                  </div>
+                </div>
+                <div id="onlineRobotGrid" class="grid"></div>
+              </section>
+              <section class="fleet-section" id="offlineSection">
+                <div class="fleet-section-head">
+                  <h2 class="fleet-section-title" id="offlineSectionTitle">Offline (0)</h2>
+                  <button class="button button-compact" id="selectAllOfflineRobots" type="button"
+                    data-button-intent="selection">Select all offline</button>
+                </div>
+                <div id="offlineRobotGrid" class="grid"></div>
+              </section>
+            </div>
+            <div id="emptyState" class="empty-state hidden">No robots matched your filters.</div>
+          </div>
         </div>
       </div>
-      <div id="dashboardFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
-        <div class="fix-mode-header">
-          <h3>Fix mode</h3>
-          <span id="dashboardFixModeSummary" class="fix-mode-summary">Select one or more robots to see available
-            fixes.</span>
-        </div>
-        <div id="dashboardFixModeActions" class="fix-mode-actions"></div>
-        <div id="dashboardFixModeStatus" class="fix-mode-status"></div>
-      </div>
-
-      <details class="dashboard-controls">
-        <summary>
-          <span class="dashboard-controls-summary-label">Fleet controls and filters</span>
-          <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
-        </summary>
-        <div class="dashboard-controls-body">
-          <div class="filters">
-            <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
-            <select id="filterType" class="filter-item"></select>
-            <select id="filterError" class="filter-item"></select>
-          </div>
-
-          <div class="status-bar dashboard-bulk-actions">
-            <button class="button" id="openAddRobot" type="button" data-button-intent="create">Manage robots</button>
-          </div>
-          <div class="panel monitor-config-control">
-            <div class="monitor-config-head">
-              <label class="fleet-parallelism-label" for="monitorMode">Auto monitor mode:</label>
-            </div>
-            <div class="monitor-config-row">
-              <select id="monitorMode" class="filter-item monitor-config-select">
-                <option value="online_battery">Online + Battery</option>
-                <option value="online_battery_topics">Online + Battery + Topics</option>
-              </select>
-              <label class="monitor-config-inline-label" for="monitorTopicsIntervalSec">Topics interval (seconds):</label>
-              <input id="monitorTopicsIntervalSec" class="filter-item monitor-config-input" type="number" min="5"
-                max="300" step="1" value="30" />
-              <button class="button button-compact" id="applyMonitorConfig" type="button"
-                data-button-intent="monitor">Apply</button>
-            </div>
-            <div class="monitor-config-hint-row">
-              <p class="fleet-parallelism-hint monitor-config-hint">Global backend setting. Topics mode runs a shared
-                snapshot command once
-                per robot interval.</p>
-              <span id="monitorConfigStatus" class="monitor-config-status" aria-live="polite"></span>
-            </div>
-          </div>
-
-          <div class="panel fleet-parallelism-control">
-            <label class="fleet-parallelism-label" for="fleetParallelism">
-              Fleet parallelism:
-              <span id="fleetParallelismValue" class="fleet-parallelism-value">8</span>
-            </label>
-            <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
-            <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected"
-              and "Refresh online" increases speed at the cost of overhead.</p>
-          </div>
-          <div class="panel theme-switcher-control">
-            <label class="fleet-parallelism-label" for="themeSelect">
-              Theme:
-            </label>
-            <select id="themeSelect" class="filter-item">
-              <option value="deep-space">Deep Space</option>
-              <option value="arctic-grid">Arctic Grid</option>
-              <option value="ember-signal">Ember Signal</option>
-            </select>
-          </div>
-        </div>
-      </details>
-
-      <div class="fleet-sections">
-        <section class="fleet-section" id="onlineSection">
-          <div class="fleet-section-head">
-            <h2 class="fleet-section-title" id="onlineSectionTitle">Online (0)</h2>
-            <div class="fleet-section-actions">
-              <button class="button button-compact" id="cycleOnlineSort" type="button" data-button-intent="selection">
-                Sort robots: Battery
-              </button>
-              <button class="button button-compact" id="selectAllOnlineRobots" type="button"
-                data-button-intent="selection">Select all online</button>
-            </div>
-          </div>
-          <div id="onlineRobotGrid" class="grid"></div>
-        </section>
-        <section class="fleet-section" id="offlineSection">
-          <div class="fleet-section-head">
-            <h2 class="fleet-section-title" id="offlineSectionTitle">Offline (0)</h2>
-            <button class="button button-compact" id="selectAllOfflineRobots" type="button"
-              data-button-intent="selection">Select all offline</button>
-          </div>
-          <div id="offlineRobotGrid" class="grid"></div>
-        </section>
-      </div>
-      <div id="emptyState" class="empty-state hidden">No robots matched your filters.</div>
     </section>
 
     <section id="addRobot" class="view">

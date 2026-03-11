@@ -162,6 +162,113 @@
       min-width: 210px;
     }
 
+    .dashboard-shell {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .dashboard-sidebar-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: clamp(280px, 23vw, 360px) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .dashboard-sidebar,
+    .dashboard-main,
+    .dashboard-sidebar-stack {
+      display: grid;
+      gap: 1rem;
+      align-content: start;
+      min-width: 0;
+    }
+
+    .dashboard-main,
+    .fleet-sections,
+    .fleet-section,
+    .dashboard-main .grid {
+      min-width: 0;
+    }
+
+    .dashboard-sidebar-section {
+      display: grid;
+      gap: 0.85rem;
+      padding: 0.95rem;
+    }
+
+    .dashboard-controls.dashboard-sidebar-section {
+      display: block;
+      padding: 0;
+    }
+
+    .dashboard-sidebar-heading {
+      display: grid;
+      gap: 0.3rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .dashboard-sidebar-title {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-size: 0.95rem;
+      color: #d9e6ff;
+    }
+
+    .dashboard-sidebar .dashboard-kpis-bar,
+    .dashboard-sidebar .dashboard-quickbar,
+    .dashboard-sidebar .filters {
+      margin: 0;
+    }
+
+    .dashboard-sidebar .dashboard-kpis-bar,
+    .dashboard-sidebar .dashboard-sidebar-actions,
+    .dashboard-sidebar .filters {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-selection-summary {
+      padding: 0.55rem 0.7rem;
+      min-width: 0;
+    }
+
+    .dashboard-sidebar .monitor-config-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: 0.55rem;
+    }
+
+    .dashboard-sidebar .monitor-config-select,
+    .dashboard-sidebar .monitor-config-input,
+    .dashboard-sidebar .monitor-config-row .button {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+    }
+
+    .dashboard-sidebar .monitor-config-inline-label {
+      white-space: normal;
+      line-height: 1.35;
+    }
+
+    .dashboard-sidebar .monitor-config-hint-row {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+    }
+
+    .dashboard-sidebar .monitor-config-status {
+      white-space: normal;
+      justify-self: start;
+    }
+
     .dashboard-controls {
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -358,19 +465,6 @@
       }
     }
 
-    .theme-switcher-control {
-      padding: 0.62rem 0.72rem;
-      border: 1px solid rgba(138, 198, 255, 0.2);
-      border-radius: 12px;
-      background: var(--control-panel-bg);
-      display: grid;
-      gap: 0.36rem;
-    }
-
-    .theme-switcher-control .filter-item {
-      padding: 0.6rem 0.66rem;
-    }
-
     .monitor-config-status.ok {
       color: var(--ok);
     }
@@ -464,6 +558,44 @@
       gap: 0.6rem;
     }
 
+    .dashboard-sort-button,
+    .button.app-button.dashboard-sort-button,
+    .button.dashboard-sort-button {
+      background: linear-gradient(180deg, rgba(34, 61, 111, 0.95), rgba(25, 42, 76, 0.95));
+      border-color: rgba(108, 172, 255, 0.46);
+      color: #d7e8ff;
+      box-shadow: inset 0 1px 0 rgba(180, 217, 255, 0.16);
+    }
+
+    .dashboard-sort-button:hover,
+    .button.app-button.dashboard-sort-button:hover,
+    .button.dashboard-sort-button:hover {
+      border-color: rgba(137, 193, 255, 0.7);
+      background: linear-gradient(180deg, rgba(40, 72, 130, 0.98), rgba(30, 49, 88, 0.98));
+    }
+
+    @media (max-width: 1180px) {
+      .dashboard-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-sidebar {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .dashboard-sidebar .dashboard-kpis-bar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .dashboard-sidebar .dashboard-sidebar-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .dashboard-sidebar .filters {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+    }
+
     @media (max-width: 1100px) {
       .dashboard-kpis-bar {
         grid-template-columns: repeat(2, minmax(170px, 1fr));
@@ -471,6 +603,21 @@
     }
 
     @media (max-width: 700px) {
+      #runFleetOnline {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .dashboard-sidebar {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-sidebar .dashboard-kpis-bar,
+      .dashboard-sidebar .dashboard-sidebar-actions,
+      .dashboard-sidebar .filters {
+        grid-template-columns: 1fr;
+      }
+
       .dashboard-kpis-bar {
         grid-template-columns: 1fr;
       }
@@ -721,7 +868,8 @@ body::after {
 }
 
 .shell {
-  max-width: 1320px;
+  width: 100%;
+  max-width: none;
   padding: 1.5rem clamp(0.85rem, 2vw, 1.8rem) 1.9rem;
 }
 
@@ -832,8 +980,7 @@ body::after {
 }
 
 .fleet-parallelism-control,
-.monitor-config-control,
-.theme-switcher-control {
+.monitor-config-control {
   border-color: color-mix(in srgb, var(--surface-border) 70%, transparent);
   border-radius: var(--radius-sm);
   background: linear-gradient(160deg, color-mix(in srgb, var(--control-panel-bg) 98%, transparent), color-mix(in srgb, var(--surface-panel-glass) 80%, transparent));

@@ -2125,6 +2125,18 @@
   box-shadow: inset 0 1px 0 rgba(255, 217, 179, 0.14);
 }
 
+.button.app-button.dashboard-sort-button {
+  background: linear-gradient(160deg, rgba(40, 76, 138, 0.96), rgba(24, 46, 89, 0.96));
+  border-color: rgba(111, 181, 255, 0.74);
+  color: rgb(226, 240, 255);
+  box-shadow: inset 0 1px 0 rgba(190, 223, 255, 0.18);
+}
+
+.button.app-button.dashboard-sort-button:hover {
+  background: linear-gradient(160deg, rgba(51, 94, 169, 0.98), rgba(31, 58, 110, 0.98));
+  border-color: rgba(149, 206, 255, 0.88);
+}
+
 .robot-card {
   border-color: color-mix(in srgb, var(--surface-border) 86%, transparent);
   border-radius: var(--radius-lg);
