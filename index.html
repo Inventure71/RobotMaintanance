@@ -156,23 +156,18 @@
     </section>
 
     <section id="addRobot" class="view">
-      <div class="detail-toolbar">
-        <div class="detail-toolbar-left">
-          <button class="button" id="backFromAddRobot" type="button" data-button-intent="navigation">← Back to
-            fleet</button>
-          <div class="detail-title-bar">Manage Robots</div>
-        </div>
-      </div>
       <div class="manage-robots-shell">
         <div class="panel manage-tabs-panel">
           <div class="manage-tabs-row manage-tabs-row-primary">
+            <button class="button button-compact manage-shell-back-button" id="backFromAddRobot" type="button"
+              data-button-intent="navigation">← Back to fleet</button>
             <div class="manage-tab-bar manage-tab-bar-primary">
               <span class="manage-tab-bar-label">Primary navigation</span>
               <div class="manage-tabs" role="tablist" aria-label="Robot management sections">
                 <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
                   data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
                 <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
-                  data-button-intent="navigation" title="Create and edit test or fix flows">Flow Editor</button>
+                  data-button-intent="navigation" title="Create and edit test or fix flows">Test Editor</button>
                 <button id="manageTabButtonDefinitions" class="button button-compact" type="button" data-tab="definitions"
                   data-button-intent="navigation" title="Browse and manage test and fix definitions">Definitions</button>
               </div>
@@ -181,25 +176,41 @@
           </div>
 
           <div id="manageTabPanelRobots" class="manage-tab-panel active robot-registry-panel" data-tab-panel="robots">
-            <div class="manage-subnav-panel">
-              <div class="manage-subnav-header">
-                <span class="manage-subnav-label">Robot Registry view</span>
-                <span class="manage-subnav-copy">Choose whether to update existing robots or register a new one.</span>
-              </div>
-              <div class="registry-submenu-row" role="tablist" aria-label="Robot registry actions">
+            <div class="manage-subnav-panel registry-task-panel">
+              <div class="registry-submenu-row" role="tablist" aria-label="Robot registry tasks">
                 <button id="robotRegistryManageButton" class="button button-compact active" type="button"
-                  data-robot-registry-panel-button="manage" data-button-intent="navigation">Manage existing</button>
+                  data-robot-registry-panel-button="existing-robots" data-button-intent="navigation">Existing robots</button>
+                <button id="robotRegistryExistingTypesButton" class="button button-compact" type="button"
+                  data-robot-registry-panel-button="existing-robot-types" data-button-intent="navigation">Existing robot types</button>
                 <button id="robotRegistryAddButton" class="button button-compact" type="button"
-                  data-robot-registry-panel-button="add" data-button-intent="navigation">Add new</button>
+                  data-robot-registry-panel-button="new-robot" data-button-intent="navigation">Register new robot</button>
+                <button id="robotRegistryNewTypeButton" class="button button-compact" type="button"
+                  data-robot-registry-panel-button="new-robot-type" data-button-intent="navigation">Register new robot type</button>
               </div>
             </div>
 
-            <div class="registry-subpanel active" data-robot-registry-panel="manage">
+            <div class="registry-subpanel active" data-robot-registry-panel="existing-robots">
+              <div class="registry-intro-pills">
+                <div class="registry-view-intro panel">
+                  <div>
+                    <h2>Existing robots</h2>
+                    <p class="muted-copy">Choose a registered robot, then update its identity, connection, or advanced model override settings.</p>
+                  </div>
+                </div>
+                <div class="panel registry-jump-card registry-jump-card-alert">
+                  <div>
+                    <h3 class="registry-jump-title">Want to register a new robot?</h3>
+                    <p class="muted-copy">Use the dedicated registration page so creation stays separate from editing the current catalog.</p>
+                  </div>
+                  <button class="button button-compact" type="button" data-robot-registry-panel-button="new-robot"
+                    data-button-intent="create">Go to register new robot</button>
+                </div>
+              </div>
               <div class="manage-grid two-cols">
                 <div class="panel manage-list-panel">
-                  <h2>Robot Catalog</h2>
-                  <p class="muted-copy">Select a robot to inspect and modify connection details.</p>
-                  <label class="form-field">
+                  <h2>Robots</h2>
+                  <p class="muted-copy">Select one robot to edit. The list is the primary selection surface.</p>
+                  <label class="form-field hidden">
                     Select robot
                     <select id="editRobotSelect" class="form-input">
                       <option value="">No robots available</option>
@@ -209,7 +220,8 @@
                   <div id="editRobotList" class="manage-entity-list" aria-label="Robot catalog list"></div>
                 </div>
                 <div class="panel manage-editor-panel">
-                  <h2>Modify selected robot</h2>
+                  <h2>Edit robot</h2>
+                  <p class="muted-copy">Core connection details stay visible. Model overrides are kept in Advanced settings.</p>
                   <div id="editRobotStatus" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
                   <form id="editRobotForm" class="manage-editor-form" novalidate>
                     <label class="form-field">
@@ -224,45 +236,6 @@
                       IP / Host
                       <input id="editRobotIp" class="form-input" name="ip" type="text" autocomplete="off" required />
                     </label>
-                    <div class="robot-model-override-grid">
-                      <label class="form-field">
-                        Override class model (low quality)
-                        <select id="editRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
-                          <option value="default" selected>Use current assignment</option>
-                          <option value="override">Replace with override file</option>
-                        </select>
-                      </label>
-                      <label class="form-field">
-                        Override class model (high quality)
-                        <select id="editRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
-                          <option value="default" selected>Use current assignment</option>
-                          <option value="override">Replace with override file</option>
-                        </select>
-                      </label>
-                      <label id="editRobotLowModelField" class="form-field upload-dropzone-field hidden">
-                        Low quality override file
-                        <div id="editRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-low">
-                          <input id="editRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
-                          <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
-                          <span id="editRobotLowModelFileName" class="upload-dropzone-meta">Keep class low-res model</span>
-                        </div>
-                      </label>
-                      <label id="editRobotHighModelField" class="form-field upload-dropzone-field hidden">
-                        High quality override file
-                        <div id="editRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-high">
-                          <input id="editRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
-                          <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
-                          <span id="editRobotHighModelFileName" class="upload-dropzone-meta">Keep class high-res model</span>
-                        </div>
-                      </label>
-                    </div>
-                    <div id="editRobotModelStatus" class="muted-copy" style="margin-top: -4px;">Robot currently uses the class model.</div>
-                    <label id="editRobotClearOverrideField" class="form-field hidden">
-                      <span style="display:flex; align-items:center; gap:8px;">
-                        <input id="editRobotClearOverrideInput" name="clearModelOverride" type="checkbox" />
-                        <span>Remove robot override and use the class model</span>
-                      </span>
-                    </label>
                     <label class="form-field">
                       SSH username
                       <input id="editRobotUsername" class="form-input" name="username" type="text" autocomplete="off" required />
@@ -271,6 +244,50 @@
                       SSH password
                       <input id="editRobotPassword" class="form-input" name="password" type="password" autocomplete="off" required />
                     </label>
+                    <details class="manage-advanced-block">
+                      <summary>Advanced settings</summary>
+                      <div class="manage-advanced-body">
+                        <div class="robot-model-override-grid">
+                          <label class="form-field">
+                            Override class model (low quality)
+                            <select id="editRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
+                              <option value="default" selected>Use current assignment</option>
+                              <option value="override">Replace with override file</option>
+                            </select>
+                          </label>
+                          <label class="form-field">
+                            Override class model (high quality)
+                            <select id="editRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
+                              <option value="default" selected>Use current assignment</option>
+                              <option value="override">Replace with override file</option>
+                            </select>
+                          </label>
+                          <label id="editRobotLowModelField" class="form-field upload-dropzone-field hidden">
+                            Low quality override file
+                            <div id="editRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-low">
+                              <input id="editRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
+                              <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
+                              <span id="editRobotLowModelFileName" class="upload-dropzone-meta">Keep class low-res model</span>
+                            </div>
+                          </label>
+                          <label id="editRobotHighModelField" class="form-field upload-dropzone-field hidden">
+                            High quality override file
+                            <div id="editRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-edit-high">
+                              <input id="editRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
+                              <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
+                              <span id="editRobotHighModelFileName" class="upload-dropzone-meta">Keep class high-res model</span>
+                            </div>
+                          </label>
+                        </div>
+                        <div id="editRobotModelStatus" class="muted-copy manage-advanced-note">Robot currently uses the class model.</div>
+                        <label id="editRobotClearOverrideField" class="form-field hidden">
+                          <span class="manage-inline-checkbox">
+                            <input id="editRobotClearOverrideInput" name="clearModelOverride" type="checkbox" />
+                            <span>Remove robot override and use the class model</span>
+                          </span>
+                        </label>
+                      </div>
+                    </details>
                     <div class="add-robot-actions">
                       <button id="editRobotSaveButton" class="button" type="submit" data-button-intent="create">Save changes</button>
                       <button id="editRobotDeleteButton" class="button button-danger" type="button" data-button-intent="danger">Delete robot</button>
@@ -278,12 +295,128 @@
                   </form>
                 </div>
               </div>
+            </div>
 
+            <div class="registry-subpanel hidden" data-robot-registry-panel="new-robot">
+              <div class="add-robot-shell registry-new-robot-shell">
+                <div class="panel add-robot-panel">
+                  <div class="add-robot-head">
+                    <h2>Register a new robot</h2>
+                    <p class="muted-copy">Start with the robot itself. If the right robot type does not exist yet, create it intentionally from the Robot Types task.</p>
+                  </div>
+                  <div class="registry-flow-note">
+                    <span class="add-robot-badge">Step 1: type</span>
+                    <span class="add-robot-badge">Step 2: connection</span>
+                    <span class="add-robot-badge">Step 3: advanced overrides</span>
+                  </div>
+                  <div id="addRobotMessage" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
+                  <form id="addRobotForm" class="add-robot-form" novalidate>
+                    <div class="form-grid">
+                      <label class="form-field">
+                        Robot name
+                        <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input"
+                          placeholder="e.g. ROSbot Lab South" required />
+                      </label>
+                      <label class="form-field">
+                        Robot type
+                        <select id="addRobotType" name="type" class="form-input" required>
+                          <option value="" disabled selected>Loading robot types...</option>
+                        </select>
+                      </label>
+                      <label class="form-field">
+                        IP / Host
+                        <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
+                          placeholder="e.g. 192.168.0.42 or robot-host" required />
+                      </label>
+                      <label class="form-field">
+                        SSH username
+                        <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input"
+                          placeholder="robot" required />
+                      </label>
+                      <label class="form-field">
+                        SSH password
+                        <div class="form-password-field">
+                          <input id="addRobotPassword" name="password" type="password" autocomplete="off"
+                            class="form-input" placeholder="••••••••" required />
+                          <button id="toggleAddRobotPassword" class="button password-toggle" type="button"
+                            data-button-intent="utility" aria-label="Show password">Show</button>
+                        </div>
+                      </label>
+                    </div>
+                    <details class="manage-advanced-block">
+                      <summary>Advanced settings</summary>
+                      <div class="manage-advanced-body">
+                        <div class="robot-model-override-grid">
+                          <label class="form-field">
+                            Override class model (low quality)
+                            <select id="addRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
+                              <option value="default" selected>Keep class model</option>
+                              <option value="override">Upload override</option>
+                            </select>
+                          </label>
+                          <label class="form-field">
+                            Override class model (high quality)
+                            <select id="addRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
+                              <option value="default" selected>Keep class model</option>
+                              <option value="override">Upload override</option>
+                            </select>
+                          </label>
+                          <label id="addRobotLowModelField" class="form-field upload-dropzone-field hidden">
+                            Low quality override file
+                            <div id="addRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-low">
+                              <input id="addRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
+                              <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
+                              <span id="addRobotLowModelFileName" class="upload-dropzone-meta">No low-res override selected</span>
+                            </div>
+                          </label>
+                          <label id="addRobotHighModelField" class="form-field upload-dropzone-field hidden">
+                            High quality override file
+                            <div id="addRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-high">
+                              <input id="addRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
+                              <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
+                              <span id="addRobotHighModelFileName" class="upload-dropzone-meta">No high-res override selected</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    </details>
+                    <div class="add-robot-actions">
+                      <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
+                      <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
+                    </div>
+                  </form>
+                </div>
+                <aside class="panel registry-support-panel" aria-label="Robot type help">
+                  <h3 class="add-robot-side-title">Need a new robot type?</h3>
+                  <p class="muted-copy">Open the dedicated new-type page when you need to upload models or define a battery command before registering this robot.</p>
+                  <button class="button" type="button" id="openRobotTypeCreatorFromNewRobot" data-robot-registry-panel-button="new-robot-type"
+                    data-button-intent="navigation">Go to register new robot type</button>
+                </aside>
+              </div>
+            </div>
+
+            <div class="registry-subpanel hidden" data-robot-registry-panel="existing-robot-types">
+              <div class="registry-intro-pills">
+                <div class="registry-view-intro panel">
+                  <div>
+                    <h2>Existing robot types</h2>
+                    <p class="muted-copy">Manage shared type metadata in one place. Update names, battery commands, and model assets for the selected type.</p>
+                  </div>
+                </div>
+                <div class="panel registry-jump-card registry-jump-card-alert">
+                  <div>
+                    <h3 class="registry-jump-title">Need to register a new robot type?</h3>
+                    <p class="muted-copy">Use the dedicated new-type page so creation stays separate from editing existing definitions.</p>
+                  </div>
+                  <button class="button button-compact" type="button" data-robot-registry-panel-button="new-robot-type"
+                    data-button-intent="create">Go to register new robot type</button>
+                </div>
+              </div>
               <div class="manage-grid two-cols registry-types-grid">
                 <div class="panel manage-list-panel">
-                  <h2>Robot Types</h2>
-                  <p class="muted-copy">Inspect, rename, and remove existing robot type definitions.</p>
-                  <label class="form-field">
+                  <h2>Type catalog</h2>
+                  <p class="muted-copy">Select one type to inspect, rename, replace models, or remove.</p>
+                  <label class="form-field hidden">
                     Select robot type
                     <select id="editRobotTypeManageSelect" class="form-input">
                       <option value="">No robot types available</option>
@@ -293,9 +426,9 @@
                   <div id="editRobotTypeList" class="manage-entity-list" aria-label="Robot type list"></div>
                 </div>
                 <div class="panel manage-editor-panel">
-                  <h2>Modify selected robot type</h2>
+                  <h2>Edit robot type</h2>
                   <div id="editRobotTypeStatus" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
-                  <form id="editRobotTypeForm" class="manage-editor-form" novalidate>
+                  <form id="editRobotTypeForm" class="manage-editor-form robot-type-form" novalidate>
                     <label class="form-field">
                       Type ID
                       <input id="editRobotTypeId" class="form-input" type="text" readonly />
@@ -337,9 +470,9 @@
                         </div>
                       </label>
                     </div>
-                    <div id="editRobotTypeModelStatus" class="muted-copy" style="margin-top: -4px;">Type model status unavailable.</div>
+                    <div id="editRobotTypeModelStatus" class="muted-copy manage-advanced-note">Type model status unavailable.</div>
                     <label id="editRobotTypeClearModelField" class="form-field hidden">
-                      <span style="display:flex; align-items:center; gap:8px;">
+                      <span class="manage-inline-checkbox">
                         <input id="editRobotTypeClearModelInput" name="clearModel" type="checkbox" />
                         <span>Remove class model and fall back to the default viewer</span>
                       </span>
@@ -353,90 +486,20 @@
               </div>
             </div>
 
-            <div class="registry-subpanel hidden" data-robot-registry-panel="add">
+            <div class="registry-subpanel hidden" data-robot-registry-panel="new-robot-type">
               <div class="add-robot-shell">
                 <div class="panel add-robot-panel">
                   <div class="add-robot-head">
-                    <h2>Register a new robot</h2>
-                    <p class="muted-copy">Add a robot that uses one of the existing robot types.</p>
+                    <h2>Register a new robot type</h2>
+                    <p class="muted-copy">Create a new shared robot type with both model qualities and an optional live battery command.</p>
                   </div>
-                  <div id="addRobotMessage" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
-                  <form id="addRobotForm" class="add-robot-form" novalidate>
-                    <div class="form-grid">
-                      <label class="form-field">
-                        Robot name
-                        <input id="addRobotName" name="name" type="text" autocomplete="off" class="form-input"
-                          placeholder="e.g. ROSbot Lab South" required />
-                      </label>
-                      <label class="form-field">
-                        Robot type
-                        <select id="addRobotType" name="type" class="form-input" required>
-                          <option value="" disabled selected>Loading robot types...</option>
-                        </select>
-                      </label>
-                      <label class="form-field">
-                        IP / Host
-                        <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
-                          placeholder="e.g. 192.168.0.42 or robot-host" required />
-                      </label>
-                      <div class="robot-model-override-grid">
-                        <label class="form-field">
-                          Override class model (low quality)
-                          <select id="addRobotOverrideLowModelSelect" class="form-input" name="overrideLowModel">
-                            <option value="default" selected>Keep class model</option>
-                            <option value="override">Upload override</option>
-                          </select>
-                        </label>
-                        <label class="form-field">
-                          Override class model (high quality)
-                          <select id="addRobotOverrideHighModelSelect" class="form-input" name="overrideHighModel">
-                            <option value="default" selected>Keep class model</option>
-                            <option value="override">Upload override</option>
-                          </select>
-                        </label>
-                        <label id="addRobotLowModelField" class="form-field upload-dropzone-field hidden">
-                          Low quality override file
-                          <div id="addRobotLowModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-low">
-                            <input id="addRobotLowModelFile" class="upload-dropzone-input" name="lowModelFile" type="file" accept=".glb,.gltf" />
-                            <span class="upload-dropzone-title">Drop a low-res override here or choose a file</span>
-                            <span id="addRobotLowModelFileName" class="upload-dropzone-meta">No low-res override selected</span>
-                          </div>
-                        </label>
-                        <label id="addRobotHighModelField" class="form-field upload-dropzone-field hidden">
-                          High quality override file
-                          <div id="addRobotHighModelDropzone" class="upload-dropzone" data-upload-dropzone="robot-add-high">
-                            <input id="addRobotHighModelFile" class="upload-dropzone-input" name="highModelFile" type="file" accept=".glb,.gltf" />
-                            <span class="upload-dropzone-title">Drop a high-res override here or choose a file</span>
-                            <span id="addRobotHighModelFileName" class="upload-dropzone-meta">No high-res override selected</span>
-                          </div>
-                        </label>
-                      </div>
-                      <label class="form-field">
-                        SSH username
-                        <input id="addRobotUsername" name="username" type="text" autocomplete="off" class="form-input"
-                          placeholder="robot" required />
-                      </label>
-                      <label class="form-field">
-                        SSH password
-                        <div class="form-password-field">
-                          <input id="addRobotPassword" name="password" type="password" autocomplete="off"
-                            class="form-input" placeholder="••••••••" required />
-                          <button id="toggleAddRobotPassword" class="button password-toggle" type="button"
-                            data-button-intent="utility" aria-label="Show password">Show</button>
-                        </div>
-                      </label>
-                    </div>
-                    <div class="add-robot-actions">
-                      <button class="button add-robot-save" type="submit" data-button-intent="create">Save robot</button>
-                      <span id="addRobotSavingHint" class="muted-copy" aria-live="polite"></span>
-                    </div>
-                  </form>
-                </div>
-                <aside class="panel add-robot-side-panel" aria-label="Robot type creation guidance">
-                  <h3 class="add-robot-side-title">Create a new robot type</h3>
-                  <p class="muted-copy">Upload both model variants and set the battery command in the same form.</p>
+                  <div class="registry-flow-note">
+                    <span class="add-robot-badge">Shared type metadata</span>
+                    <span class="add-robot-badge">Battery command</span>
+                    <span class="add-robot-badge">Low + high models</span>
+                  </div>
                   <div id="addRobotTypeMessage" class="add-robot-message is-empty" aria-live="polite" style="display:none; min-height:0; margin:0;"></div>
-                  <form id="addRobotTypeForm" class="manage-editor-form" novalidate>
+                  <form id="addRobotTypeForm" class="manage-editor-form robot-type-form robot-type-create-form" novalidate>
                     <div class="robot-type-create-grid">
                       <label class="form-field robot-type-create-name-field">
                         Display name
@@ -474,9 +537,11 @@
                         </div>
                       </label>
                     </div>
-                    <button id="addRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Create robot type</button>
+                    <div class="add-robot-actions">
+                      <button id="addRobotTypeSaveButton" class="button" type="submit" data-button-intent="create">Create robot type</button>
+                    </div>
                   </form>
-                </aside>
+                </div>
               </div>
             </div>
           </div>
@@ -486,7 +551,7 @@
               <div class="definitions-library-header">
                 <div>
                   <h2>Definitions Library</h2>
-                  <p class="muted-copy">Browse tests and fixes together, then open the selected item in the flow editor.</p>
+                  <p class="muted-copy">Browse tests and fixes together, then open the selected item in the test editor.</p>
                 </div>
                 <div class="definitions-library-actions">
                   <button id="manageNewTestDefinitionButton" class="button" type="button"
@@ -510,7 +575,7 @@
           <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
             <div class="flow-editor-switcher manage-subnav-panel">
               <div class="manage-subnav-header">
-                <span class="manage-subnav-label">Flow Editor mode</span>
+                <span class="manage-subnav-label">Test Editor mode</span>
                 <span class="manage-subnav-copy">Switch the editor between test and fix workflows.</span>
               </div>
               <div class="manage-tabs" role="tablist" aria-label="Flow definition type">

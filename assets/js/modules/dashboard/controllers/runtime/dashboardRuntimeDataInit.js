@@ -750,7 +750,7 @@ export function registerDataInitRuntime(runtime, env) {
   function openManageRobotsFromDashboard() {
         showAddRobotPage({
           tabId: 'robots',
-          robotRegistryPanelId: 'manage',
+          robotRegistryPanelId: 'existing-robots',
         });
       }
 

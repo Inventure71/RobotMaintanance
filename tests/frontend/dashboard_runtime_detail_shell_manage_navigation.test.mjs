@@ -98,36 +98,58 @@ async function loadApi() {
   return context.module.exports.registerDetailShellRuntime;
 }
 
-function buildRegistryNodes(initialPanel = 'manage') {
-  const manageButton = makeNode({
-    dataset: { robotRegistryPanelButton: 'manage' },
-    classes: initialPanel === 'manage' ? ['active'] : [],
+function buildRegistryNodes(initialPanel = 'existing-robots') {
+  const existingButton = makeNode({
+    dataset: { robotRegistryPanelButton: 'existing-robots' },
+    classes: initialPanel === 'existing-robots' ? ['active'] : [],
   });
-  const addButton = makeNode({
-    dataset: { robotRegistryPanelButton: 'add' },
-    classes: initialPanel === 'add' ? ['active'] : [],
+  const existingTypesButton = makeNode({
+    dataset: { robotRegistryPanelButton: 'existing-robot-types' },
+    classes: initialPanel === 'existing-robot-types' ? ['active'] : [],
   });
-  manageButton.setAttribute('aria-selected', initialPanel === 'manage' ? 'true' : 'false');
-  addButton.setAttribute('aria-selected', initialPanel === 'add' ? 'true' : 'false');
+  const newRobotButton = makeNode({
+    dataset: { robotRegistryPanelButton: 'new-robot' },
+    classes: initialPanel === 'new-robot' ? ['active'] : [],
+  });
+  const newTypeButton = makeNode({
+    dataset: { robotRegistryPanelButton: 'new-robot-type' },
+    classes: initialPanel === 'new-robot-type' ? ['active'] : [],
+  });
+  existingButton.setAttribute('aria-selected', initialPanel === 'existing-robots' ? 'true' : 'false');
+  existingTypesButton.setAttribute('aria-selected', initialPanel === 'existing-robot-types' ? 'true' : 'false');
+  newRobotButton.setAttribute('aria-selected', initialPanel === 'new-robot' ? 'true' : 'false');
+  newTypeButton.setAttribute('aria-selected', initialPanel === 'new-robot-type' ? 'true' : 'false');
 
-  const managePanel = makeNode({
-    dataset: { robotRegistryPanel: 'manage' },
-    classes: initialPanel === 'manage' ? ['active'] : ['hidden'],
+  const existingPanel = makeNode({
+    dataset: { robotRegistryPanel: 'existing-robots' },
+    classes: initialPanel === 'existing-robots' ? ['active'] : ['hidden'],
   });
-  const addPanel = makeNode({
-    dataset: { robotRegistryPanel: 'add' },
-    classes: initialPanel === 'add' ? ['active'] : ['hidden'],
+  const existingTypesPanel = makeNode({
+    dataset: { robotRegistryPanel: 'existing-robot-types' },
+    classes: initialPanel === 'existing-robot-types' ? ['active'] : ['hidden'],
+  });
+  const newRobotPanel = makeNode({
+    dataset: { robotRegistryPanel: 'new-robot' },
+    classes: initialPanel === 'new-robot' ? ['active'] : ['hidden'],
+  });
+  const newTypePanel = makeNode({
+    dataset: { robotRegistryPanel: 'new-robot-type' },
+    classes: initialPanel === 'new-robot-type' ? ['active'] : ['hidden'],
   });
 
   return {
-    manageButton,
-    addButton,
-    managePanel,
-    addPanel,
+    existingButton,
+    existingTypesButton,
+    newRobotButton,
+    newTypeButton,
+    existingPanel,
+    existingTypesPanel,
+    newRobotPanel,
+    newTypePanel,
   };
 }
 
-function makeEnv(initialPanel = 'manage') {
+function makeEnv(initialPanel = 'existing-robots') {
   const registry = buildRegistryNodes(initialPanel);
   return {
     MANAGE_TABS: ['robots', 'definitions', 'recorder'],
@@ -157,8 +179,8 @@ function makeEnv(initialPanel = 'manage') {
     addRobotHighModelFileInput: makeNode(),
     addRobotLowModelFileName: makeNode(),
     addRobotHighModelFileName: makeNode(),
-    robotRegistryPanelButtons: [registry.manageButton, registry.addButton],
-    robotRegistryPanels: [registry.managePanel, registry.addPanel],
+    robotRegistryPanelButtons: [registry.existingButton, registry.existingTypesButton, registry.newRobotButton, registry.newTypeButton],
+    robotRegistryPanels: [registry.existingPanel, registry.existingTypesPanel, registry.newRobotPanel, registry.newTypePanel],
   };
 }
 
@@ -199,7 +221,7 @@ function makeRuntime(calls) {
 
 test('showAddRobotPage preserves the current robot registry subpanel when no override is requested', async () => {
   const registerDetailShellRuntime = await loadApi();
-  const env = makeEnv('add');
+  const env = makeEnv('new-robot');
   const calls = {
     addRobotMessages: [],
     editRobotMessages: [],
@@ -218,20 +240,22 @@ test('showAddRobotPage preserves the current robot registry subpanel when no ove
     refreshDefinitions: false,
   });
 
-  assert.equal(env.state.activeRobotRegistryPanel, 'add');
+  assert.equal(env.state.activeRobotRegistryPanel, 'new-robot');
   assert.equal(env.addRobotSection.classList.contains('active'), true);
   assert.equal(env.dashboard.classList.contains('active'), false);
   assert.equal(env.detail.classList.contains('active'), false);
-  assert.equal(env.robotRegistryPanelButtons[1].classList.contains('active'), true);
-  assert.equal(env.robotRegistryPanels[1].classList.contains('active'), true);
+  assert.equal(env.robotRegistryPanelButtons[2].classList.contains('active'), true);
+  assert.equal(env.robotRegistryPanels[2].classList.contains('active'), true);
   assert.equal(env.robotRegistryPanels[0].classList.contains('hidden'), true);
+  assert.equal(env.robotRegistryPanels[1].classList.contains('hidden'), true);
+  assert.equal(env.robotRegistryPanels[3].classList.contains('hidden'), true);
   assert.equal(calls.setActiveManageTab.length, 1);
   assert.equal(calls.setActiveManageTab[0][0], 'robots');
 });
 
-test('showAddRobotPage can explicitly force the Manage existing robot registry panel', async () => {
+test('showAddRobotPage can explicitly force the Existing robots registry panel', async () => {
   const registerDetailShellRuntime = await loadApi();
-  const env = makeEnv('add');
+  const env = makeEnv('new-robot');
   const calls = {
     addRobotMessages: [],
     editRobotMessages: [],
@@ -248,16 +272,20 @@ test('showAddRobotPage can explicitly force the Manage existing robot registry p
     tabId: 'robots',
     syncHash: false,
     refreshDefinitions: false,
-    robotRegistryPanelId: 'manage',
+    robotRegistryPanelId: 'existing-robots',
   });
 
-  assert.equal(env.state.activeRobotRegistryPanel, 'manage');
+  assert.equal(env.state.activeRobotRegistryPanel, 'existing-robots');
   assert.equal(env.robotRegistryPanelButtons[0].classList.contains('active'), true);
   assert.equal(env.robotRegistryPanelButtons[0].getAttribute('aria-selected'), 'true');
   assert.equal(env.robotRegistryPanelButtons[1].classList.contains('active'), false);
   assert.equal(env.robotRegistryPanelButtons[1].getAttribute('aria-selected'), 'false');
+  assert.equal(env.robotRegistryPanelButtons[2].classList.contains('active'), false);
+  assert.equal(env.robotRegistryPanelButtons[3].classList.contains('active'), false);
   assert.equal(env.robotRegistryPanels[0].classList.contains('active'), true);
   assert.equal(env.robotRegistryPanels[0].classList.contains('hidden'), false);
   assert.equal(env.robotRegistryPanels[1].classList.contains('active'), false);
   assert.equal(env.robotRegistryPanels[1].classList.contains('hidden'), true);
+  assert.equal(env.robotRegistryPanels[2].classList.contains('hidden'), true);
+  assert.equal(env.robotRegistryPanels[3].classList.contains('hidden'), true);
 });

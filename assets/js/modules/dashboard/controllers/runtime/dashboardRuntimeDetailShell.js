@@ -873,10 +873,14 @@ export function registerDetailShellRuntime(runtime, env) {
 
   function normalizeRobotRegistryPanel(panelId) {
         const normalized = normalizeText(panelId, '').toLowerCase();
-        return normalized === 'add' ? 'add' : 'manage';
+        if (normalized === 'manage' || normalized === 'existing-robots') return 'existing-robots';
+        if (normalized === 'add' || normalized === 'new-robot') return 'new-robot';
+        if (normalized === 'robot-types' || normalized === 'existing-robot-types' || normalized === 'types' || normalized === 'type') return 'existing-robot-types';
+        if (normalized === 'new-robot-type' || normalized === 'add-type' || normalized === 'new-type') return 'new-robot-type';
+        return 'existing-robots';
       }
 
-  function setActiveRobotRegistryPanel(panelId = 'manage') {
+  function setActiveRobotRegistryPanel(panelId = 'existing-robots') {
         const nextPanel = normalizeRobotRegistryPanel(panelId);
         state.activeRobotRegistryPanel = nextPanel;
         robotRegistryPanelButtons.forEach((button) => {
@@ -894,10 +898,10 @@ export function registerDetailShellRuntime(runtime, env) {
   function initRobotRegistryPanels() {
         robotRegistryPanelButtons.forEach((button) => {
           button.addEventListener('click', () => {
-            setActiveRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton || 'manage');
+            setActiveRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton || 'existing-robots');
           });
         });
-        setActiveRobotRegistryPanel(state.activeRobotRegistryPanel || 'manage');
+        setActiveRobotRegistryPanel(state.activeRobotRegistryPanel || 'existing-robots');
       }
 
   function syncUploadDropzoneLabel(input, labelNode, emptyLabel = 'No file selected') {
@@ -1894,9 +1898,11 @@ export function registerDetailShellRuntime(runtime, env) {
         node.textContent = normalizedMessage;
         node.classList.remove('error', 'ok', 'warn');
         node.classList.toggle('is-empty', !normalizedMessage);
-        node.style.display = normalizedMessage ? '' : 'none';
-        node.style.minHeight = normalizedMessage ? '' : '0';
-        node.style.margin = normalizedMessage ? '' : '0';
+        if (node.style) {
+          node.style.display = normalizedMessage ? '' : 'none';
+          node.style.minHeight = normalizedMessage ? '' : '0';
+          node.style.margin = normalizedMessage ? '' : '0';
+        }
         if (style) node.classList.add(style);
       }
 
@@ -1905,9 +1911,11 @@ export function registerDetailShellRuntime(runtime, env) {
         const normalizedMessage = normalizeText(message, '');
         node.textContent = normalizedMessage;
         node.classList.toggle('is-empty', !normalizedMessage);
-        node.style.display = normalizedMessage ? '' : 'none';
-        node.style.minHeight = normalizedMessage ? '' : '0';
-        node.style.margin = normalizedMessage ? '' : '0';
+        if (node.style) {
+          node.style.display = normalizedMessage ? '' : 'none';
+          node.style.minHeight = normalizedMessage ? '' : '0';
+          node.style.margin = normalizedMessage ? '' : '0';
+        }
       }
 
   function getRobotTypeById(typeId) {
@@ -2335,6 +2343,7 @@ export function registerDetailShellRuntime(runtime, env) {
           setEditRobotMessage('New robot is ready for review/editing.', 'ok');
           if (editRobotSelect?.value) {
             setActiveManageTab('robots', { syncHash: false, persist: true });
+            setActiveRobotRegistryPanel('existing-robots');
           }
           if (addRobotForm) addRobotForm.reset();
           resetRobotOverrideControls({
@@ -2593,6 +2602,7 @@ export function registerDetailShellRuntime(runtime, env) {
           if (addRobotTypeForm) addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
           resetRobotTypeBatteryInfoPanels();
+          setActiveRobotRegistryPanel('new-robot-type');
         } finally {
           state.isCreateRobotTypeInProgress = false;
           if (addRobotTypeSaveButton) {

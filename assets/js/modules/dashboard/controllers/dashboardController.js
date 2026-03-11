@@ -154,7 +154,7 @@ let ROBOT_TYPE_BY_ID = new Map();
       selectedManageRobotId: '',
       selectedManageRobotTypeId: '',
       activeManageTab: 'robots',
-      activeRobotRegistryPanel: 'manage',
+      activeRobotRegistryPanel: 'existing-robots',
       definitionsSummary: {
         commandPrimitives: [],
         tests: [],

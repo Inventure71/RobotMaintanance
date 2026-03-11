@@ -41,3 +41,41 @@ test('dashboard shell organizes header, sidebar, and main fleet content', async 
     /<div class="dashboard-main">[\s\S]*?id="fleetOnlineSummary"[\s\S]*?id="selectionSummary"[\s\S]*?id="dashboardFixModePanel"[\s\S]*?id="onlineSection"[\s\S]*?id="cycleOnlineSort"[\s\S]*?id="runFleetOnline"[\s\S]*?id="selectAllOnlineRobots"[\s\S]*?id="offlineSection"[\s\S]*?id="emptyState"[\s\S]*?<\/div>/,
   );
 });
+
+test('manage shell keeps the back action inside the tabs panel and removes the title pill', async () => {
+  const html = await fs.readFile(INDEX_PATH, 'utf8');
+  const addRobotStart = html.indexOf('<section id="addRobot" class="view">');
+  const detailStart = html.indexOf('<section id="detail" class="view">');
+
+  assert.notEqual(addRobotStart, -1, 'expected addRobot section in index.html');
+  assert.notEqual(detailStart, -1, 'expected detail section in index.html');
+  assert.ok(detailStart > addRobotStart, 'expected detail section after addRobot section');
+
+  const addRobotSection = collapseWhitespace(html.slice(addRobotStart, detailStart));
+
+  assert.doesNotMatch(addRobotSection, /<div class="detail-title-bar">Manage Robots<\/div>/);
+  assert.doesNotMatch(addRobotSection, /Robot Registry tasks/);
+  assert.doesNotMatch(addRobotSection, /Pick one job\. Each view keeps a single primary workflow on screen\./);
+  assert.match(
+    addRobotSection,
+    /<div class="manage-tabs-row manage-tabs-row-primary">[\s\S]*?id="backFromAddRobot"[\s\S]*?class="manage-tab-bar manage-tab-bar-primary"[\s\S]*?Primary navigation[\s\S]*?<\/div>/,
+  );
+  assert.match(
+    addRobotSection,
+    /<div class="registry-intro-pills">[\s\S]*?<div class="registry-view-intro panel">[\s\S]*?Existing robots[\s\S]*?Choose a registered robot[\s\S]*?<div class="panel registry-jump-card registry-jump-card-alert">[\s\S]*?Want to register a new robot\?[\s\S]*?Go to register new robot[\s\S]*?<\/div>/,
+  );
+
+  const newRobotTypeStart = addRobotSection.indexOf('data-robot-registry-panel="new-robot-type"');
+  const definitionsStart = addRobotSection.indexOf('id="manageTabPanelDefinitions"');
+
+  assert.notEqual(newRobotTypeStart, -1, 'expected new robot type registry panel');
+  assert.notEqual(definitionsStart, -1, 'expected definitions panel after robot registry panels');
+  assert.ok(definitionsStart > newRobotTypeStart, 'expected definitions panel after new robot type panel');
+
+  const newRobotTypePanel = collapseWhitespace(addRobotSection.slice(newRobotTypeStart, definitionsStart));
+
+  assert.match(newRobotTypePanel, /<div class="add-robot-shell">[\s\S]*?Register a new robot type/);
+  assert.doesNotMatch(newRobotTypePanel, /registry-new-robot-shell/);
+  assert.doesNotMatch(newRobotTypePanel, /Already have robot types\?/);
+  assert.doesNotMatch(newRobotTypePanel, /Go to existing robot types/);
+});
