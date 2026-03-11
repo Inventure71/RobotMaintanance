@@ -104,24 +104,24 @@ def test_robot_and_type_model_payloads_include_available_qualities(tmp_path):
     (robot_models_root / "LowRes" / "robots").mkdir(parents=True)
     (robot_models_root / "HighRes").mkdir(parents=True)
     (robot_models_root / "LowRes" / "robots" / "theseus.glb").write_bytes(b"low")
-    (robot_models_root / "LowRes" / "rosbot-3-pro.glb").write_bytes(b"type-low")
-    (robot_models_root / "HighRes" / "rosbot-3-pro.glb").write_bytes(b"type-high")
+    (robot_models_root / "LowRes" / "custom-type.glb").write_bytes(b"type-low")
+    (robot_models_root / "HighRes" / "custom-type.glb").write_bytes(b"type-high")
 
     robots_by_id = {
         "theseus": {
             "id": "theseus",
             "name": "Theseus",
-            "type": "rosbot-3-pro",
+            "type": "custom-type",
             "ip": "10.0.0.9",
             "ssh": {"username": "u", "password": "p"},
             "model": {"file_name": "robots/theseus.glb"},
         }
     }
     robot_types_by_id = {
-        "rosbot-3-pro": {
-            "typeId": "rosbot-3-pro",
+        "custom-type": {
+            "typeId": "custom-type",
             "tests": [],
-            "model": {"file_name": "rosbot-3-pro.glb"},
+            "model": {"file_name": "custom-type.glb"},
         }
     }
 
@@ -146,7 +146,7 @@ def test_robot_and_type_model_payloads_include_available_qualities(tmp_path):
     types_response = client.get("/api/robot-types")
     assert types_response.status_code == 200
     type_model = types_response.json()[0]["model"]
-    assert type_model["file_name"] == "rosbot-3-pro.glb"
+    assert type_model["file_name"] == "custom-type.glb"
     assert type_model["available_qualities"] == ["low", "high"]
     assert int(type_model["asset_version"]) > 0
 

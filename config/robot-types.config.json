@@ -55,27 +55,6 @@
         "/tf_static",
         "/velocity"
       ]
-    },
-    {
-      "id": "rosbot-3-pro",
-      "name": "Rosbot 3 Pro",
-      "testRefs": [
-        "online",
-        "topics_snapshot_ros2__battery",
-        "topics_snapshot_ros2__camera",
-        "topics_snapshot_ros2__general",
-        "topics_snapshot_ros2__lidar",
-        "topics_snapshot_ros2__movement",
-        "topics_snapshot_ros2__proximity"
-      ],
-      "fixRefs": [],
-      "topics": [],
-      "model": {
-        "file_name": "rosbot-3-pro.glb"
-      },
-      "autoMonitor": {
-        "batteryCommand": "source /opt/ros/humble/setup.bash >/dev/null 2>&1 || true; source ~/ws/install/setup.bash >/dev/null 2>&1 || true; timeout 6s ros2 topic echo --once /battery"
-      }
     }
   ]
 }
