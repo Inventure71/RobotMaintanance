@@ -35,21 +35,11 @@
 
             <details class="dashboard-controls dashboard-sidebar-section" open>
               <summary>
-                <span class="dashboard-controls-summary-label">Filters &amp; control</span>
+                <span class="dashboard-controls-summary-label">Control</span>
                 <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
               </summary>
               <div class="dashboard-controls-body">
-                <div class="filters">
-                  <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
-                  <select id="filterType" class="filter-item"></select>
-                  <select id="filterError" class="filter-item"></select>
-                </div>
-
-                <div id="selectionSummary" class="panel dashboard-selection-summary">0 robot(s) selected</div>
-
                 <div class="status-bar dashboard-quickbar dashboard-sidebar-actions">
-                  <button class="button" id="selectAllRobots" type="button" data-button-intent="selection">Select all
-                    robots</button>
                   <button class="button" id="runSelectedRobotTests" type="button" data-button-intent="run">Run selected
                     tests</button>
                   <button class="button" id="toggleDashboardFixMode" type="button" data-button-intent="fix">Enter fix
@@ -59,12 +49,29 @@
               </div>
             </details>
 
-            <section class="dashboard-sidebar-section panel">
-              <div class="dashboard-sidebar-heading">
-                <h2 class="dashboard-sidebar-title">Auto monitor</h2>
-                <p class="dashboard-sidebar-copy">Tune background checks and dashboard behavior.</p>
+            <details class="dashboard-controls dashboard-sidebar-section" open>
+              <summary>
+                <span class="dashboard-controls-summary-label">Search &amp; filter</span>
+                <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="dashboard-controls-body">
+                <div class="filters">
+                  <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
+                  <select id="filterType" class="filter-item"></select>
+                  <select id="filterError" class="filter-item"></select>
+                </div>
               </div>
-              <div class="dashboard-sidebar-stack">
+            </details>
+
+            <details class="dashboard-controls dashboard-sidebar-section dashboard-expert-controls">
+              <summary>
+                <span class="dashboard-controls-summary-label">Expert Mode</span>
+                <span class="dashboard-controls-summary-icon" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="dashboard-controls-body dashboard-sidebar-stack">
+                <div class="dashboard-sidebar-heading">
+                  <p class="dashboard-sidebar-copy">Tune background checks and dashboard behavior.</p>
+                </div>
                 <div class="panel monitor-config-control">
                   <div class="monitor-config-head">
                     <label class="fleet-parallelism-label" for="monitorMode">Auto monitor mode:</label>
@@ -98,12 +105,14 @@
                     and "Refresh online" increases speed at the cost of overhead.</p>
                 </div>
               </div>
-            </section>
+            </details>
           </aside>
 
           <div class="dashboard-main">
             <div id="fleetOnlineSummary" class="panel dashboard-online-summary"
               style="display: none; padding: 0.65rem 0.8rem;"></div>
+            <div id="selectionSummary" class="panel dashboard-selection-summary">0 robot(s) selected</div>
+            <button id="selectAllRobots" type="button" hidden aria-hidden="true" tabindex="-1"></button>
 
             <div id="dashboardFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
               <div class="fix-mode-header">

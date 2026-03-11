@@ -978,9 +978,12 @@ export function registerDataInitRuntime(runtime, env) {
           }
         });
   
-        $('#selectAllRobots').addEventListener('click', () => {
-          selectAllRobots();
-        });
+        const selectAllRobotsButton = $('#selectAllRobots');
+        if (selectAllRobotsButton) {
+          selectAllRobotsButton.addEventListener('click', () => {
+            selectAllRobots();
+          });
+        }
   
         $('#selectAllOnlineRobots').addEventListener('click', () => {
           selectAllOnlineRobots();

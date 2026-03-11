@@ -33,11 +33,11 @@ test('dashboard shell organizes header, sidebar, and main fleet content', async 
 
   assert.match(
     dashboardSection,
-    /<aside class="dashboard-sidebar" aria-label="Fleet controls">[\s\S]*?Fleet health[\s\S]*?Filters &amp; control[\s\S]*?Auto monitor[\s\S]*?<\/aside>/,
+    /<aside class="dashboard-sidebar" aria-label="Fleet controls">[\s\S]*?Fleet health[\s\S]*?Control[\s\S]*?Search &amp; filter[\s\S]*?Expert Mode[\s\S]*?<\/aside>/,
   );
   assert.doesNotMatch(dashboardSection, /id="themeSelect"/);
   assert.match(
     dashboardSection,
-    /<div class="dashboard-main">[\s\S]*?id="fleetOnlineSummary"[\s\S]*?id="dashboardFixModePanel"[\s\S]*?id="onlineSection"[\s\S]*?id="cycleOnlineSort"[\s\S]*?id="runFleetOnline"[\s\S]*?id="selectAllOnlineRobots"[\s\S]*?id="offlineSection"[\s\S]*?id="emptyState"[\s\S]*?<\/div>/,
+    /<div class="dashboard-main">[\s\S]*?id="fleetOnlineSummary"[\s\S]*?id="selectionSummary"[\s\S]*?id="dashboardFixModePanel"[\s\S]*?id="onlineSection"[\s\S]*?id="cycleOnlineSort"[\s\S]*?id="runFleetOnline"[\s\S]*?id="selectAllOnlineRobots"[\s\S]*?id="offlineSection"[\s\S]*?id="emptyState"[\s\S]*?<\/div>/,
   );
 });

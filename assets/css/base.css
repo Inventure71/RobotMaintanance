@@ -239,6 +239,10 @@
       min-width: 0;
     }
 
+    .dashboard-main > .dashboard-selection-summary {
+      margin: 0;
+    }
+
     .dashboard-sidebar .monitor-config-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -319,6 +323,10 @@
       padding: 0.8rem;
       display: grid;
       gap: 0.75rem;
+    }
+
+    .dashboard-expert-controls .dashboard-controls-body {
+      gap: 1rem;
     }
 
     .dashboard-controls .filters {
