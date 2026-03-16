@@ -35,7 +35,10 @@ test('dashboard shell organizes header, sidebar, and main fleet content', async 
     dashboardSection,
     /<aside class="dashboard-sidebar" aria-label="Fleet controls">[\s\S]*?Fleet health[\s\S]*?Control[\s\S]*?Search &amp; filter[\s\S]*?Expert Mode[\s\S]*?<\/aside>/,
   );
-  assert.doesNotMatch(dashboardSection, /id="themeSelect"/);
+  assert.match(
+    dashboardSection,
+    /Expert Mode[\s\S]*?Visual style:[\s\S]*?id="themeSelect"[\s\S]*?<option value="swiss">Swiss<\/option>[\s\S]*?<option value="classic">Classic<\/option>/,
+  );
   assert.match(
     dashboardSection,
     /<div class="dashboard-main">[\s\S]*?id="fleetOnlineSummary"[\s\S]*?id="selectionSummary"[\s\S]*?id="dashboardFixModePanel"[\s\S]*?id="onlineSection"[\s\S]*?id="cycleOnlineSort"[\s\S]*?id="runFleetOnline"[\s\S]*?id="selectAllOnlineRobots"[\s\S]*?id="offlineSection"[\s\S]*?id="emptyState"[\s\S]*?<\/div>/,

@@ -8,7 +8,13 @@ import {
   hydrateActionButtons,
   setActionButtonLoading,
 } from '../../../components/action-button-component.js';
-import { initThemeSwitcher } from '../../../components/theme-switcher-component.js';
+import {
+  DEFAULT_DESIGN_SYSTEM_ID,
+  DESIGN_SYSTEM_ATTRIBUTE,
+  DESIGN_SYSTEM_OPTIONS,
+  DESIGN_SYSTEM_STORAGE_KEY,
+  initThemeSwitcher,
+} from '../../../components/theme-switcher-component.js';
 import {
   DEFAULT_TEST_DEFINITIONS,
   PRESET_COMMANDS,
@@ -572,6 +578,10 @@ const runtimeEnv = {
   hydrateActionButtons,
   initThemeSwitcher,
   initVisualFlows,
+  DEFAULT_DESIGN_SYSTEM_ID,
+  DESIGN_SYSTEM_ATTRIBUTE,
+  DESIGN_SYSTEM_OPTIONS,
+  DESIGN_SYSTEM_STORAGE_KEY,
   manageDefinitionFilterButtons,
   manageDefinitionsList,
   manageDeleteFixButton,

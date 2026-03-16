@@ -1,0 +1,321 @@
+:where(
+  .swiss-surface,
+  .panel,
+  .fleet-section,
+  .manage-tabs-panel,
+  .manage-list-panel,
+  .manage-editor-panel,
+  .recorder-terminal-panel,
+  .recorder-checks-panel,
+  .add-robot-panel,
+  .add-robot-side-panel,
+  .registry-support-panel,
+  .dashboard-controls,
+  .fleet-parallelism-control,
+  .monitor-config-control,
+  .detail-toolbar,
+  .manage-subnav-panel,
+  .manage-advanced-block,
+  .definition-assignment,
+  .battery-command-help,
+  .recorder-type-targets,
+  .bug-report-panel,
+  .test-debug-panel
+) {
+  background: var(--surface-panel) !important;
+  border: 1px solid var(--surface-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.dashboard-controls > summary,
+.terminal-toolbar,
+.robot-card-header,
+.manage-tabs-row-primary {
+  background: var(--surface-panel-strong) !important;
+  border-radius: 0 !important;
+  border-color: var(--surface-border) !important;
+  box-shadow: none !important;
+}
+
+.dashboard-controls > summary {
+  color: var(--text-primary);
+}
+
+.dashboard-controls > summary::after {
+  color: var(--text-dim);
+}
+
+.dashboard-controls-summary-icon {
+  border-radius: 0;
+  border-color: var(--surface-border);
+  color: var(--text-secondary);
+}
+
+:where(
+  .swiss-button,
+  .button,
+  .button-compact,
+  .button.app-button,
+  .button.app-button.app-button--intent-run,
+  .button.app-button.app-button--intent-monitor,
+  .button.app-button.app-button--intent-selection,
+  .button.app-button.app-button--intent-navigation,
+  .button.app-button.app-button--intent-create,
+  .button.app-button.app-button--intent-terminal,
+  .button.app-button.app-button--intent-danger,
+  .button.app-button.app-button--intent-fix,
+  .button.app-button.app-button--intent-utility
+) {
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, sans-serif;
+  border-radius: 0 !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  box-shadow: none !important;
+  transition: background-color 120ms linear, color 120ms linear, border-color 120ms linear;
+}
+
+.button:hover,
+.button.app-button:hover {
+  transform: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.button:active,
+.button.app-button:active,
+.button.app-button.app-button--pressed {
+  transform: none !important;
+}
+
+.button.app-button.dashboard-sort-button {
+  background: var(--surface-card) !important;
+  border-color: var(--surface-border-strong) !important;
+  color: var(--text-primary) !important;
+  border-style: dashed !important;
+}
+
+.button.app-button.dashboard-sort-button:hover {
+  background: var(--surface-card-hover) !important;
+}
+
+.button:disabled,
+.button.app-button:disabled {
+  opacity: 0.55;
+}
+
+:where(
+  .swiss-control,
+  .filter-item,
+  .form-input,
+  .manage-json-input,
+  .bug-report-message,
+  .terminal-toolbar .terminal-mode,
+  .monitor-config-select,
+  .monitor-config-input,
+  .definition-assignment select,
+  .definition-assignment input,
+  .definition-assignment textarea
+) {
+  border-radius: 0 !important;
+  border: 1px solid var(--surface-border) !important;
+  background: var(--surface-input) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+.filter-item::placeholder,
+.form-input::placeholder,
+.bug-report-message::placeholder {
+  color: var(--text-dim);
+}
+
+.filter-item:focus,
+.form-input:focus,
+.manage-json-input:focus,
+.bug-report-message:focus {
+  border-color: var(--text-primary) !important;
+  box-shadow: 0 0 0 1px var(--text-primary) !important;
+}
+
+.form-field,
+.battery-command-label,
+.fleet-parallelism-label,
+.monitor-config-inline-label {
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, sans-serif;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+
+.robot-card {
+  border-radius: 0 !important;
+  background: var(--surface-card) !important;
+  border: 1px solid var(--surface-border) !important;
+  min-height: 332px;
+  box-shadow: none !important;
+  transition: border-color 120ms linear, background-color 120ms linear;
+}
+
+.robot-card::before {
+  display: none !important;
+}
+
+.robot-card::after {
+  content: '';
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  background: #7f8794;
+  pointer-events: none;
+}
+
+.robot-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--text-primary) !important;
+}
+
+.robot-card-header {
+  border-bottom: 1px solid var(--surface-border) !important;
+}
+
+.robot-card-title,
+.robot-card-sub,
+.test-title,
+.test-title-label {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, sans-serif;
+  color: var(--text-primary);
+}
+
+.robot-card-sub,
+.test-value {
+  color: var(--text-secondary);
+}
+
+.model-wrap {
+  border-bottom: 1px solid var(--surface-border) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.grid .robot-card {
+  opacity: 1;
+  animation: swiss-card-enter 160ms linear;
+}
+
+@keyframes swiss-card-enter {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.manage-tabs .button,
+.registry-submenu-row .button,
+.flow-editor-switcher .manage-tabs .button {
+  border-radius: 0 !important;
+}
+
+.registry-jump-card {
+  border-style: solid !important;
+}
+
+.manage-list-item,
+.test-row,
+.manage-list-empty,
+.recorder-terminal-output,
+.upload-dropzone,
+.battery-command-example {
+  border-radius: 0 !important;
+  border: 1px solid var(--surface-border) !important;
+  background: var(--surface-input) !important;
+  box-shadow: none !important;
+}
+
+.manage-list-item:hover,
+.test-row:hover,
+.upload-dropzone:hover,
+.upload-dropzone.is-drag-over {
+  transform: none !important;
+  border-color: var(--text-primary) !important;
+  background: var(--surface-card-hover) !important;
+}
+
+.manage-list-item-meta {
+  color: var(--text-secondary);
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+}
+
+.detail-model-wrap {
+  background: var(--surface-card) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--surface-border) !important;
+  box-shadow: none !important;
+}
+
+.terminal-shell {
+  border-radius: 0 !important;
+  border: 1px solid var(--terminal-shell-border) !important;
+  box-shadow: none !important;
+}
+
+.terminal-toolbar {
+  border-radius: 0 !important;
+}
+
+.terminal-connection-wrap,
+.terminal-connection-led {
+  border-radius: 0 !important;
+}
+
+.terminal-connection-text {
+  color: #d8d8d8;
+}
+
+.terminal-activation-overlay {
+  border-radius: 0 !important;
+  border: 1px dashed var(--surface-border-strong) !important;
+}
+
+.bug-report-modal,
+.test-debug-modal {
+  backdrop-filter: none !important;
+}
+
+.bug-report-panel,
+.test-debug-panel {
+  background: var(--modal-panel-bg) !important;
+}
+
+.test-debug-step,
+.test-debug-pre {
+  border-radius: 0 !important;
+  border-color: var(--surface-border) !important;
+  background: var(--surface-input) !important;
+  color: var(--text-primary) !important;
+}
+
+.floating-bug-button {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.floating-bug-button:hover {
+  transform: none !important;
+}
+
+.empty-state {
+  border-radius: 0 !important;
+  border-style: solid !important;
+  background: var(--surface-empty) !important;
+}

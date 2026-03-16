@@ -1,0 +1,175 @@
+.kpi {
+  min-height: 4.8rem;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: var(--surface-kpi) !important;
+}
+
+.kpi-value {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.75rem;
+  line-height: 1.05;
+  text-shadow: none !important;
+}
+
+.kpi.ok {
+  border-left: 0.3rem solid var(--state-ok) !important;
+}
+
+.kpi.warn {
+  border-left: 0.3rem solid var(--state-warn) !important;
+}
+
+.kpi.err {
+  border-left: 0.3rem solid var(--state-err) !important;
+}
+
+:where(
+  .swiss-chip,
+  .status-chip,
+  .pill,
+  .battery-pill,
+  .add-robot-badge,
+  .recorder-summary-pill,
+  .manage-definition-chip,
+  .test-icon-fallback,
+  .robot-type-divider-count
+) {
+  border-radius: 0 !important;
+  border: 1px solid var(--surface-border) !important;
+  background: var(--surface-input) !important;
+  color: var(--text-primary) !important;
+  backdrop-filter: none !important;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  box-shadow: none !important;
+}
+
+.status-chip.ok {
+  border-color: var(--status-chip-ok-border) !important;
+  background: rgba(15, 123, 69, 0.08) !important;
+  color: var(--state-ok) !important;
+}
+
+.status-chip.warn {
+  border-color: var(--status-chip-warn-border) !important;
+  background: rgba(161, 92, 0, 0.1) !important;
+  color: var(--state-warn) !important;
+}
+
+.status-chip.err {
+  border-color: var(--status-chip-err-border) !important;
+  background: rgba(170, 19, 40, 0.1) !important;
+  color: var(--state-err) !important;
+}
+
+.battery-pill {
+  --battery-pill-accent: var(--state-ok);
+  --battery-pill-border: rgba(15, 123, 69, 0.35);
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.battery-pill-warning {
+  --battery-pill-accent: var(--state-warn);
+  --battery-pill-border: rgba(161, 92, 0, 0.35);
+}
+
+.battery-pill-critical {
+  --battery-pill-accent: var(--state-err);
+  --battery-pill-border: rgba(170, 19, 40, 0.35);
+}
+
+.battery-pill-icon,
+.battery-pill-meter,
+.battery-pill-meter-fill {
+  border-radius: 0 !important;
+}
+
+.robot-card.state-ok::after {
+  background: var(--state-ok);
+}
+
+.robot-card.state-warning::after {
+  background: var(--state-warn);
+}
+
+.robot-card.state-critical::after {
+  background: var(--state-err);
+}
+
+.robot-card.state-offline::after {
+  background: #707782;
+}
+
+.robot-card.state-ok {
+  background: rgba(15, 123, 69, 0.08) !important;
+  border-color: rgba(15, 123, 69, 0.42) !important;
+}
+
+.robot-card.state-warning {
+  background: rgba(161, 92, 0, 0.1) !important;
+  border-color: rgba(161, 92, 0, 0.44) !important;
+}
+
+.robot-card.state-critical {
+  background: rgba(170, 19, 40, 0.1) !important;
+  border-color: rgba(170, 19, 40, 0.44) !important;
+}
+
+.robot-card.state-offline {
+  background: rgba(83, 83, 83, 0.12) !important;
+  border-color: rgba(77, 77, 77, 0.4) !important;
+}
+
+.robot-card.selected,
+.robot-card.state-ok.selected,
+.robot-card.state-warning.selected,
+.robot-card.state-critical.selected,
+.robot-card.state-offline.selected {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.manage-tabs .button.active,
+.registry-submenu-row .button.active,
+.flow-editor-switcher .manage-tabs .button.active {
+  background: #f0f2f5 !important;
+  border-color: #f0f2f5 !important;
+  color: #101318 !important;
+}
+
+.registry-jump-card-accent {
+  background: rgba(0, 94, 150, 0.1) !important;
+  border-color: rgba(0, 94, 150, 0.46) !important;
+}
+
+.registry-jump-card-alert,
+.panel.registry-jump-card-alert {
+  background: rgba(195, 0, 30, 0.11) !important;
+  border-color: rgba(195, 0, 30, 0.45) !important;
+}
+
+.registry-jump-card-alert .registry-jump-title,
+.panel.registry-jump-card-alert .registry-jump-title {
+  color: #ff8898 !important;
+}
+
+.manage-list-item.active,
+#editRobotList .manage-list-item.active,
+.recorder-step-item.active {
+  background: rgba(195, 0, 30, 0.12) !important;
+  border-color: rgba(195, 0, 30, 0.45) !important;
+  box-shadow: none !important;
+}
+
+.terminal-connection-wrap.connected {
+  border-color: rgba(36, 196, 114, 0.75);
+  background: rgba(12, 49, 30, 0.8);
+}
+
+.terminal-connection-wrap.connecting,
+.terminal-connection-wrap.error,
+.terminal-connection-wrap.disconnected {
+  border-color: rgba(170, 19, 40, 0.72);
+  background: rgba(58, 14, 22, 0.8);
+}

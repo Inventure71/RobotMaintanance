@@ -1,0 +1,129 @@
+:root {
+  color-scheme: dark;
+
+  --bg-canvas: #0b0c0e;
+  --bg-ambient-1: #131519;
+  --bg-ambient-2: #1a1d22;
+  --bg-grid: rgba(255, 255, 255, 0.07);
+  --bg-noise-opacity: 0;
+
+  --surface-panel: rgba(20, 22, 27, 0.97);
+  --surface-panel-strong: rgba(29, 32, 38, 0.99);
+  --surface-panel-glass: rgba(20, 22, 27, 0.94);
+  --surface-border: rgba(255, 255, 255, 0.2);
+  --surface-border-strong: rgba(255, 255, 255, 0.35);
+  --surface-input: #121418;
+  --surface-card: #15181d;
+  --surface-card-hover: #1d2128;
+  --surface-kpi: #16191f;
+  --surface-empty: #171a1f;
+
+  --text-primary: #f0f2f5;
+  --text-secondary: #b5bbc4;
+  --text-dim: #8a909a;
+
+  --accent-primary: #c3001e;
+  --accent-primary-strong: #a6001b;
+  --accent-secondary: #005e96;
+  --accent-secondary-strong: #003f6b;
+
+  --state-ok: #0f7b45;
+  --state-warn: #a15c00;
+  --state-err: #aa1328;
+
+  --ring-focus: #f0f2f5;
+  --ring-hover: rgba(255, 255, 255, 0.42);
+  --ring-active: rgba(255, 255, 255, 0.6);
+
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-3: none;
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+
+  --theme-overlay-pattern:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  --theme-overlay-opacity: 1;
+
+  --button-intent-run-bg: #0f7b45;
+  --button-intent-run-border: #0c5a33;
+  --button-intent-run-text: #f6fff9;
+  --button-intent-monitor-bg: #005e96;
+  --button-intent-monitor-border: #003f6b;
+  --button-intent-monitor-text: #f7fbff;
+  --button-intent-selection-bg: #2a2f38;
+  --button-intent-selection-border: #9097a3;
+  --button-intent-selection-text: #eef1f6;
+  --button-intent-navigation-bg: #f0f2f5;
+  --button-intent-navigation-border: #f0f2f5;
+  --button-intent-navigation-text: #111318;
+  --button-intent-create-bg: #c3001e;
+  --button-intent-create-border: #8f0016;
+  --button-intent-create-text: #fff9fa;
+  --button-intent-terminal-bg: #2b2b2b;
+  --button-intent-terminal-border: #111111;
+  --button-intent-terminal-text: #f6f6f6;
+  --button-intent-danger-bg: #7f0014;
+  --button-intent-danger-border: #59000e;
+  --button-intent-danger-text: #fff2f4;
+  --button-intent-fix-bg: #a15c00;
+  --button-intent-fix-border: #734000;
+  --button-intent-fix-text: #fffaf3;
+  --button-intent-utility-bg: #242931;
+  --button-intent-utility-border: #7f8794;
+  --button-intent-utility-text: #ebedf2;
+
+  --pill-height: 1.9rem;
+  --pill-padding-x: 0.56rem;
+  --pill-font-size: 0.78rem;
+  --pill-surface-strong: rgba(21, 24, 30, 0.96);
+
+  --status-chip-bg: #171a1f;
+  --status-chip-ok-border: rgba(15, 123, 69, 0.45);
+  --status-chip-warn-border: rgba(161, 92, 0, 0.45);
+  --status-chip-err-border: rgba(170, 19, 40, 0.45);
+
+  --terminal-shell-bg: #07090c;
+  --terminal-shell-border: rgba(255, 255, 255, 0.32);
+  --terminal-toolbar-bg: rgba(26, 29, 35, 0.99);
+  --terminal-toolbar-border: rgba(255, 255, 255, 0.28);
+
+  --control-panel-bg: #1a1e25;
+
+  --modal-overlay: rgba(10, 10, 10, 0.66);
+  --modal-panel-bg: #191c22;
+  --modal-panel-border: rgba(255, 255, 255, 0.3);
+
+  --floating-bug-bg: #c3001e;
+  --floating-bug-border: #8f0016;
+  --floating-bug-text: #fff3f6;
+
+  --bg-a: var(--bg-canvas);
+  --bg-b: var(--bg-ambient-2);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-panel-strong);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --ok: var(--state-ok);
+  --warn: var(--state-warn);
+  --err: var(--state-err);
+  --focus: var(--ring-focus);
+  --line: var(--surface-border);
+}
+
+[data-theme='arctic-grid'] {
+  --accent-primary: #00a4df;
+  --accent-primary-strong: #0077a2;
+  --accent-secondary: #56c3ff;
+  --accent-secondary-strong: #2f8cb8;
+}
+
+[data-theme='ember-signal'] {
+  --accent-primary: #d2452f;
+  --accent-primary-strong: #9a2f1f;
+  --accent-secondary: #c87a1e;
+  --accent-secondary-strong: #915813;
+}

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-design-system="swiss">
 
 <head>
   <meta charset="UTF-8" />
@@ -8,6 +8,28 @@
   <link rel="icon" type="image/x-icon" href="/assets/Icons/favicon.ico" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="assets/css/main.css" />
+  <link id="swissThemeStylesheet" rel="stylesheet" href="assets/css/swiss-international.css" />
+  <script>
+    (() => {
+      const storageKey = 'dashboard.designSystem';
+      const allowedDesignSystems = new Set(['classic', 'swiss']);
+      let designSystem = 'swiss';
+      try {
+        const storedDesignSystem = window.localStorage.getItem(storageKey);
+        if (allowedDesignSystems.has(String(storedDesignSystem || '').trim().toLowerCase())) {
+          designSystem = String(storedDesignSystem).trim().toLowerCase();
+        }
+      } catch (_error) {
+        // Best effort bootstrapping.
+      }
+
+      document.documentElement.setAttribute('data-design-system', designSystem);
+      const swissThemeStylesheet = document.getElementById('swissThemeStylesheet');
+      if (swissThemeStylesheet) {
+        swissThemeStylesheet.disabled = designSystem !== 'swiss';
+      }
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"
     crossorigin="anonymous"></script>
@@ -103,6 +125,15 @@
                   <input id="fleetParallelism" type="range" min="1" max="100" step="1" value="8" />
                   <p class="fleet-parallelism-hint">DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING. Used by "Run selected"
                     and "Refresh online" increases speed at the cost of overhead.</p>
+                </div>
+
+                <div class="panel theme-switcher-control">
+                  <label class="fleet-parallelism-label" for="themeSelect">Visual style:</label>
+                  <select id="themeSelect" class="filter-item monitor-config-select">
+                    <option value="swiss">Swiss</option>
+                    <option value="classic">Classic</option>
+                  </select>
+                  <p class="fleet-parallelism-hint">Switch between the current Swiss redesign and the previous command deck styling.</p>
                 </div>
               </div>
             </details>

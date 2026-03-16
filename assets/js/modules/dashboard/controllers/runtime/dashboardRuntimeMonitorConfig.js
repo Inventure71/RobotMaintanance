@@ -96,6 +96,10 @@ export function registerMonitorConfigRuntime(runtime, env) {
     hydrateActionButtons,
     initThemeSwitcher,
     initVisualFlows,
+    DEFAULT_DESIGN_SYSTEM_ID,
+    DESIGN_SYSTEM_ATTRIBUTE,
+    DESIGN_SYSTEM_OPTIONS,
+    DESIGN_SYSTEM_STORAGE_KEY,
     manageDeleteFixButton,
     manageDeleteTestButton,
     manageFixDescriptionInput,
@@ -608,10 +612,19 @@ export function registerMonitorConfigRuntime(runtime, env) {
       }
 
   function initThemeControls() {
+        const swissThemeStylesheet = document.getElementById('swissThemeStylesheet');
         initThemeSwitcher({
           selectElement: themeSelect,
           rootElement: document.documentElement,
-          defaultThemeId: 'deep-space',
+          attributeName: DESIGN_SYSTEM_ATTRIBUTE,
+          defaultThemeId: DEFAULT_DESIGN_SYSTEM_ID,
+          storageKey: DESIGN_SYSTEM_STORAGE_KEY,
+          themes: DESIGN_SYSTEM_OPTIONS,
+          onApply: (designSystemId) => {
+            if (swissThemeStylesheet) {
+              swissThemeStylesheet.disabled = designSystemId !== 'swiss';
+            }
+          },
         });
       }
 
