@@ -13,3 +13,4 @@ NextSteps.md
 .env.local
 assets/models/Legacy
 .playwright-cli/
+output/
