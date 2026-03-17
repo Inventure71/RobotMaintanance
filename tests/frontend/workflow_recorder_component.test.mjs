@@ -329,6 +329,41 @@ test('workflow recorder preserves multi-rule all_of checks when loading an exist
   assert.equal(rebuilt.checks[0].read.rules.length, 2);
 });
 
+test('workflow recorder exports draft context for prompt bundling', () => {
+  const recorder = new WorkflowRecorderComponent({});
+  recorder.createNewTest();
+  recorder.addOrUpdateOutput({
+    key: 'battery',
+    label: 'Battery',
+    icon: 'B',
+    passDetails: 'Battery found',
+    failDetails: 'Battery missing',
+  });
+  const write = recorder.addWriteBlock({
+    command: 'echo battery',
+    outputPayload: { stdout: 'battery ok' },
+  });
+  recorder.addOrUpdateReadBlock({
+    outputKey: 'battery',
+    inputRef: write.saveAs,
+    kind: 'contains_string',
+    needle: 'battery',
+  });
+
+  const draft = recorder.exportDraftContext('battery_health');
+
+  assert.equal(draft.started, true);
+  assert.equal(draft.publishReady, true);
+  assert.equal(draft.definitionId, 'battery_health');
+  assert.equal(draft.outputs.length, 1);
+  assert.equal(draft.outputs[0].key, 'battery');
+  assert.equal(draft.execute.length, 1);
+  assert.equal(draft.execute[0].command, 'echo battery');
+  assert.equal(draft.checks.length, 1);
+  assert.equal(draft.checks[0].checkId, 'battery_health__battery');
+  assert.equal(draft.checks[0].read[0].kind, 'contains_string');
+});
+
 test('workflow recorder moves the first write down and preserves saveAs bindings', () => {
   const { recorder, first, second, third } = buildRecorderWithThreeWrites();
 

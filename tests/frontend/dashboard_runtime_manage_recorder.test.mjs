@@ -42,6 +42,7 @@ function makeClassList(initial = []) {
 
 function makeNode(value = '') {
   const listeners = new Map();
+  const attributes = new Map();
   const node = {
     value,
     checked: false,
@@ -67,6 +68,10 @@ function makeNode(value = '') {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(handler);
     },
+    removeEventListener: (type, handler) => {
+      const handlers = listeners.get(type) || [];
+      listeners.set(type, handlers.filter((candidate) => candidate !== handler));
+    },
     dispatchEvent: (event) => {
       const handlers = listeners.get(event?.type) || [];
       handlers.forEach((handler) => handler(event));
@@ -76,7 +81,15 @@ function makeNode(value = '') {
       handlers.forEach((handler) => handler({ type: 'click' }));
     },
     setAttribute: (name, nextValue) => {
+      attributes.set(name, nextValue);
       node[name] = nextValue;
+    },
+    getAttribute: (name) => {
+      if (attributes.has(name)) return attributes.get(name);
+      return node[name];
+    },
+    focus: () => {
+      node.focused = true;
     },
     querySelectorAll: (selector) => {
       const matches = [];
@@ -103,6 +116,86 @@ async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source
     .replace(
+      "import { renderRecorderLlmPromptTemplate } from '../../templates/recorderLlmPromptTemplate.js';",
+      `const renderRecorderLlmPromptTemplate = ({ selectedRobot, currentDefinition, currentRecorderDraft, recorderTerminalTranscript, userSystemDetails, userTestRequest }) => ({
+        promptVersion: 'recorder-llm-roundtrip.v1',
+        instructions: {
+          objective: 'Return only ready test-definition JSON for the existing /api/definitions/tests save contract.',
+          responseFormat: 'Return a single JSON object with no prose before or after it.',
+          mode: 'orchestrate',
+          preparation: [
+            'SSH into the robot and run the commands you normally use to inspect the system before asking the external LLM for help.',
+            'The recorder terminal transcript below must include enough command context for the model to understand what it is checking. This mainly helps the model define the read blocks correctly.',
+            'The model should not invent write commands for your system. If the transcript does not show the relevant commands or outputs, the result will be wrong.',
+            'It is fine for the terminal transcript to contain more command history than strictly necessary, but it must not contain less than the context needed to understand the workflow.',
+            'Use the example response below as the formatting reference. It includes multiple write steps, multiple outputs/checks, and multiple read rules.',
+          ],
+          requiredTopLevelFields: ['id', 'label', 'mode', 'execute', 'checks'],
+          allowedReadKinds: ['contains_string', 'contains_any_string', 'contains_lines_unordered', 'all_of'],
+          constraints: [
+            'mode must be orchestrate',
+            'execute must be a non-empty array',
+            'checks must be a non-empty array',
+            'each check must define a top-level boolean runAtConnection',
+            'all checks must share the same runAtConnection value',
+          ],
+          fullResponseExample: {
+            id: 'topics_snapshot_startup',
+            label: 'Topics Snapshot Startup',
+            enabled: true,
+            mode: 'orchestrate',
+            execute: [
+              { id: 'step_1', command: 'source /opt/ros/humble/setup.bash && source ~/robot_ws/install/setup.bash', saveAs: 'env_ready' },
+              { id: 'step_2', command: 'ros2 topic list', saveAs: 'topics_raw' },
+              { id: 'step_3', command: 'ros2 topic echo /battery_state --once', saveAs: 'battery_raw' },
+            ],
+            checks: [
+              {
+                id: 'topics_snapshot_startup__topics',
+                label: 'Required topics',
+                icon: 'T',
+                runAtConnection: true,
+                manualOnly: true,
+                enabled: true,
+                defaultStatus: 'warning',
+                defaultValue: 'unknown',
+                defaultDetails: 'Not checked yet',
+                read: {
+                  kind: 'all_of',
+                  rules: [
+                    { kind: 'contains_lines_unordered', inputRef: 'topics_raw', lines: ['/battery_state', '/cmd_vel'], requireAll: true },
+                    { kind: 'contains_any_string', inputRef: 'topics_raw', needles: ['/scan', '/lidar/scan'], caseSensitive: false },
+                  ],
+                },
+                pass: { status: 'ok', value: 'all_present', details: 'Required startup topics are present.' },
+                fail: { status: 'error', value: 'missing', details: 'One or more required startup topics are missing.' },
+              },
+              {
+                id: 'topics_snapshot_startup__battery',
+                label: 'Battery topic payload',
+                icon: 'B',
+                runAtConnection: true,
+                manualOnly: true,
+                enabled: true,
+                defaultStatus: 'warning',
+                defaultValue: 'unknown',
+                defaultDetails: 'Not checked yet',
+                read: { kind: 'contains_string', inputRef: 'battery_raw', needle: 'voltage', caseSensitive: false },
+                pass: { status: 'ok', value: 'present', details: 'Battery payload includes voltage data.' },
+                fail: { status: 'error', value: 'missing', details: 'Battery payload did not include voltage data.' },
+              },
+            ],
+          },
+        },
+        selectedRobot,
+        currentDefinition,
+        currentRecorderDraft,
+        recorderTerminalTranscript,
+        userSystemDetails,
+        userTestRequest,
+      });`,
+    )
+    .replace(
       "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",
       'const renderManageEntityList = () => {};',
     )
@@ -113,12 +206,20 @@ async function loadApi() {
     exports: {},
     document: {
       createElement: () => makeNode(),
+      body: { classList: makeClassList() },
       addEventListener: () => {},
       removeEventListener: () => {},
     },
     window: {
       prompt: () => '',
       confirm: () => true,
+      navigator: {
+        clipboard: {
+          writeText: async (value) => {
+            context.__copiedText = value;
+          },
+        },
+      },
     },
     confirm: () => true,
   };
@@ -160,6 +261,13 @@ function makeEnv() {
     activeManageTab: 'definitions',
     manageDefinitionsFilter: 'all',
     manageFlowEditorMode: 'test',
+    isRecorderLlmPromptModalOpen: false,
+    isRecorderLlmImportModalOpen: false,
+    recorderTerminalComponent: {
+      exportTranscript() {
+        return 'robot@rosbot$ rostopic list\n/battery\n/camera';
+      },
+    },
     workflowRecorder: {
       started: true,
       loaded: null,
@@ -187,6 +295,20 @@ function makeEnv() {
           blockingIssues: [],
           editingOutputKey: '',
           editingReadBlockId: '',
+        };
+      },
+      exportDraftContext(definitionId) {
+        return {
+          started: true,
+          publishReady: true,
+          definitionId,
+          outputCount: 1,
+          writeCount: 1,
+          readCount: 1,
+          outputs: [{ key: 'battery', label: 'Battery', icon: 'B', runAtConnection: true, readBlockCount: 1 }],
+          execute: [{ order: 1, id: 'write_1', command: 'echo battery', saveAs: 'out_1' }],
+          checks: [{ outputKey: 'battery', checkId: `${definitionId}__battery`, label: 'Battery', runAtConnection: true, read: [] }],
+          blockingIssues: [],
         };
       },
       setPublishStatus(message, tone) {
@@ -253,6 +375,22 @@ function makeEnv() {
     recorderLastEditingOutputKey: '',
     recorderLastEditingReadBlockId: '',
     recorderRobotTypeTargets: makeNode(),
+    recorderAskLlmButton: makeNode(),
+    recorderAskLlmHelpButton: makeNode(),
+    recorderLlmHelpPanel: makeNode(),
+    recorderPasteLlmResultButton: makeNode(),
+    recorderLlmPromptModal: makeNode(),
+    recorderLlmPromptCancelButton: makeNode(),
+    recorderLlmCopyPromptButton: makeNode(),
+    recorderLlmSystemDetailsInput: makeNode(),
+    recorderLlmTestRequestInput: makeNode(),
+    recorderLlmPromptPreview: makeNode(),
+    recorderLlmPromptStatus: makeNode(),
+    recorderLlmImportModal: makeNode(),
+    recorderLlmImportCancelButton: makeNode(),
+    recorderLlmImportLoadButton: makeNode(),
+    recorderLlmImportInput: makeNode(),
+    recorderLlmImportStatus: makeNode(),
     recorderPublishTestButton: {},
     recorderAddOutputBtn: {},
     recorderAddWriteBtn: makeNode(),
@@ -421,6 +559,217 @@ test('setFlowEditorMode initializes fix robot type targets from definitions summ
   assert.equal(env.manageFixRobotTypeTargets.children[0].children[1].textContent, 'Rosbot');
   assert.equal(env.manageRecorderFixEditorPanel.classList.contains('active'), true);
   assert.equal(env.manageRecorderTestEditorPanel.classList.contains('hidden'), true);
+});
+
+test('toggleRecorderLlmHelp updates aria-expanded state', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.setRecorderLlmHelpExpanded(false);
+  assert.equal(env.recorderAskLlmHelpButton.getAttribute('aria-expanded'), 'false');
+  assert.equal(env.recorderLlmHelpPanel.classList.contains('hidden'), true);
+
+  api.toggleRecorderLlmHelp();
+  assert.equal(env.recorderAskLlmHelpButton.getAttribute('aria-expanded'), 'true');
+  assert.equal(env.recorderLlmHelpPanel.classList.contains('hidden'), false);
+
+  api.toggleRecorderLlmHelp();
+  assert.equal(env.recorderAskLlmHelpButton.getAttribute('aria-expanded'), 'false');
+  assert.equal(env.recorderLlmHelpPanel.classList.contains('hidden'), true);
+});
+
+test('getRecorderLlmPromptBuildResult blocks prompt copy when transcript or required fields are missing', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  env.state.recorderTerminalComponent.exportTranscript = () => '';
+  let result = api.getRecorderLlmPromptBuildResult();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /terminal transcript/i);
+
+  env.state.recorderTerminalComponent.exportTranscript = () => 'robot@rosbot$ rostopic list';
+  result = api.getRecorderLlmPromptBuildResult();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /system \/ stack details/i);
+
+  env.recorderLlmSystemDetailsInput.value = 'ROS 2 Humble on Ubuntu';
+  result = api.getRecorderLlmPromptBuildResult();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /what do you want to test/i);
+});
+
+test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in recorder order', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderRobotSelect.value = 'rosbot';
+  env.recorderDefinitionIdInput.value = 'battery_health';
+  env.recorderDefinitionLabelInput.value = 'Battery health';
+  env.recorderLlmSystemDetailsInput.value = 'ROS 2 Humble, Ubuntu 22.04, rostopic available';
+  env.recorderLlmTestRequestInput.value = 'Verify battery and camera topics are present after startup.';
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  const result = api.getRecorderLlmPromptBuildResult();
+
+  assert.equal(result.ok, true);
+  assert.ok(result.promptText.indexOf('"instructions"') < result.promptText.indexOf('"selectedRobot"'));
+  assert.ok(result.promptText.indexOf('"selectedRobot"') < result.promptText.indexOf('"currentDefinition"'));
+  assert.ok(result.promptText.indexOf('"currentDefinition"') < result.promptText.indexOf('"currentRecorderDraft"'));
+  assert.ok(result.promptText.indexOf('"currentRecorderDraft"') < result.promptText.indexOf('"recorderTerminalTranscript"'));
+  assert.ok(result.promptText.indexOf('"recorderTerminalTranscript"') < result.promptText.indexOf('"userSystemDetails"'));
+  assert.ok(result.promptText.indexOf('"userSystemDetails"') < result.promptText.indexOf('"userTestRequest"'));
+
+  const payload = JSON.parse(result.promptText);
+  assert.equal(payload.instructions.mode, 'orchestrate');
+  assert.deepEqual(payload.instructions.allowedReadKinds, [
+    'contains_string',
+    'contains_any_string',
+    'contains_lines_unordered',
+    'all_of',
+  ]);
+  assert.equal(payload.instructions.preparation.length, 5);
+  assert.match(payload.instructions.preparation[0], /SSH into the robot/i);
+  assert.match(payload.instructions.preparation[2], /should not invent write commands/i);
+  assert.equal(payload.instructions.fullResponseExample.mode, 'orchestrate');
+  assert.equal(payload.instructions.fullResponseExample.execute.length, 3);
+  assert.equal(payload.instructions.fullResponseExample.checks.length, 2);
+  assert.equal(payload.instructions.fullResponseExample.checks[0].read.kind, 'all_of');
+  assert.equal(payload.instructions.fullResponseExample.checks[0].read.rules.length, 2);
+  assert.equal(payload.selectedRobot.id, 'rosbot');
+  assert.equal(payload.currentDefinition.id, 'battery_health');
+  assert.equal(payload.recorderTerminalTranscript, 'robot@rosbot$ rostopic list\n/battery\n/camera');
+  assert.equal(payload.userSystemDetails, 'ROS 2 Humble, Ubuntu 22.04, rostopic available');
+  assert.equal(payload.userTestRequest, 'Verify battery and camera topics are present after startup.');
+});
+
+test('loadRecorderLlmImportResult rejects invalid JSON without mutating the current draft', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const currentDraft = { id: 'existing_draft' };
+  env.state.workflowRecorder.loaded = currentDraft;
+  env.recorderLlmImportInput.value = 'not valid json';
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  const loaded = api.loadRecorderLlmImportResult();
+
+  assert.equal(loaded, false);
+  assert.equal(env.state.workflowRecorder.loaded, currentDraft);
+  assert.match(env.recorderLlmImportStatus.textContent, /invalid json/i);
+});
+
+test('validateRecorderLlmImportInput reports unsupported read kinds explicitly', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderLlmImportInput.value = JSON.stringify({
+    id: 'battery_health',
+    label: 'Battery health',
+    mode: 'orchestrate',
+    execute: [{ id: 'step_1', command: 'echo battery', saveAs: 'out_1' }],
+    checks: [
+      {
+        id: 'battery_health__battery',
+        label: 'Battery',
+        runAtConnection: true,
+        read: { kind: 'regex', inputRef: 'out_1', pattern: 'battery' },
+        pass: { details: 'ok' },
+        fail: { details: 'fail' },
+      },
+    ],
+  });
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  const definition = api.validateRecorderLlmImportInput();
+
+  assert.equal(definition, null);
+  assert.match(env.recorderLlmImportStatus.textContent, /unsupported read kind/i);
+});
+
+test('validateRecorderLlmImportInput reports mixed runAtConnection values explicitly', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderLlmImportInput.value = JSON.stringify({
+    id: 'battery_health',
+    label: 'Battery health',
+    mode: 'orchestrate',
+    execute: [{ id: 'step_1', command: 'echo battery', saveAs: 'out_1' }],
+    checks: [
+      {
+        id: 'battery_health__battery',
+        label: 'Battery',
+        runAtConnection: true,
+        read: { kind: 'contains_string', inputRef: 'out_1', needle: 'battery' },
+        pass: { details: 'ok' },
+        fail: { details: 'fail' },
+      },
+      {
+        id: 'battery_health__camera',
+        label: 'Camera',
+        runAtConnection: false,
+        read: { kind: 'contains_string', inputRef: 'out_1', needle: 'camera' },
+        pass: { details: 'ok' },
+        fail: { details: 'fail' },
+      },
+    ],
+  });
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  const definition = api.validateRecorderLlmImportInput();
+
+  assert.equal(definition, null);
+  assert.match(env.recorderLlmImportStatus.textContent, /share one runAtConnection value/i);
+});
+
+test('loadRecorderLlmImportResult hydrates valid JSON into the recorder draft', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderLlmImportInput.value = [
+    '```json',
+    JSON.stringify({
+      id: 'battery_health',
+      label: 'Battery health',
+      mode: 'orchestrate',
+      execute: [{ id: 'step_1', command: 'echo battery', saveAs: 'out_1' }],
+      checks: [
+        {
+          id: 'battery_health__battery',
+          label: 'Battery',
+          icon: 'B',
+          runAtConnection: false,
+          read: { kind: 'contains_string', inputRef: 'out_1', needle: 'battery' },
+          pass: { details: 'Battery found' },
+          fail: { details: 'Battery missing' },
+        },
+      ],
+    }, null, 2),
+    '```',
+  ].join('\n');
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.openRecorderLlmImportModal();
+  const validated = api.validateRecorderLlmImportInput();
+  const loaded = api.loadRecorderLlmImportResult();
+
+  assert.equal(validated.id, 'battery_health');
+  assert.equal(loaded, true);
+  assert.equal(env.state.workflowRecorder.loaded.id, 'battery_health');
+  assert.equal(env.recorderDefinitionIdInput.value, 'battery_health');
+  assert.equal(env.recorderDefinitionLabelInput.value, 'Battery health');
+  assert.equal(env.recorderRunAtConnectionInput.checked, false);
+  assert.equal(env.state.activeManageTab, 'recorder');
+  assert.equal(env.state.manageFlowEditorMode, 'test');
+  assert.equal(env.state.isRecorderLlmImportModalOpen, false);
+  assert.deepEqual(env.state.workflowRecorder.publishStatus, {
+    message: "Imported 'battery_health' into the recorder draft. Review before publishing.",
+    tone: 'ok',
+  });
 });
 
 test('addRecorderWriteVisual adds a manual write block and seeds recorder draft metadata', async () => {

@@ -1709,6 +1709,41 @@
   line-height: 1;
 }
 
+.flow-builder-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.recorder-llm-help-toggle {
+  min-width: 2.2rem;
+  padding-inline: 0;
+  font-weight: 700;
+}
+
+.recorder-llm-help {
+  border: 1px solid rgba(138, 198, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 14, 30, 0.52);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 0.55rem 0.7rem;
+}
+
+.recorder-llm-help p,
+.recorder-llm-help ul {
+  margin: 0;
+}
+
+.recorder-llm-help ul {
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+}
+
     .flow-builder-summary {
       display: flex;
       flex-wrap: wrap;
@@ -2066,6 +2101,10 @@
     }
 
   @media (max-width: 640px) {
+      .flow-builder-topbar-main {
+        grid-template-columns: 1fr;
+      }
+
       .form-grid {
         grid-template-columns: 1fr;
       }
@@ -2148,6 +2187,104 @@
     }
 
     .bug-report-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    .recorder-llm-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 36;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.1rem;
+      background: rgba(3, 7, 16, 0.72);
+      backdrop-filter: blur(2px);
+    }
+
+    .recorder-llm-panel {
+      width: min(760px, 100%);
+      max-height: calc(100vh - 2.2rem);
+      overflow: auto;
+      border: 1px solid rgba(138, 198, 255, 0.35);
+      border-radius: 14px;
+      background: #0a132c;
+      box-shadow: 0 24px 46px rgba(0, 0, 0, 0.42);
+      padding: 0.9rem;
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .recorder-llm-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .recorder-llm-copy,
+    .recorder-llm-label {
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .recorder-llm-copy {
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    .recorder-llm-textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 120px;
+      border-radius: 10px;
+      border: 1px solid rgba(138, 198, 255, 0.3);
+      background: rgba(11, 19, 42, 0.85);
+      color: var(--text);
+      padding: 0.62rem 0.66rem;
+      font-family: inherit;
+      font-size: 0.92rem;
+      line-height: 1.35;
+      outline: none;
+    }
+
+    .recorder-llm-preview,
+    .recorder-llm-import {
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.82rem;
+    }
+
+    .recorder-llm-textarea:focus {
+      border-color: var(--focus);
+      box-shadow: 0 0 0 3px rgba(138, 198, 255, 0.15);
+    }
+
+    .recorder-llm-textarea[readonly] {
+      opacity: 0.95;
+    }
+
+    .recorder-llm-status {
+      min-height: 1.05rem;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .recorder-llm-status.ok {
+      color: var(--ok);
+    }
+
+    .recorder-llm-status.warn {
+      color: var(--warn);
+    }
+
+    .recorder-llm-status.error {
+      color: var(--err);
+    }
+
+    .recorder-llm-actions {
       display: flex;
       justify-content: flex-end;
       gap: 0.5rem;
@@ -2686,6 +2823,17 @@
 }
 
 .bug-report-panel {
+  border-color: var(--modal-panel-border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(175deg, color-mix(in srgb, var(--modal-panel-bg) 98%, transparent), color-mix(in srgb, var(--surface-panel-strong) 86%, transparent));
+  box-shadow: var(--elevation-3);
+}
+
+.recorder-llm-modal {
+  background: var(--modal-overlay);
+}
+
+.recorder-llm-panel {
   border-color: var(--modal-panel-border);
   border-radius: var(--radius-md);
   background: linear-gradient(175deg, color-mix(in srgb, var(--modal-panel-bg) 98%, transparent), color-mix(in srgb, var(--surface-panel-strong) 86%, transparent));

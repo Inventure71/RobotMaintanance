@@ -622,8 +622,8 @@
             <div id="manageRecorderTestEditorPanel" class="flow-editor-mode-panel active" data-flow-editor-panel="test">
               <div class="panel flow-builder-topbar">
                 <div class="flow-builder-topbar-main">
-              <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
-                draft</button>
+                  <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
+                    draft</button>
                   <label class="form-field">
                     Robot
                     <select id="recorderRobotSelect" class="form-input">
@@ -640,8 +640,10 @@
                     <input id="recorderDefinitionLabel" class="form-input" type="text"
                       placeholder="Topics Snapshot Custom" />
                   </label>
-              <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
-                test</button>
+                  <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
+                    test</button>
+                </div>
+                <div class="flow-builder-topbar-actions">
                 </div>
                 <div class="flow-builder-summary">
                   <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
@@ -654,6 +656,29 @@
 
               <div class="manage-grid two-cols flow-builder-grid">
                 <div class="panel flow-builder-workflow-panel">
+                  <div class="recorder-llm-section">
+                    <button id="recorderAskLlmButton" class="button button-compact" type="button"
+                      data-button-intent="utility">ASK YOUR LLM</button>
+                    <button id="recorderPasteLlmResultButton" class="button button-compact" type="button"
+                      data-button-intent="utility">PASTE LLM RESULT</button>
+                    <button id="recorderAskLlmHelpButton" class="button button-compact recorder-llm-help-toggle"
+                      type="button" data-button-intent="navigation" aria-expanded="false"
+                      aria-controls="recorderLlmHelpPanel">?</button>
+                  </div>
+                  <div id="recorderLlmHelpPanel" class="recorder-llm-help hidden" aria-hidden="true">
+                    <p>Copy a prompt bundle from this recorder, use any external LLM to generate the test JSON, then
+                      paste the JSON back here for validation and draft loading. This app does not call any LLM
+                      directly.</p>
+                    <ul>
+                      <li>SSH into the robot and run the same commands you normally use when investigating the system.</li>
+                      <li>The terminal above should contain enough command and output history for the model to understand
+                        what to check. This mainly helps it build the read blocks correctly.</li>
+                      <li>The model cannot reliably invent the right write commands for your system. More terminal context
+                        is fine. Missing context is not.</li>
+                      <li>The copied prompt already includes a full JSON example with multiple writes, outputs, and read
+                        rules so the formatting stays explicit.</li>
+                    </ul>
+                  </div>
                   <h2>1. Outputs</h2>
                   <div class="flow-builder-output-form" style="display:none;">
                     <label class="form-field">
@@ -917,6 +942,52 @@
         <div class="bug-report-actions">
           <button id="cancelBugReport" class="button" type="button" data-button-intent="navigation">Cancel</button>
           <button id="submitBugReport" class="button" type="button" data-button-intent="create">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="recorderLlmPromptModal" class="recorder-llm-modal hidden" aria-hidden="true">
+      <div class="recorder-llm-panel" role="dialog" aria-modal="true" aria-labelledby="recorderLlmPromptTitle">
+        <div class="recorder-llm-header">
+          <h3 id="recorderLlmPromptTitle">Ask Your LLM</h3>
+        </div>
+        <p class="recorder-llm-copy">Build a prompt bundle from the current recorder draft and terminal transcript, then copy it into an external LLM.</p>
+        <p class="recorder-llm-copy">Before copying, SSH into the robot and run the commands you normally use. The terminal transcript gives the model the context it needs to understand what to validate. It helps the model infer read blocks, but it should not be expected to invent the right write commands if the terminal history does not show them.</p>
+        <p class="recorder-llm-copy">Extra terminal context is acceptable. Missing terminal context is the problem. The copied prompt also includes a complete JSON example covering multiple writes, outputs, and read rules.</p>
+        <label class="recorder-llm-label" for="recorderLlmSystemDetailsInput">System / stack details</label>
+        <textarea id="recorderLlmSystemDetailsInput" class="recorder-llm-textarea" rows="4"
+          placeholder="OS, middleware, ROS version, stack layout, commands available, constraints..."></textarea>
+        <label class="recorder-llm-label" for="recorderLlmTestRequestInput">What do you want to test?</label>
+        <textarea id="recorderLlmTestRequestInput" class="recorder-llm-textarea" rows="4"
+          placeholder="Describe the workflow, outputs to validate, and success/failure conditions."></textarea>
+        <label class="recorder-llm-label" for="recorderLlmPromptPreview">Prompt bundle preview</label>
+        <textarea id="recorderLlmPromptPreview" class="recorder-llm-textarea recorder-llm-preview" rows="14" readonly
+          placeholder="The generated prompt bundle will appear here once the required fields are filled."></textarea>
+        <div id="recorderLlmPromptStatus" class="recorder-llm-status" aria-live="polite"></div>
+        <div class="recorder-llm-actions">
+          <button id="recorderLlmPromptCancelButton" class="button" type="button"
+            data-button-intent="navigation">Cancel</button>
+          <button id="recorderLlmCopyPromptButton" class="button" type="button"
+            data-button-intent="utility">Copy prompt</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="recorderLlmImportModal" class="recorder-llm-modal hidden" aria-hidden="true">
+      <div class="recorder-llm-panel" role="dialog" aria-modal="true" aria-labelledby="recorderLlmImportTitle">
+        <div class="recorder-llm-header">
+          <h3 id="recorderLlmImportTitle">Paste LLM Result</h3>
+        </div>
+        <p class="recorder-llm-copy">Paste the external LLM JSON response. The current recorder draft stays unchanged unless validation succeeds.</p>
+        <label class="recorder-llm-label" for="recorderLlmImportInput">LLM result JSON</label>
+        <textarea id="recorderLlmImportInput" class="recorder-llm-textarea recorder-llm-import" rows="16"
+          placeholder='Paste raw JSON or a fenced JSON block here.'></textarea>
+        <div id="recorderLlmImportStatus" class="recorder-llm-status" aria-live="polite"></div>
+        <div class="recorder-llm-actions">
+          <button id="recorderLlmImportCancelButton" class="button" type="button"
+            data-button-intent="navigation">Cancel</button>
+          <button id="recorderLlmImportLoadButton" class="button" type="button"
+            data-button-intent="utility" disabled>Load into draft</button>
         </div>
       </div>
     </div>

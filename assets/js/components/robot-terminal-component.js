@@ -40,6 +40,7 @@ export class RobotTerminalComponent {
       this._connectionWrapElement = null;
       this._reconnectButtonElement = null;
       this._fullscreenButtonElement = null;
+      this._transcript = '';
     }
 
     connect(robot, presetCommands = []) {
@@ -50,6 +51,23 @@ export class RobotTerminalComponent {
       this._renderToolbar();
       this._initializeTerminal(robot);
       this._connectLiveSession(robot, { runAutoPreset: true }).catch(() => {});
+    }
+
+    exportTranscript() {
+      return this._transcript;
+    }
+
+    resetTranscript() {
+      this._transcript = '';
+    }
+
+    _appendTranscript(content) {
+      const text = String(content ?? '').replace(/\r\n/g, '\n');
+      if (!text) {
+        this._transcript += '\n';
+        return;
+      }
+      this._transcript += text.endsWith('\n') ? text : `${text}\n`;
     }
 
     _initializeTerminal(robot) {
@@ -447,6 +465,7 @@ export class RobotTerminalComponent {
         return;
       }
       const text = String(content ?? '').replace(/\r\n/g, '\n');
+      this._appendTranscript(text);
       if (!text) {
         this.terminal.write('\r\n');
         return;
@@ -475,6 +494,7 @@ export class RobotTerminalComponent {
 
     _writeFallbackLine(content, level = 'ok') {
       if (!this.terminalElement) return;
+      this._appendTranscript(content);
       const line = document.createElement('span');
       line.className = `line ${level}`;
       line.textContent = String(content ?? '').replace(/\r\n/g, '\n');
@@ -582,6 +602,7 @@ export class RobotTerminalComponent {
         const payload = JSON.parse(rawData);
         const messageType = String(payload?.type || '').toLowerCase();
         if (messageType === 'output' && typeof payload.data === 'string') {
+          this._appendTranscript(payload.data);
           this.terminal.write(payload.data);
           return;
         }
@@ -593,6 +614,7 @@ export class RobotTerminalComponent {
         }
         return;
       } catch (_error) {
+        this._appendTranscript(rawData);
         this.terminal.write(rawData);
       }
     }
@@ -823,6 +845,7 @@ export class RobotTerminalComponent {
       const robotId = this.currentRobot?.id;
       const endpoint = robotId ? this._buildEndpoint(robotId) : null;
       this._disposing = true;
+      this.resetTranscript();
       this.mode = 'fallback';
       this._detachLegacyInput();
       if (this._sessionConnectController) {

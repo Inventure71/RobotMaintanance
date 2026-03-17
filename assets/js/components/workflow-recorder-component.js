@@ -612,6 +612,44 @@ export class WorkflowRecorderComponent {
     return this.outputs.map((output) => `${normalizedDefinitionId}__${normalizeToken(output.key, 'output')}`);
   }
 
+  exportDraftContext(definitionId = '', options = {}) {
+    const normalizedDefinitionId = normalizeToken(definitionId, '');
+    const includeBlockingIssues = options.includeBlockingIssues !== false;
+    const state = this.getState(normalizedDefinitionId);
+
+    return {
+      started: state.started,
+      publishReady: state.publishReady,
+      definitionId: normalizedDefinitionId,
+      outputCount: state.outputCount,
+      writeCount: state.writeCount,
+      readCount: state.readCount,
+      outputs: this.outputs.map((output) => ({
+        key: output.key,
+        label: output.label,
+        icon: output.icon,
+        runAtConnection: output.runAtConnection !== false,
+        passDetails: output.passDetails,
+        failDetails: output.failDetails,
+        readBlockCount: this._readRulesForOutput(output.key).length,
+      })),
+      execute: this._getWriteBlocks().map((block, index) => ({
+        order: index + 1,
+        id: block.id,
+        command: normalizeText(block.command, ''),
+        saveAs: normalizeText(block.saveAs, ''),
+      })),
+      checks: this.outputs.map((output, index) => ({
+        outputKey: output.key,
+        checkId: normalizedDefinitionId ? `${normalizedDefinitionId}__${normalizeToken(output.key, `output_${index + 1}`)}` : '',
+        label: output.label,
+        runAtConnection: output.runAtConnection !== false,
+        read: this._readRulesForOutput(output.key),
+      })),
+      blockingIssues: includeBlockingIssues ? [...state.blockingIssues] : [],
+    };
+  }
+
   buildTestDefinition({ definitionId, label }) {
     const normalizedDefinitionId = normalizeToken(definitionId, '');
     if (!normalizedDefinitionId) {

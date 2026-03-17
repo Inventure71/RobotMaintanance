@@ -150,6 +150,8 @@ let ROBOT_TYPE_BY_ID = new Map();
       activeTerminalRobotId: null,
       testDebugModalOpen: false,
       isBugReportModalOpen: false,
+      isRecorderLlmPromptModalOpen: false,
+      isRecorderLlmImportModalOpen: false,
       isBugReportSubmitInProgress: false,
       isCreateRobotInProgress: false,
       isEditRobotInProgress: false,
@@ -382,6 +384,22 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderTerminalPopReadBtn = $('#recorderTerminalPopReadBtn');
     const activateRecorderTerminalButton = $('#activateRecorderTerminal');
     const recorderTerminalActivationOverlay = $('#recorderTerminalActivationOverlay');
+    const recorderAskLlmButton = $('#recorderAskLlmButton');
+    const recorderAskLlmHelpButton = $('#recorderAskLlmHelpButton');
+    const recorderLlmHelpPanel = $('#recorderLlmHelpPanel');
+    const recorderPasteLlmResultButton = $('#recorderPasteLlmResultButton');
+    const recorderLlmPromptModal = $('#recorderLlmPromptModal');
+    const recorderLlmPromptCancelButton = $('#recorderLlmPromptCancelButton');
+    const recorderLlmCopyPromptButton = $('#recorderLlmCopyPromptButton');
+    const recorderLlmSystemDetailsInput = $('#recorderLlmSystemDetailsInput');
+    const recorderLlmTestRequestInput = $('#recorderLlmTestRequestInput');
+    const recorderLlmPromptPreview = $('#recorderLlmPromptPreview');
+    const recorderLlmPromptStatus = $('#recorderLlmPromptStatus');
+    const recorderLlmImportModal = $('#recorderLlmImportModal');
+    const recorderLlmImportCancelButton = $('#recorderLlmImportCancelButton');
+    const recorderLlmImportLoadButton = $('#recorderLlmImportLoadButton');
+    const recorderLlmImportInput = $('#recorderLlmImportInput');
+    const recorderLlmImportStatus = $('#recorderLlmImportStatus');
 
     const toggleDashboardFixModeButton = $('#toggleDashboardFixMode');
     const toggleDetailFixModeButton = $('#toggleDetailFixMode');
@@ -664,6 +682,22 @@ const runtimeEnv = {
   recorderTerminalBadge,
   recorderTerminalDisplay,
   recorderTerminalHint,
+  recorderAskLlmButton,
+  recorderAskLlmHelpButton,
+  recorderLlmHelpPanel,
+  recorderPasteLlmResultButton,
+  recorderLlmPromptModal,
+  recorderLlmPromptCancelButton,
+  recorderLlmCopyPromptButton,
+  recorderLlmSystemDetailsInput,
+  recorderLlmTestRequestInput,
+  recorderLlmPromptPreview,
+  recorderLlmPromptStatus,
+  recorderLlmImportModal,
+  recorderLlmImportCancelButton,
+  recorderLlmImportLoadButton,
+  recorderLlmImportInput,
+  recorderLlmImportStatus,
   recorderTerminalPopReadBtn,
   recorderTerminalShell,
   recorderTerminalToolbar,

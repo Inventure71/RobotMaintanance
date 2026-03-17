@@ -1,3 +1,5 @@
+import { renderRecorderLlmPromptTemplate } from '../../templates/recorderLlmPromptTemplate.js';
+
 export function registerManageRecorderRuntime(runtime, env) {
   const {
     $,
@@ -173,6 +175,22 @@ export function registerManageRecorderRuntime(runtime, env) {
     recorderStateBadge,
     recorderStatus,
     recorderStepCountBadge,
+    recorderAskLlmButton,
+    recorderAskLlmHelpButton,
+    recorderLlmHelpPanel,
+    recorderPasteLlmResultButton,
+    recorderLlmPromptModal,
+    recorderLlmPromptCancelButton,
+    recorderLlmCopyPromptButton,
+    recorderLlmSystemDetailsInput,
+    recorderLlmTestRequestInput,
+    recorderLlmPromptPreview,
+    recorderLlmPromptStatus,
+    recorderLlmImportModal,
+    recorderLlmImportCancelButton,
+    recorderLlmImportLoadButton,
+    recorderLlmImportInput,
+    recorderLlmImportStatus,
     recorderTerminalActivationOverlay,
     recorderTerminalBadge,
     recorderTerminalDisplay,
@@ -199,6 +217,10 @@ export function registerManageRecorderRuntime(runtime, env) {
   } = env;
   let recorderLastEditingOutputKey = normalizeText(initialRecorderLastEditingOutputKey, '');
   let recorderLastEditingReadBlockId = normalizeText(initialRecorderLastEditingReadBlockId, '');
+  let recorderLlmImportedDefinition = null;
+
+  const RECORDER_LLM_BASE_READ_KINDS = new Set(['contains_string', 'contains_any_string', 'contains_lines_unordered']);
+  const RECORDER_LLM_ALLOWED_READ_KINDS = new Set([...RECORDER_LLM_BASE_READ_KINDS, 'all_of']);
 
   const addRobotIdsToSelection = (...args) => runtime.addRobotIdsToSelection(...args);
   const appendTerminalLine = (...args) => runtime.appendTerminalLine(...args);
@@ -496,6 +518,389 @@ export function registerManageRecorderRuntime(runtime, env) {
         return slug || fallback;
       }
 
+  function setRecorderLlmStatus(element, message = '', tone = '') {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('ok', 'warn', 'error');
+        if (tone) {
+          element.classList.add(tone);
+        }
+      }
+
+  function resetRecorderLlmImportState({ clearInput = false } = {}) {
+        recorderLlmImportedDefinition = null;
+        if (clearInput && recorderLlmImportInput) {
+          recorderLlmImportInput.value = '';
+        }
+        if (recorderLlmImportLoadButton) {
+          recorderLlmImportLoadButton.disabled = true;
+        }
+        setRecorderLlmStatus(recorderLlmImportStatus, '', '');
+      }
+
+  function setRecorderLlmModalVisibility(modal, open, stateKey) {
+        if (!modal) return;
+        modal.classList.toggle('hidden', !open);
+        modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+        if (stateKey) {
+          state[stateKey] = Boolean(open);
+        }
+        syncModalScrollLock();
+      }
+
+  function closeRecorderLlmPromptModal({ preserveFields = true } = {}) {
+        setRecorderLlmModalVisibility(recorderLlmPromptModal, false, 'isRecorderLlmPromptModalOpen');
+        setRecorderLlmStatus(recorderLlmPromptStatus, '', '');
+        if (!preserveFields) {
+          if (recorderLlmSystemDetailsInput) recorderLlmSystemDetailsInput.value = '';
+          if (recorderLlmTestRequestInput) recorderLlmTestRequestInput.value = '';
+          if (recorderLlmPromptPreview) recorderLlmPromptPreview.value = '';
+        }
+      }
+
+  function closeRecorderLlmImportModal({ preserveInput = true } = {}) {
+        setRecorderLlmModalVisibility(recorderLlmImportModal, false, 'isRecorderLlmImportModalOpen');
+        if (!preserveInput) {
+          resetRecorderLlmImportState({ clearInput: true });
+        } else {
+          if (recorderLlmImportLoadButton) {
+            recorderLlmImportLoadButton.disabled = !recorderLlmImportedDefinition;
+          }
+        }
+      }
+
+  function setRecorderLlmHelpExpanded(expanded) {
+        const open = Boolean(expanded);
+        if (recorderAskLlmHelpButton) {
+          recorderAskLlmHelpButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        if (recorderLlmHelpPanel) {
+          recorderLlmHelpPanel.classList.toggle('hidden', !open);
+          recorderLlmHelpPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+      }
+
+  function toggleRecorderLlmHelp() {
+        const expanded = recorderAskLlmHelpButton?.getAttribute('aria-expanded') === 'true';
+        setRecorderLlmHelpExpanded(!expanded);
+      }
+
+  function buildRecorderLlmRobotContext() {
+        const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
+        const robot = state.robots.find((entry) => normalizeText(entry?.id, '') === robotIdValue);
+        return {
+          id: robotIdValue,
+          name: normalizeText(robot?.name, robotIdValue),
+          typeId: normalizeText(robot?.typeId ?? robot?.type, ''),
+        };
+      }
+
+  function buildRecorderLlmDefinitionContext() {
+        return {
+          id: normalizeText(recorderDefinitionIdInput?.value, ''),
+          label: normalizeText(recorderDefinitionLabelInput?.value, ''),
+          runAtConnectionDefault: getRecorderRunAtConnectionDefault(),
+          mappedRobotTypeIds: getSelectedRecorderTypeIds(),
+        };
+      }
+
+  function getRecorderTerminalTranscript() {
+        return normalizeText(state.recorderTerminalComponent?.exportTranscript?.(), '');
+      }
+
+  function buildRecorderLlmPromptPayload({ systemDetails, userRequest, transcript }) {
+        const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
+        const draftContext = state.workflowRecorder?.exportDraftContext?.(definitionId) || {
+          started: false,
+          publishReady: false,
+          definitionId,
+          outputCount: 0,
+          writeCount: 0,
+          readCount: 0,
+          outputs: [],
+          execute: [],
+          checks: [],
+          blockingIssues: [],
+        };
+        return renderRecorderLlmPromptTemplate({
+          selectedRobot: buildRecorderLlmRobotContext(),
+          currentDefinition: buildRecorderLlmDefinitionContext(),
+          currentRecorderDraft: draftContext,
+          recorderTerminalTranscript: transcript,
+          userSystemDetails: systemDetails,
+          userTestRequest: userRequest,
+        });
+      }
+
+  function getRecorderLlmPromptBuildResult() {
+        const transcript = getRecorderTerminalTranscript();
+        if (!transcript) {
+          return {
+            ok: false,
+            error: 'Recorder terminal transcript is required. Run or rebuild the visible recorder terminal session first.',
+          };
+        }
+        const systemDetails = normalizeText(recorderLlmSystemDetailsInput?.value, '');
+        if (!systemDetails) {
+          return {
+            ok: false,
+            error: 'System / stack details are required.',
+          };
+        }
+        const userRequest = normalizeText(recorderLlmTestRequestInput?.value, '');
+        if (!userRequest) {
+          return {
+            ok: false,
+            error: 'What do you want to test? is required.',
+          };
+        }
+        const payload = buildRecorderLlmPromptPayload({ systemDetails, userRequest, transcript });
+        return {
+          ok: true,
+          payload,
+          promptText: JSON.stringify(payload, null, 2),
+        };
+      }
+
+  function refreshRecorderLlmPromptPreview() {
+        const result = getRecorderLlmPromptBuildResult();
+        if (recorderLlmPromptPreview) {
+          recorderLlmPromptPreview.value = result.ok ? result.promptText : '';
+        }
+        setRecorderLlmStatus(
+          recorderLlmPromptStatus,
+          result.ok ? 'Prompt bundle ready to copy.' : result.error,
+          result.ok ? 'ok' : 'warn',
+        );
+        return result;
+      }
+
+  async function copyRecorderLlmPrompt() {
+        const result = refreshRecorderLlmPromptPreview();
+        if (!result.ok) {
+          return false;
+        }
+        const clipboard = window?.navigator?.clipboard;
+        if (!clipboard || typeof clipboard.writeText !== 'function') {
+          setRecorderLlmStatus(recorderLlmPromptStatus, 'Clipboard access is unavailable in this browser.', 'error');
+          return false;
+        }
+        try {
+          await clipboard.writeText(result.promptText);
+          setRecorderLlmStatus(recorderLlmPromptStatus, 'Prompt bundle copied to clipboard.', 'ok');
+          return true;
+        } catch (error) {
+          setRecorderLlmStatus(
+            recorderLlmPromptStatus,
+            `Clipboard copy failed: ${error instanceof Error ? error.message : String(error)}`,
+            'error',
+          );
+          return false;
+        }
+      }
+
+  function openRecorderLlmPromptModal() {
+        refreshRecorderLlmPromptPreview();
+        setRecorderLlmModalVisibility(recorderLlmPromptModal, true, 'isRecorderLlmPromptModalOpen');
+        recorderLlmSystemDetailsInput?.focus?.();
+      }
+
+  function stripRecorderLlmJsonWrapperNoise(rawValue) {
+        let text = String(rawValue ?? '').trim();
+        const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+        if (fenced) {
+          text = fenced[1].trim();
+        }
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+          const wrapped = text.slice(firstBrace, lastBrace + 1).trim();
+          if (wrapped.startsWith('{') && wrapped.endsWith('}')) {
+            text = wrapped;
+          }
+        }
+        return text;
+      }
+
+  function parseRecorderLlmImportPayload(rawValue) {
+        const stripped = stripRecorderLlmJsonWrapperNoise(rawValue);
+        if (!stripped) {
+          throw new Error('Paste the external LLM JSON result first.');
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(stripped);
+        } catch (error) {
+          throw new Error(`LLM result is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('LLM result must be a JSON object.');
+        }
+        return parsed;
+      }
+
+  function validateRecorderReadSpec(readSpec, contextLabel = 'check') {
+        if (!readSpec || typeof readSpec !== 'object' || Array.isArray(readSpec)) {
+          throw new Error(`${contextLabel} must define a read object.`);
+        }
+        const kind = normalizeText(readSpec.kind, '').toLowerCase();
+        if (!RECORDER_LLM_ALLOWED_READ_KINDS.has(kind)) {
+          throw new Error(`${contextLabel} uses unsupported read kind '${kind || 'unknown'}'.`);
+        }
+        if (kind === 'all_of') {
+          const rules = Array.isArray(readSpec.rules) ? readSpec.rules : [];
+          if (!rules.length) {
+            throw new Error(`${contextLabel} kind 'all_of' must define non-empty rules[].`);
+          }
+          return {
+            ...readSpec,
+            kind,
+            rules: rules.map((rule, index) => {
+              const validatedRule = validateRecorderReadSpec(rule, `${contextLabel} rule ${index + 1}`);
+              if (!RECORDER_LLM_BASE_READ_KINDS.has(validatedRule.kind)) {
+                throw new Error(`${contextLabel} rule ${index + 1} must use a base read kind.`);
+              }
+              return validatedRule;
+            }),
+          };
+        }
+        if (!normalizeText(readSpec.inputRef, '')) {
+          throw new Error(`${contextLabel} read.${kind} must define inputRef.`);
+        }
+        if (kind === 'contains_string' && !normalizeText(readSpec.needle, '')) {
+          throw new Error(`${contextLabel} read.contains_string must define needle.`);
+        }
+        if (kind === 'contains_any_string') {
+          const needles = Array.isArray(readSpec.needles) ? readSpec.needles.map((item) => normalizeText(item, '')).filter(Boolean) : [];
+          if (!needles.length) {
+            throw new Error(`${contextLabel} read.contains_any_string must define non-empty needles[].`);
+          }
+        }
+        if (kind === 'contains_lines_unordered') {
+          const lines = Array.isArray(readSpec.lines) ? readSpec.lines.map((item) => normalizeText(item, '')).filter(Boolean) : [];
+          if (!lines.length) {
+            throw new Error(`${contextLabel} read.contains_lines_unordered must define non-empty lines[].`);
+          }
+        }
+        return {
+          ...readSpec,
+          kind,
+        };
+      }
+
+  function validateRecorderImportedDefinition(rawDefinition) {
+        const definition = rawDefinition && typeof rawDefinition === 'object' ? rawDefinition : {};
+        const definitionId = normalizeText(definition.id, '');
+        if (!definitionId) {
+          throw new Error('Imported definition must define a top-level id.');
+        }
+        const label = normalizeText(definition.label, '');
+        if (!label) {
+          throw new Error('Imported definition must define a top-level label.');
+        }
+        const mode = normalizeText(definition.mode, '').toLowerCase();
+        if (mode !== 'orchestrate') {
+          throw new Error(`Imported definition mode must be 'orchestrate', received '${mode || 'unknown'}'.`);
+        }
+        const execute = Array.isArray(definition.execute) ? definition.execute : [];
+        if (!execute.length) {
+          throw new Error('Imported definition must define non-empty execute[].');
+        }
+        const normalizedExecute = execute.map((step, index) => {
+          if (!step || typeof step !== 'object' || Array.isArray(step)) {
+            throw new Error(`execute[${index}] must be an object.`);
+          }
+          const command = normalizeText(step.command, '');
+          if (!command) {
+            throw new Error(`execute[${index}] must define command.`);
+          }
+          return {
+            ...step,
+            command,
+          };
+        });
+        const checks = Array.isArray(definition.checks) ? definition.checks : [];
+        if (!checks.length) {
+          throw new Error('Imported definition must define non-empty checks[].');
+        }
+        const normalizedChecks = checks.map((check, index) => {
+          if (!check || typeof check !== 'object' || Array.isArray(check)) {
+            throw new Error(`checks[${index}] must be an object.`);
+          }
+          const checkId = normalizeText(check.id, '');
+          if (!checkId) {
+            throw new Error(`checks[${index}] must define id.`);
+          }
+          if (typeof check.runAtConnection !== 'boolean') {
+            throw new Error(`checks[${index}] must define a top-level boolean runAtConnection.`);
+          }
+          if (!check.pass || typeof check.pass !== 'object' || Array.isArray(check.pass)) {
+            throw new Error(`checks[${index}] must define a pass object.`);
+          }
+          if (!check.fail || typeof check.fail !== 'object' || Array.isArray(check.fail)) {
+            throw new Error(`checks[${index}] must define a fail object.`);
+          }
+          return {
+            ...check,
+            id: checkId,
+            read: validateRecorderReadSpec(check.read, `checks[${index}]`),
+          };
+        });
+        const uniformRunAtConnection = inferUniformRunAtConnection(normalizedChecks, true);
+        if (uniformRunAtConnection === null) {
+          throw new Error('Imported definition checks must share one runAtConnection value.');
+        }
+        return {
+          ...definition,
+          id: definitionId,
+          label,
+          mode: 'orchestrate',
+          execute: normalizedExecute,
+          checks: normalizedChecks,
+        };
+      }
+
+  function validateRecorderLlmImportInput() {
+        try {
+          const parsed = parseRecorderLlmImportPayload(recorderLlmImportInput?.value);
+          recorderLlmImportedDefinition = validateRecorderImportedDefinition(parsed);
+          if (recorderLlmImportLoadButton) {
+            recorderLlmImportLoadButton.disabled = false;
+          }
+          setRecorderLlmStatus(recorderLlmImportStatus, 'Valid recorder test JSON. Ready to load.', 'ok');
+          return recorderLlmImportedDefinition;
+        } catch (error) {
+          recorderLlmImportedDefinition = null;
+          if (recorderLlmImportLoadButton) {
+            recorderLlmImportLoadButton.disabled = true;
+          }
+          setRecorderLlmStatus(
+            recorderLlmImportStatus,
+            error instanceof Error ? error.message : String(error),
+            'error',
+          );
+          return null;
+        }
+      }
+
+  function openRecorderLlmImportModal() {
+        resetRecorderLlmImportState();
+        setRecorderLlmModalVisibility(recorderLlmImportModal, true, 'isRecorderLlmImportModalOpen');
+        recorderLlmImportInput?.focus?.();
+      }
+
+  function loadRecorderLlmImportResult() {
+        const definition = recorderLlmImportedDefinition || validateRecorderLlmImportInput();
+        if (!definition) return false;
+        loadExistingTestIntoRecorder(definition);
+        closeRecorderLlmImportModal({ preserveInput: false });
+        state.workflowRecorder?.setPublishStatus?.(
+          `Imported '${normalizeText(definition.id, 'definition')}' into the recorder draft. Review before publishing.`,
+          'ok',
+        );
+        return true;
+      }
+
   function renderRecorderRobotTypeTargets() {
         if (!recorderRobotTypeTargets) return;
         recorderRobotTypeTargets.replaceChildren();
@@ -703,6 +1108,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (normalizedMode === 'test') {
           syncRecorderUiState();
         } else {
+          setRecorderLlmHelpExpanded(false);
+          closeRecorderLlmPromptModal();
+          closeRecorderLlmImportModal();
           ensureFixRobotTypeTargetsRendered();
           hideRecorderReadPopover();
         }
@@ -955,6 +1363,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (normalizedTab === 'recorder') {
           syncRecorderUiState();
         } else {
+          setRecorderLlmHelpExpanded(false);
+          closeRecorderLlmPromptModal();
+          closeRecorderLlmImportModal();
           hideRecorderReadPopover();
         }
         if (syncHash) {
@@ -1301,6 +1712,8 @@ export function registerManageRecorderRuntime(runtime, env) {
         const definitionId = normalizeText(testDefinition?.id, '');
         const definitionLabel = normalizeText(testDefinition?.label, definitionId);
         setFlowEditorMode('test', { announce: false });
+        setRecorderLlmHelpExpanded(false);
+        resetRecorderLlmImportState();
         state.workflowRecorder.loadTestDefinition(testDefinition);
         clearRecorderOutputForm();
         clearRecorderReadForm();
@@ -1389,6 +1802,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (!state.workflowRecorder) return;
         setFlowEditorMode('test', { announce: false });
         setActiveManageTab('recorder', { syncHash: true, persist: true });
+        setRecorderLlmHelpExpanded(false);
+        closeRecorderLlmPromptModal();
+        closeRecorderLlmImportModal({ preserveInput: false });
         state.workflowRecorder.createNewTest();
         clearRecorderOutputForm();
         clearRecorderReadForm();
@@ -1411,6 +1827,9 @@ export function registerManageRecorderRuntime(runtime, env) {
 
   function startNewFixDraft() {
         clearManageFixEditor();
+        setRecorderLlmHelpExpanded(false);
+        closeRecorderLlmPromptModal();
+        closeRecorderLlmImportModal({ preserveInput: false });
         setFlowEditorMode('fix', { announce: false });
         setActiveManageTab('recorder', { syncHash: true, persist: true });
         if (manageFixIdInput) manageFixIdInput.value = 'new_fix';
@@ -1529,9 +1948,15 @@ export function registerManageRecorderRuntime(runtime, env) {
             }
           }
         }
-  
+
         syncRecorderReadKindFields();
         syncRecorderReadPopoverVisibility();
+        if (state.isRecorderLlmPromptModalOpen) {
+          refreshRecorderLlmPromptPreview();
+        }
+        if (state.isRecorderLlmImportModalOpen && recorderLlmImportInput && normalizeText(recorderLlmImportInput.value, '')) {
+          validateRecorderLlmImportInput();
+        }
       }
 
   async function runRecorderCommandAndCapture() {
@@ -1861,6 +2286,55 @@ export function registerManageRecorderRuntime(runtime, env) {
         recorderAddReadBtn?.addEventListener('click', () => {
           addRecorderReadVisual();
         });
+        recorderAskLlmButton?.addEventListener('click', () => {
+          openRecorderLlmPromptModal();
+        });
+        recorderAskLlmHelpButton?.addEventListener('click', () => {
+          toggleRecorderLlmHelp();
+        });
+        recorderPasteLlmResultButton?.addEventListener('click', () => {
+          openRecorderLlmImportModal();
+        });
+        recorderLlmPromptCancelButton?.addEventListener('click', () => {
+          closeRecorderLlmPromptModal();
+        });
+        recorderLlmCopyPromptButton?.addEventListener('click', () => {
+          copyRecorderLlmPrompt();
+        });
+        recorderLlmSystemDetailsInput?.addEventListener('input', () => {
+          refreshRecorderLlmPromptPreview();
+        });
+        recorderLlmTestRequestInput?.addEventListener('input', () => {
+          refreshRecorderLlmPromptPreview();
+        });
+        recorderLlmImportCancelButton?.addEventListener('click', () => {
+          closeRecorderLlmImportModal({ preserveInput: false });
+        });
+        recorderLlmImportInput?.addEventListener('input', () => {
+          validateRecorderLlmImportInput();
+        });
+        recorderLlmImportLoadButton?.addEventListener('click', () => {
+          loadRecorderLlmImportResult();
+        });
+        recorderLlmPromptModal?.addEventListener('click', (event) => {
+          if (event.target === recorderLlmPromptModal) {
+            closeRecorderLlmPromptModal();
+          }
+        });
+        recorderLlmImportModal?.addEventListener('click', (event) => {
+          if (event.target === recorderLlmImportModal) {
+            closeRecorderLlmImportModal({ preserveInput: false });
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key !== 'Escape') return;
+          if (state.isRecorderLlmPromptModalOpen) {
+            closeRecorderLlmPromptModal();
+          }
+          if (state.isRecorderLlmImportModalOpen) {
+            closeRecorderLlmImportModal({ preserveInput: false });
+          }
+        });
         recorderReadKindSelect?.addEventListener('change', () => {
           syncRecorderReadKindFields();
         });
@@ -1880,6 +2354,10 @@ export function registerManageRecorderRuntime(runtime, env) {
         });
         clearRecorderOutputForm();
         clearRecorderReadForm();
+        setRecorderLlmHelpExpanded(false);
+        resetRecorderLlmImportState({ clearInput: true });
+        if (recorderLlmPromptPreview) recorderLlmPromptPreview.value = '';
+        setRecorderLlmStatus(recorderLlmPromptStatus, '', '');
         setManageDefinitionsFilter(state.manageDefinitionsFilter || 'all');
         setFlowEditorMode(state.manageFlowEditorMode || 'test', { announce: false });
         syncRecorderUiState();
@@ -1925,6 +2403,21 @@ export function registerManageRecorderRuntime(runtime, env) {
     clearRecorderOutputForm,
     clearRecorderReadForm,
     clearManageFixEditor,
+    setRecorderLlmHelpExpanded,
+    toggleRecorderLlmHelp,
+    buildRecorderLlmPromptPayload,
+    getRecorderLlmPromptBuildResult,
+    refreshRecorderLlmPromptPreview,
+    copyRecorderLlmPrompt,
+    openRecorderLlmPromptModal,
+    closeRecorderLlmPromptModal,
+    stripRecorderLlmJsonWrapperNoise,
+    parseRecorderLlmImportPayload,
+    validateRecorderImportedDefinition,
+    validateRecorderLlmImportInput,
+    openRecorderLlmImportModal,
+    closeRecorderLlmImportModal,
+    loadRecorderLlmImportResult,
     loadExistingTestIntoRecorder,
     loadExistingFixIntoFlow,
     duplicateManageTestDefinition,

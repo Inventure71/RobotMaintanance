@@ -968,7 +968,10 @@ export function registerMonitorConfigRuntime(runtime, env) {
 
   function syncModalScrollLock() {
         if (!document?.body) return;
-        const shouldLock = state.testDebugModalOpen || state.isBugReportModalOpen;
+        const shouldLock = state.testDebugModalOpen
+          || state.isBugReportModalOpen
+          || state.isRecorderLlmPromptModalOpen
+          || state.isRecorderLlmImportModalOpen;
         document.body.classList.toggle(MODAL_SCROLL_LOCK_CLASS, shouldLock);
       }
 
