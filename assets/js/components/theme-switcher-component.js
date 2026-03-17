@@ -1,6 +1,6 @@
 export const DESIGN_SYSTEM_ATTRIBUTE = 'data-design-system';
 export const DESIGN_SYSTEM_STORAGE_KEY = 'dashboard.designSystem';
-export const DEFAULT_DESIGN_SYSTEM_ID = 'swiss';
+export const DEFAULT_DESIGN_SYSTEM_ID = 'classic';
 export const DESIGN_SYSTEM_OPTIONS = Object.freeze([
   { id: 'swiss', label: 'Swiss' },
   { id: 'classic', label: 'Classic' },

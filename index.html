@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-design-system="swiss">
+<html lang="en" data-design-system="classic">
 
 <head>
   <meta charset="UTF-8" />
@@ -13,7 +13,7 @@
     (() => {
       const storageKey = 'dashboard.designSystem';
       const allowedDesignSystems = new Set(['classic', 'swiss']);
-      let designSystem = 'swiss';
+      let designSystem = 'classic';
       try {
         const storedDesignSystem = window.localStorage.getItem(storageKey);
         if (allowedDesignSystems.has(String(storedDesignSystem || '').trim().toLowerCase())) {
