@@ -198,7 +198,9 @@
                 <button id="manageTabButtonRobots" class="button button-compact active" type="button" data-tab="robots"
                   data-button-intent="navigation" title="Register and manage robot connections">Robot Registry</button>
                 <button id="manageTabButtonRecorder" class="button button-compact" type="button" data-tab="recorder"
-                  data-button-intent="navigation" title="Create and edit test or fix flows">Test Editor</button>
+                  data-recorder-editor-mode="test" data-button-intent="navigation" title="Create and edit test flows">Test Editor</button>
+                <button id="manageTabButtonFixEditor" class="button button-compact" type="button" data-tab="recorder"
+                  data-recorder-editor-mode="fix" data-button-intent="navigation" title="Create and edit fix flows">Fix Editor</button>
                 <button id="manageTabButtonDefinitions" class="button button-compact" type="button" data-tab="definitions"
                   data-button-intent="navigation" title="Browse and manage test and fix definitions">Definitions</button>
               </div>
@@ -264,7 +266,15 @@
                       <select id="editRobotType" class="form-input" name="type" required></select>
                     </label>
                     <label class="form-field">
-                      IP / Host
+                      <div class="battery-command-heading">
+                        <span class="battery-command-label">IP / Host</span>
+                        <button id="editRobotIpInfoButton" class="button test-info-btn battery-command-info-button" type="button"
+                          data-button-intent="utility" aria-expanded="false" aria-controls="editRobotIpInfo"
+                          aria-label="Show IP / Host help" title="Show IP / Host help">?</button>
+                      </div>
+                      <div id="editRobotIpInfo" class="battery-command-help hidden">
+                        <p class="muted-copy">Hostnames in our lab should end with <strong>.robotics.lab</strong> (for example <strong>agamemnon.robotics.lab</strong>).</p>
+                      </div>
                       <input id="editRobotIp" class="form-input" name="ip" type="text" autocomplete="off" required />
                     </label>
                     <label class="form-field">
@@ -355,9 +365,17 @@
                         </select>
                       </label>
                       <label class="form-field">
-                        IP / Host
+                        <div class="battery-command-heading">
+                          <span class="battery-command-label">IP / Host</span>
+                          <button id="addRobotIpInfoButton" class="button test-info-btn battery-command-info-button" type="button"
+                            data-button-intent="utility" aria-expanded="false" aria-controls="addRobotIpInfo"
+                            aria-label="Show IP / Host help" title="Show IP / Host help">?</button>
+                        </div>
+                        <div id="addRobotIpInfo" class="battery-command-help hidden">
+                          <p class="muted-copy">Hostnames in our lab should end with <strong>.robotics.lab</strong> (for example <strong>agamemnon.robotics.lab</strong>).</p>
+                        </div>
                         <input id="addRobotIp" name="ip" type="text" autocomplete="off" class="form-input"
-                          placeholder="e.g. 192.168.0.42 or robot-host" required />
+                          placeholder="e.g. 192.168.0.42 or agamemnon.robotics.lab" required />
                       </label>
                       <label class="form-field">
                         SSH username
@@ -604,175 +622,219 @@
           </div>
 
           <div id="manageTabPanelRecorder" class="manage-tab-panel" data-tab-panel="recorder">
-            <div class="flow-editor-switcher manage-subnav-panel">
-              <div class="manage-subnav-header">
-                <span class="manage-subnav-label">Test Editor mode</span>
-                <span class="manage-subnav-copy">Switch the editor between test and fix workflows.</span>
-              </div>
-              <div class="manage-tabs" role="tablist" aria-label="Flow definition type">
-                <button id="manageFlowModeTestButton" class="button button-compact active" type="button"
-                  data-flow-mode="test" data-button-intent="navigation">Test flow</button>
-                <button id="manageFlowModeFixButton" class="button button-compact" type="button"
-                  data-flow-mode="fix" data-button-intent="navigation">Fix flow</button>
-              </div>
-              <div id="manageFlowModeHint" class="manage-tab-status" aria-live="polite">Open a definition from the
-                library or start a new draft.</div>
-            </div>
-
             <div id="manageRecorderTestEditorPanel" class="flow-editor-mode-panel active" data-flow-editor-panel="test">
-              <div class="panel flow-builder-topbar">
-                <div class="flow-builder-topbar-main">
-                  <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
-                    draft</button>
-                  <label class="form-field">
-                    Robot
-                    <select id="recorderRobotSelect" class="form-input">
-                      <option value="">Select robot</option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    Definition ID
-                    <input id="recorderDefinitionId" class="form-input" type="text"
-                      placeholder="e.g. topics_snapshot_custom" />
-                  </label>
-                  <label class="form-field">
-                    Label
-                    <input id="recorderDefinitionLabel" class="form-input" type="text"
-                      placeholder="Topics Snapshot Custom" />
-                  </label>
-                  <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
-                    test</button>
-                </div>
-                <div class="flow-builder-topbar-actions">
-                </div>
-                <div class="flow-builder-summary">
-                  <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
-                  <span id="recorderStepCount" class="recorder-summary-pill">0 write blocks</span>
-                  <span id="recorderCheckCount" class="recorder-summary-pill">0 read blocks</span>
-                  <span id="recorderOutputCount" class="recorder-summary-pill">0 outputs</span>
-                </div>
-                <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
-              </div>
-
-              <div class="manage-grid two-cols flow-builder-grid">
-                <div class="panel flow-builder-workflow-panel">
-                  <div class="recorder-llm-section">
-                    <button id="recorderAskLlmButton" class="button button-compact" type="button"
-                      data-button-intent="utility">ASK YOUR LLM</button>
-                    <button id="recorderPasteLlmResultButton" class="button button-compact" type="button"
-                      data-button-intent="utility">PASTE LLM RESULT</button>
-                    <button id="recorderAskLlmHelpButton" class="button button-compact recorder-llm-help-toggle"
-                      type="button" data-button-intent="navigation" aria-expanded="false"
-                      aria-controls="recorderLlmHelpPanel">?</button>
+              <div id="recorderExperienceShell" class="recorder-experience-shell">
+                <div class="panel recorder-mode-shell">
+                  <div class="recorder-mode-header">
+                    <div>
+                      <h2>Choose Recorder Mode</h2>
+                      <p class="muted-copy">Simple is a guided external-LLM flow. Advanced keeps the full manual builder visible.</p>
+                    </div>
+                    <div class="recorder-mode-header-actions">
+                      <span id="recorderModeBadge" class="recorder-summary-pill hidden">Mode not selected</span>
+                      <button id="recorderResetExperienceButton" class="button button-compact hidden" type="button"
+                        data-button-intent="danger">Reset draft</button>
+                      <button id="recorderChangeModeButton" class="button button-compact hidden" type="button"
+                        data-button-intent="navigation">Change mode</button>
+                    </div>
                   </div>
-                  <div id="recorderLlmHelpPanel" class="recorder-llm-help hidden" aria-hidden="true">
-                    <p>Copy a prompt bundle from this recorder, use any external LLM to generate the test JSON, then
-                      paste the JSON back here for validation and draft loading. This app does not call any LLM
-                      directly.</p>
-                    <ul>
-                      <li>SSH into the robot and run the same commands you normally use when investigating the system.</li>
-                      <li>The terminal above should contain enough command and output history for the model to understand
-                        what to check. This mainly helps it build the read blocks correctly.</li>
-                      <li>The model cannot reliably invent the right write commands for your system. More terminal context
-                        is fine. Missing context is not.</li>
-                      <li>The copied prompt already includes a full JSON example with multiple writes, outputs, and read
-                        rules so the formatting stays explicit.</li>
-                    </ul>
+                  <div id="recorderModeSelector" class="recorder-mode-selector">
+                    <button id="recorderSelectSimpleMode" class="button recorder-mode-card" type="button"
+                      data-button-intent="utility">
+                      <span class="recorder-mode-card-title">Simple</span>
+                      <span class="recorder-mode-card-copy">Use terminal context and an external LLM to generate the test JSON.</span>
+                    </button>
+                    <button id="recorderSelectAdvancedMode" class="button recorder-mode-card" type="button"
+                      data-button-intent="navigation">
+                      <span class="recorder-mode-card-title">Advanced</span>
+                      <span class="recorder-mode-card-copy">Build the test manually with terminal, outputs, write blocks, and validations.</span>
+                    </button>
                   </div>
-                  <h2>1. Outputs</h2>
-                  <div class="flow-builder-output-form" style="display:none;">
-                    <label class="form-field">
-                      Output key
-                      <input id="recorderOutputKey" class="form-input" type="text" placeholder="e.g. battery" />
-                    </label>
-                    <label class="form-field">
-                      Output label
-                      <input id="recorderOutputLabel" class="form-input" type="text" placeholder="Battery" />
-                    </label>
-                    <label class="form-field">
-                      Icon
-                      <input id="recorderOutputIcon" class="form-input" type="text" placeholder="🔋" />
-                    </label>
-                    <label class="form-field">
-                      Pass details
-                      <input id="recorderOutputPassDetails" class="form-input" type="text"
-                        placeholder="Battery topic present" />
-                    </label>
-                    <label class="form-field">
-                      Fail details
-                      <input id="recorderOutputFailDetails" class="form-input" type="text"
-                        placeholder="Battery topic missing" />
-                    </label>
-                  </div>
-                  <div class="recorder-check-actions" style="margin-bottom: 12px;">
-                    <button id="recorderAddOutputBtn" class="button button-compact" type="button"
-                      data-button-intent="create">Add Output Block</button>
-                  </div>
-                  <div id="recorderOutputs" class="manage-entity-list"></div>
-
-                  <h2>2. Flow</h2>
-                  <p class="recorder-flow-hint">Write blocks define execution order. Read blocks validate captured
-                    write outputs and bind to one output, but do not participate in runtime step ordering.</p>
-                  <div class="recorder-command-row">
-                    <input id="recorderCommandInput" class="form-input" type="text"
-                      placeholder="Type command to run..." />
-                    <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
-                      block</button>
-                  </div>
-
-                  <div class="flow-builder-read-form" style="display:none;">
-                    <label class="form-field">
-                      Output
-                      <select id="recorderReadOutputKey" class="form-input">
-                        <option value="">Select output</option>
-                      </select>
-                    </label>
-                    <label class="form-field">
-                      Input ref
-                      <select id="recorderReadInputRef" class="form-input">
-                        <option value="">Select write output</option>
-                      </select>
-                    </label>
-                    <label class="form-field">
-                      Matcher
-                      <select id="recorderReadKind" class="form-input">
-                        <option value="contains_string">Contains string</option>
-                        <option value="contains_any_string">Contains any string</option>
-                        <option value="contains_lines_unordered">Contains lines unordered</option>
-                      </select>
-                    </label>
-                    <label class="form-field">
-                      Needle
-                      <input id="recorderReadNeedle" class="form-input" type="text" placeholder="e.g. /battery" />
-                    </label>
-                    <label class="form-field">
-                      Needles (comma separated)
-                      <input id="recorderReadNeedles" class="form-input" type="text" placeholder="/battery,/scan" />
-                    </label>
-                    <label class="form-field">
-                      Lines (one per line)
-                      <textarea id="recorderReadLines" class="form-input manage-json-input"
-                        placeholder="/battery&#10;/scan"></textarea>
-                    </label>
-                    <label class="recorder-primitive-toggle">
-                      <input id="recorderReadRequireAll" type="checkbox" checked />
-                      Require all lines
-                    </label>
-                  </div>
-                  <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
-                    <button id="recorderAddWriteBtn" class="button button-compact" type="button"
-                      data-button-intent="utility">Add Write Block</button>
-                    <button id="recorderAddReadBtn" class="button button-compact" type="button"
-                      data-button-intent="create">Add Read Block</button>
-                  </div>
-
-                  <div id="recorderFlowBlocks" class="manage-entity-list"></div>
                 </div>
 
-                <div class="panel flow-builder-terminal-panel">
-                  <h2>Terminal (SSH)</h2>
-                  <p class="recorder-section-hint">Select a robot to connect an interactive SSH session. Highlight text to
-                    automatically populate read blocks.</p>
+                <div id="recorderSharedTopbar" class="panel flow-builder-topbar hidden">
+                  <div id="recorderSharedTopbarMain" class="flow-builder-topbar-main recorder-topbar-main">
+                    <div id="recorderTopbarNewDraftWrap" class="recorder-topbar-slot">
+                      <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
+                        draft</button>
+                    </div>
+                    <div id="recorderTopbarRobotWrap" class="recorder-topbar-slot">
+                      <label class="form-field">
+                        Robot
+                        <select id="recorderRobotSelect" class="form-input">
+                          <option value="">Select robot</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="recorderTopbarDefinitionWrap" class="recorder-topbar-slot recorder-topbar-slot--double">
+                      <label class="form-field">
+                        Definition ID
+                        <input id="recorderDefinitionId" class="form-input" type="text"
+                          placeholder="e.g. topics_snapshot_custom" />
+                      </label>
+                      <label class="form-field">
+                        Label
+                        <input id="recorderDefinitionLabel" class="form-input" type="text"
+                          placeholder="Topics Snapshot Custom" />
+                      </label>
+                    </div>
+                    <div id="recorderTopbarPublishWrap" class="recorder-topbar-slot">
+                      <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
+                        test</button>
+                    </div>
+                  </div>
+                  <div class="flow-builder-summary">
+                    <span id="recorderStateBadge" class="recorder-summary-pill">Draft idle</span>
+                    <span id="recorderStepCount" class="recorder-summary-pill">0 write blocks</span>
+                    <span id="recorderCheckCount" class="recorder-summary-pill">0 read blocks</span>
+                    <span id="recorderOutputCount" class="recorder-summary-pill">0 outputs</span>
+                  </div>
+                  <div id="recorderStatus" class="manage-editor-status" aria-live="polite"></div>
+                </div>
+
+                <div id="recorderSimpleSelectRobotStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="select-robot">
+                  <div class="recorder-simple-step-header">
+                    <h2 id="recorderSimpleSelectRobotTitle">1. Select Robot</h2>
+                    <p class="muted-copy">Choose the robot before entering the guided Simple flow.</p>
+                  </div>
+                  <div class="recorder-simple-copy">
+                    <p>Select the robot you want to inspect. The next step will use that robot for the SSH terminal session and the generated test context.</p>
+                  </div>
+                  <div id="recorderSimpleSelectRobotField" class="recorder-simple-select-field"></div>
+                  <div class="recorder-step-actions">
+                    <button id="recorderSimpleSelectRobotNext" class="button" type="button"
+                      data-button-intent="create">Next: Terminal Context</button>
+                  </div>
+                </div>
+
+                <div id="recorderSimpleTerminalStep" class="recorder-simple-step hidden" data-recorder-simple-step="terminal">
+                  <div class="panel recorder-simple-instructions">
+                    <div class="recorder-simple-step-header">
+                      <h2 id="recorderSimpleTerminalTitle">2. Terminal Context</h2>
+                      <p class="muted-copy">Capture the command outputs that make the test objectively evaluable.</p>
+                    </div>
+                    <div class="recorder-simple-copy">
+                      <p>Run the same commands you normally use to inspect the robot or stack. The goal is to capture outputs that let the generated checks evaluate the system correctly.</p>
+                      <p>The transcript mainly helps the model infer read and validation blocks. It should not be expected to invent the correct commands if the transcript does not show them.</p>
+                    </div>
+                    <div class="recorder-command-examples">
+                      <div class="recorder-command-example-card">
+                        <h3>ROS1</h3>
+                        <code>rostopic list</code>
+                        <code>rosnode list</code>
+                        <code>rostopic echo /topic -n 1</code>
+                      </div>
+                      <div class="recorder-command-example-card">
+                        <h3>ROS2</h3>
+                        <code>ros2 topic list</code>
+                        <code>ros2 node list</code>
+                        <code>ros2 topic echo /topic --once</code>
+                      </div>
+                      <div class="recorder-command-example-card">
+                        <h3>Linux / System</h3>
+                        <code>systemctl status ...</code>
+                        <code>journalctl -u ... -n 100</code>
+                        <code>ip addr</code>
+                        <code>ps aux</code>
+                      </div>
+                    <div class="recorder-command-example-card">
+                      <h3>Containers</h3>
+                      <code>docker ps</code>
+                      <code>docker logs &lt;container&gt; --tail 100</code>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+
+                <div id="recorderSimplePromptStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="prompt">
+                  <div class="recorder-simple-step-header">
+                    <h2 id="recorderSimplePromptTitle">3. Ask Your LLM</h2>
+                    <p class="muted-copy">Describe the stack and the exact test objective, then generate the prompt bundle.</p>
+                  </div>
+                  <label class="recorder-llm-label" for="recorderLlmSystemDetailsInput">System / stack details</label>
+                  <textarea id="recorderLlmSystemDetailsInput" class="recorder-llm-textarea" rows="5"
+                    placeholder="OS, middleware, ROS version, stack layout, commands available, constraints..."></textarea>
+                  <label class="recorder-llm-label" for="recorderLlmTestRequestInput">What do you want to test?</label>
+                  <textarea id="recorderLlmTestRequestInput" class="recorder-llm-textarea" rows="5"
+                    placeholder="Describe the workflow, outputs to validate, and success/failure conditions."></textarea>
+                  <div id="recorderLlmPromptStatus" class="recorder-llm-status" aria-live="polite"></div>
+                  <div class="recorder-step-actions">
+                    <button id="recorderSimplePromptBack" class="button" type="button"
+                      data-button-intent="navigation">Back</button>
+                    <button id="recorderGeneratePromptButton" class="button" type="button"
+                      data-button-intent="utility">Generate prompt</button>
+                    <button id="recorderSimplePromptNext" class="button" type="button"
+                      data-button-intent="create">Next: Copy And Paste Result</button>
+                  </div>
+                </div>
+
+                <div id="recorderSimpleImportStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="import">
+                  <div class="recorder-simple-step-header">
+                    <h2 id="recorderSimpleImportTitle">4. Copy Prompt And Paste Result</h2>
+                    <p class="muted-copy">Copy the generated prompt into your external LLM, then paste the returned JSON here.</p>
+                  </div>
+                  <div class="recorder-import-instructions">
+                    <p>Paste the prompt into your external LLM provider, ask it to return only JSON, then paste the result below and validate it. The current draft stays unchanged until validation succeeds.</p>
+                    <p class="muted-copy">Use this shape to identify valid JSON output:</p>
+                    <pre class="recorder-json-example"><code>{
+  "id": "battery_health_check",
+  "label": "Battery Health Check",
+  "mode": "orchestrate",
+  "execute": [
+    {
+      "id": "step_1",
+      "command": "ros2 topic list",
+      "saveAs": "topics_raw"
+    }
+  ],
+  "checks": [
+    {
+      "id": "battery_health_check__topics",
+      "label": "Has battery topic",
+      "runAtConnection": true,
+      "read": {
+        "kind": "contains_string",
+        "inputRef": "topics_raw",
+        "needle": "/battery",
+        "caseSensitive": false
+      },
+      "pass": {
+        "status": "ok",
+        "value": "present",
+        "details": "The required battery topic is present."
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "The required battery topic is missing."
+      }
+    }
+  ]
+}</code></pre>
+                  </div>
+                  <div class="recorder-step-actions recorder-step-actions-inline">
+                    <button id="recorderLlmCopyPromptButton" class="button" type="button"
+                      data-button-intent="utility">Copy prompt</button>
+                  </div>
+                  <label class="recorder-llm-label" for="recorderLlmImportInput">LLM result JSON</label>
+                  <textarea id="recorderLlmImportInput" class="recorder-llm-textarea recorder-llm-import" rows="16"
+                    placeholder='Paste raw JSON or a fenced JSON block here.'></textarea>
+                  <div id="recorderLlmImportStatus" class="recorder-llm-status" aria-live="polite"></div>
+                  <div class="recorder-step-actions">
+                    <button id="recorderSimpleImportBack" class="button" type="button"
+                      data-button-intent="navigation">Back</button>
+                    <button id="recorderValidateImportButton" class="button" type="button"
+                      data-button-intent="utility">Validate</button>
+                    <button id="recorderSimpleImportNext" class="button" type="button"
+                      data-button-intent="create">Next: Preview Blocks</button>
+                  </div>
+                </div>
+
+                <div id="recorderTerminalPanel" class="panel flow-builder-terminal-panel hidden">
+                  <div class="recorder-simple-step-header">
+                    <h2>Terminal (SSH)</h2>
+                    <p id="recorderTerminalPanelHint" class="recorder-section-hint">Select a robot to connect an interactive SSH session. Highlight text to automatically populate read blocks.</p>
+                  </div>
                   <div class="terminal-shell" style="height: 400px; position:relative; overflow:hidden;">
                     <button id="recorderTerminalPopReadBtn" class="button button-compact floating-action-btn"
                       style="position: absolute; top: 10px; right: 10px; z-index: 10; display: none;">+ Add Read
@@ -788,23 +850,177 @@
                     <div id="recorderTerminalDisplay" class="fallback" aria-live="polite"
                       style="height: calc(100% - 40px); background:#060912; overflow-y:auto; padding: 0.5rem;"></div>
                   </div>
-
-                  <section class="definition-assignment" aria-label="Assignment">
-                    <div class="definition-assignment-header">
-                      <h3>Assignment</h3>
-                      <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
+                  <div id="recorderSimpleTerminalActions" class="recorder-simple-terminal-actions hidden">
+                    <label class="recorder-primitive-toggle recorder-simple-ack">
+                      <input id="recorderSimpleTranscriptAcknowledge" type="checkbox" />
+                      Continue even if this transcript is still empty
+                    </label>
+                    <div class="recorder-step-actions">
+                      <button id="recorderSimpleTerminalNext" class="button" type="button"
+                        data-button-intent="create">Next: Ask Your LLM</button>
                     </div>
-                    <div class="definition-assignment-grid">
-                      <label class="recorder-primitive-toggle">
-                        <input id="recorderRunAtConnectionInput" type="checkbox" checked />
-                        Run test at connection
-                      </label>
-                    </div>
-                    <h4 class="definition-assignment-subtitle">Map to robot types</h4>
-                    <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
-                  </section>
-                  <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
+                  </div>
                 </div>
+
+                <div id="recorderAdvancedWorkspace" class="recorder-advanced-workspace hidden">
+                  <div class="recorder-advanced-column recorder-advanced-column-left">
+                    <div id="recorderWritePanel" class="panel flow-builder-workflow-panel">
+                      <div class="recorder-simple-step-header">
+                        <h2>Write Blocks</h2>
+                        <p class="recorder-flow-hint">Execution order comes only from write blocks. Capture commands from the terminal or add them manually.</p>
+                      </div>
+                      <div class="recorder-command-row">
+                        <input id="recorderCommandInput" class="form-input" type="text"
+                          placeholder="Type command to run..." />
+                        <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
+                          block</button>
+                      </div>
+                      <div class="recorder-check-actions" style="margin-top: 12px;">
+                        <button id="recorderAddWriteBtn" class="button button-compact" type="button"
+                          data-button-intent="utility">Add Write Block</button>
+                      </div>
+                      <div id="recorderWriteBlocks" class="manage-entity-list"></div>
+                    </div>
+                  </div>
+
+                  <div class="recorder-advanced-column recorder-advanced-column-right">
+                    <div id="recorderOutputsPanel" class="panel flow-builder-workflow-panel">
+                      <div class="recorder-simple-step-header">
+                        <h2>Outputs</h2>
+                        <p class="recorder-flow-hint">Outputs define the result buckets that the checks will update.</p>
+                      </div>
+                      <div class="flow-builder-output-form" style="display:none;">
+                        <label class="form-field">
+                          Output key
+                          <input id="recorderOutputKey" class="form-input" type="text" placeholder="e.g. battery" />
+                        </label>
+                        <label class="form-field">
+                          Output label
+                          <input id="recorderOutputLabel" class="form-input" type="text" placeholder="Battery" />
+                        </label>
+                        <label class="form-field">
+                          Icon
+                          <input id="recorderOutputIcon" class="form-input" type="text" placeholder="🔋" />
+                        </label>
+                        <label class="form-field">
+                          Pass details
+                          <input id="recorderOutputPassDetails" class="form-input" type="text"
+                            placeholder="Battery topic present" />
+                        </label>
+                        <label class="form-field">
+                          Fail details
+                          <input id="recorderOutputFailDetails" class="form-input" type="text"
+                            placeholder="Battery topic missing" />
+                        </label>
+                      </div>
+                      <div class="recorder-check-actions" style="margin-bottom: 12px;">
+                        <button id="recorderAddOutputBtn" class="button button-compact" type="button"
+                          data-button-intent="create">Add Output Block</button>
+                      </div>
+                      <div id="recorderOutputs" class="manage-entity-list"></div>
+                    </div>
+
+                    <div id="recorderReadsPanel" class="panel flow-builder-workflow-panel">
+                      <div class="recorder-simple-step-header">
+                        <h2>Read Blocks / Validations</h2>
+                        <p class="recorder-flow-hint">Bind each validation to one output and one captured write result.</p>
+                      </div>
+                      <div class="flow-builder-read-form" style="display:none;">
+                        <label class="form-field">
+                          Output
+                          <select id="recorderReadOutputKey" class="form-input">
+                            <option value="">Select output</option>
+                          </select>
+                        </label>
+                        <label class="form-field">
+                          Input ref
+                          <select id="recorderReadInputRef" class="form-input">
+                            <option value="">Select write output</option>
+                          </select>
+                        </label>
+                        <label class="form-field">
+                          Matcher
+                          <select id="recorderReadKind" class="form-input">
+                            <option value="contains_string">Contains string</option>
+                            <option value="contains_any_string">Contains any string</option>
+                            <option value="contains_lines_unordered">Contains lines unordered</option>
+                          </select>
+                        </label>
+                        <label class="form-field">
+                          Needle
+                          <input id="recorderReadNeedle" class="form-input" type="text" placeholder="e.g. /battery" />
+                        </label>
+                        <label class="form-field">
+                          Needles (comma separated)
+                          <input id="recorderReadNeedles" class="form-input" type="text" placeholder="/battery,/scan" />
+                        </label>
+                        <label class="form-field">
+                          Lines (one per line)
+                          <textarea id="recorderReadLines" class="form-input manage-json-input"
+                            placeholder="/battery&#10;/scan"></textarea>
+                        </label>
+                        <label class="recorder-primitive-toggle">
+                          <input id="recorderReadRequireAll" type="checkbox" checked />
+                          Require all lines
+                        </label>
+                      </div>
+                      <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
+                        <button id="recorderAddReadBtn" class="button button-compact" type="button"
+                          data-button-intent="create">Add Read Block</button>
+                      </div>
+                      <div id="recorderReadBlocks" class="manage-entity-list"></div>
+                    </div>
+
+                    <div id="recorderAdvancedPreviewPanel" class="panel flow-builder-workflow-panel">
+                      <div class="recorder-simple-step-header">
+                        <h2>Live Test Preview</h2>
+                        <p class="recorder-flow-hint">Inspect the assembled draft and any publish blockers without leaving the workspace.</p>
+                      </div>
+                      <div id="recorderAdvancedPreview" class="recorder-definition-preview"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="recorderSimplePreviewStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="preview">
+                  <div class="recorder-simple-step-header">
+                    <h2 id="recorderSimplePreviewTitle">5. Preview Blocks</h2>
+                    <p class="muted-copy">Review the imported draft exactly as it will feed the existing recorder contract.</p>
+                  </div>
+                  <div id="recorderSimplePreview" class="recorder-definition-preview"></div>
+                  <div class="recorder-step-actions">
+                    <button id="recorderSimplePreviewBack" class="button" type="button"
+                      data-button-intent="navigation">Back</button>
+                    <button id="recorderSimpleEditInAdvancedButton" class="button" type="button"
+                      data-button-intent="utility">Edit in Advanced</button>
+                    <button id="recorderSimplePreviewNext" class="button" type="button"
+                      data-button-intent="create">Continue to Publish</button>
+                  </div>
+                </div>
+
+                <section id="recorderAssignmentPanel" class="panel definition-assignment hidden" aria-label="Assignment">
+                  <div class="definition-assignment-header">
+                    <h3>Assignment</h3>
+                    <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
+                  </div>
+                  <div class="definition-assignment-grid">
+                    <label class="recorder-primitive-toggle">
+                      <input id="recorderRunAtConnectionInput" type="checkbox" checked />
+                      Run test at connection
+                    </label>
+                  </div>
+                  <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                  <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
+                  <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
+                </section>
+
+                <div id="recorderSimplePublishStep" class="recorder-simple-step hidden" data-recorder-simple-step="publish">
+                  <div class="recorder-step-actions">
+                    <button id="recorderSimplePublishBack" class="button" type="button"
+                      data-button-intent="navigation">Back</button>
+                  </div>
+                </div>
+
+                <textarea id="recorderLlmPromptPreview" class="recorder-hidden-textarea" aria-hidden="true" tabindex="-1" hidden></textarea>
               </div>
             </div>
 
@@ -946,51 +1162,8 @@
       </div>
     </div>
 
-    <div id="recorderLlmPromptModal" class="recorder-llm-modal hidden" aria-hidden="true">
-      <div class="recorder-llm-panel" role="dialog" aria-modal="true" aria-labelledby="recorderLlmPromptTitle">
-        <div class="recorder-llm-header">
-          <h3 id="recorderLlmPromptTitle">Ask Your LLM</h3>
-        </div>
-        <p class="recorder-llm-copy">Build a prompt bundle from the current recorder draft and terminal transcript, then copy it into an external LLM.</p>
-        <p class="recorder-llm-copy">Before copying, SSH into the robot and run the commands you normally use. The terminal transcript gives the model the context it needs to understand what to validate. It helps the model infer read blocks, but it should not be expected to invent the right write commands if the terminal history does not show them.</p>
-        <p class="recorder-llm-copy">Extra terminal context is acceptable. Missing terminal context is the problem. The copied prompt also includes a complete JSON example covering multiple writes, outputs, and read rules.</p>
-        <label class="recorder-llm-label" for="recorderLlmSystemDetailsInput">System / stack details</label>
-        <textarea id="recorderLlmSystemDetailsInput" class="recorder-llm-textarea" rows="4"
-          placeholder="OS, middleware, ROS version, stack layout, commands available, constraints..."></textarea>
-        <label class="recorder-llm-label" for="recorderLlmTestRequestInput">What do you want to test?</label>
-        <textarea id="recorderLlmTestRequestInput" class="recorder-llm-textarea" rows="4"
-          placeholder="Describe the workflow, outputs to validate, and success/failure conditions."></textarea>
-        <label class="recorder-llm-label" for="recorderLlmPromptPreview">Prompt bundle preview</label>
-        <textarea id="recorderLlmPromptPreview" class="recorder-llm-textarea recorder-llm-preview" rows="14" readonly
-          placeholder="The generated prompt bundle will appear here once the required fields are filled."></textarea>
-        <div id="recorderLlmPromptStatus" class="recorder-llm-status" aria-live="polite"></div>
-        <div class="recorder-llm-actions">
-          <button id="recorderLlmPromptCancelButton" class="button" type="button"
-            data-button-intent="navigation">Cancel</button>
-          <button id="recorderLlmCopyPromptButton" class="button" type="button"
-            data-button-intent="utility">Copy prompt</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="recorderLlmImportModal" class="recorder-llm-modal hidden" aria-hidden="true">
-      <div class="recorder-llm-panel" role="dialog" aria-modal="true" aria-labelledby="recorderLlmImportTitle">
-        <div class="recorder-llm-header">
-          <h3 id="recorderLlmImportTitle">Paste LLM Result</h3>
-        </div>
-        <p class="recorder-llm-copy">Paste the external LLM JSON response. The current recorder draft stays unchanged unless validation succeeds.</p>
-        <label class="recorder-llm-label" for="recorderLlmImportInput">LLM result JSON</label>
-        <textarea id="recorderLlmImportInput" class="recorder-llm-textarea recorder-llm-import" rows="16"
-          placeholder='Paste raw JSON or a fenced JSON block here.'></textarea>
-        <div id="recorderLlmImportStatus" class="recorder-llm-status" aria-live="polite"></div>
-        <div class="recorder-llm-actions">
-          <button id="recorderLlmImportCancelButton" class="button" type="button"
-            data-button-intent="navigation">Cancel</button>
-          <button id="recorderLlmImportLoadButton" class="button" type="button"
-            data-button-intent="utility" disabled>Load into draft</button>
-        </div>
-      </div>
-    </div>
+    <div id="recorderLlmPromptModal" class="hidden" aria-hidden="true"></div>
+    <div id="recorderLlmImportModal" class="hidden" aria-hidden="true"></div>
 
     <button id="openBugReportFloating" class="floating-bug-button" type="button" data-button-intent="utility"
       aria-label="Report bug" title="Report bug">

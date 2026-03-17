@@ -15,6 +15,7 @@ export class RobotTerminalComponent {
       this.onFallbackCommand = options.onFallbackCommand || (() => {});
       this.onPresetLaunch = options.onPresetLaunch || (() => {});
       this.onModeChange = options.onModeChange || (() => {});
+      this.onTranscriptChange = options.onTranscriptChange || (() => {});
       this.showReconnectButton = options.showReconnectButton !== false;
       this.showRebuildButton = options.showRebuildButton !== false;
       this.showFullscreenButton = options.showFullscreenButton !== false;
@@ -59,15 +60,18 @@ export class RobotTerminalComponent {
 
     resetTranscript() {
       this._transcript = '';
+      this.onTranscriptChange(this._transcript);
     }
 
     _appendTranscript(content) {
       const text = String(content ?? '').replace(/\r\n/g, '\n');
       if (!text) {
         this._transcript += '\n';
+        this.onTranscriptChange(this._transcript);
         return;
       }
       this._transcript += text.endsWith('\n') ? text : `${text}\n`;
+      this.onTranscriptChange(this._transcript);
     }
 
     _initializeTerminal(robot) {

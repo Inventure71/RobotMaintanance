@@ -1677,6 +1677,270 @@
       margin-bottom: 0.75rem;
     }
 
+.recorder-experience-shell {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.recorder-mode-shell,
+.recorder-simple-step,
+.recorder-advanced-workspace,
+#recorderTerminalPanel,
+#recorderAssignmentPanel {
+  scroll-margin-top: 1rem;
+}
+
+.recorder-mode-header,
+.recorder-mode-header-actions,
+.recorder-step-actions,
+.recorder-step-actions-inline,
+.recorder-preview-header {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.recorder-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.recorder-mode-card {
+  min-height: 120px;
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 0.45rem;
+  text-align: left;
+  padding: 0.9rem;
+}
+
+.recorder-mode-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.recorder-mode-card-copy {
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.flow-builder-topbar-main.recorder-topbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-start;
+  gap: 0.75rem 1rem;
+}
+
+.recorder-topbar-slot {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+#recorderTopbarNewDraftWrap,
+#recorderTopbarPublishWrap {
+  align-self: end;
+}
+
+#recorderTopbarRobotWrap {
+  flex: 1 1 320px;
+  min-width: 260px;
+  max-width: 420px;
+}
+
+#recorderTopbarDefinitionWrap {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(220px, 320px);
+  gap: 0.55rem;
+  flex: 1 1 440px;
+  max-width: 580px;
+}
+
+.recorder-simple-step {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.recorder-simple-step-header {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.recorder-simple-step-header h2,
+.recorder-simple-step-header h3 {
+  margin: 0;
+}
+
+.recorder-simple-copy {
+  display: grid;
+  gap: 0.55rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.recorder-simple-select-field {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 420px;
+}
+
+.recorder-simple-select-field .form-field {
+  margin: 0;
+}
+
+.recorder-command-examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.recorder-command-example-card {
+  border: 1px solid rgba(138, 198, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 14, 30, 0.52);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.recorder-command-example-card h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.recorder-command-example-card code {
+  display: block;
+  padding: 0.22rem 0.4rem;
+  border-radius: 8px;
+  background: rgba(4, 10, 22, 0.78);
+  color: #dff9ff;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.recorder-simple-ack {
+  justify-content: flex-start;
+}
+
+.recorder-simple-terminal-actions {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+}
+
+.recorder-import-instructions {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.recorder-json-example {
+  margin: 0.55rem 0 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(138, 198, 255, 0.2);
+  background: rgba(4, 10, 24, 0.86);
+  color: #d8e8ff;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.recorder-step-actions {
+  justify-content: flex-end;
+}
+
+.recorder-step-actions-inline {
+  justify-content: flex-start;
+}
+
+.recorder-advanced-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.95rem;
+  align-items: start;
+}
+
+.recorder-advanced-column {
+  display: grid;
+  gap: 0.95rem;
+  align-content: start;
+}
+
+.recorder-definition-preview {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.recorder-preview-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.recorder-preview-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+.recorder-preview-section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.recorder-preview-section-title {
+  margin: 0;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d6e2ff;
+}
+
+.recorder-preview-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.recorder-preview-row,
+.recorder-preview-empty {
+  border: 1px solid rgba(138, 198, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(8, 14, 30, 0.52);
+  padding: 0.55rem 0.7rem;
+  color: #dff9ff;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.recorder-preview-empty {
+  color: var(--muted);
+}
+
+.recorder-preview-empty.ok {
+  color: var(--ok);
+}
+
+.recorder-preview-row-error {
+  color: var(--err);
+  border-color: rgba(255, 128, 128, 0.26);
+}
+
+.recorder-hidden-textarea {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .flow-builder-topbar-main {
       display: grid;
       grid-template-columns: repeat(5, minmax(180px, 1fr));
@@ -1707,6 +1971,11 @@
   padding-bottom: 0.56rem;
   font-size: 0.9rem;
   line-height: 1;
+}
+
+#recorderTopbarNewDraftWrap .button,
+#recorderTopbarPublishWrap .button {
+  min-width: 170px;
 }
 
 .flow-builder-topbar-actions {
@@ -2091,6 +2360,13 @@
         align-items: stretch;
       }
 
+      .recorder-topbar-slot--double,
+      .recorder-mode-selector,
+      .recorder-command-examples,
+      .recorder-advanced-workspace {
+        grid-template-columns: 1fr;
+      }
+
       .definition-assignment-grid {
         grid-template-columns: 1fr;
       }
@@ -2103,6 +2379,14 @@
   @media (max-width: 640px) {
       .flow-builder-topbar-main {
         grid-template-columns: 1fr;
+      }
+
+      .recorder-step-actions {
+        justify-content: stretch;
+      }
+
+      .recorder-step-actions .button {
+        width: 100%;
       }
 
       .form-grid {

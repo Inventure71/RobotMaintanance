@@ -86,6 +86,8 @@ export function registerDetailShellRuntime(runtime, env) {
     addRobotTypeMessage,
     addRobotTypeNameInput,
     addRobotTypeBatteryCommandInput,
+    addRobotIpInfoButton,
+    addRobotIpInfo,
     addRobotTypeBatteryInfoButton,
     addRobotTypeBatteryInfo,
     addRobotTypeLowModelDropzone,
@@ -117,6 +119,8 @@ export function registerDetailShellRuntime(runtime, env) {
     editRobotForm,
     editRobotList,
     editRobotIpInput,
+    editRobotIpInfoButton,
+    editRobotIpInfo,
     editRobotOverrideLowModelSelect,
     editRobotOverrideHighModelSelect,
     editRobotLowModelField,
@@ -1255,6 +1259,8 @@ export function registerDetailShellRuntime(runtime, env) {
         editRobotTypeClearModelInput?.addEventListener('change', () => {
           syncEditRobotTypeModelControls(getRobotTypeById(editRobotTypeManageSelect?.value));
         });
+        bindBatteryInfoToggle(addRobotIpInfoButton, addRobotIpInfo);
+        bindBatteryInfoToggle(editRobotIpInfoButton, editRobotIpInfo);
         bindBatteryInfoToggle(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo);
         bindBatteryInfoToggle(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo);
         resetRobotTypeUploadInputs();
@@ -1940,7 +1946,9 @@ export function registerDetailShellRuntime(runtime, env) {
       }
 
   function resetRobotTypeBatteryInfoPanels() {
+        setBatteryInfoExpanded(addRobotIpInfoButton, addRobotIpInfo, false);
         setBatteryInfoExpanded(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo, false);
+        setBatteryInfoExpanded(editRobotIpInfoButton, editRobotIpInfo, false);
         setBatteryInfoExpanded(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo, false);
       }
 

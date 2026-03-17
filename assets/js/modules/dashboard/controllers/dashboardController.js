@@ -238,6 +238,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const addRobotTypeSelect = $('#addRobotType');
     const addRobotMessage = $('#addRobotMessage');
     const addRobotSavingHint = $('#addRobotSavingHint');
+    const addRobotIpInfoButton = $('#addRobotIpInfoButton');
+    const addRobotIpInfo = $('#addRobotIpInfo');
     const addRobotPasswordInput = $('#addRobotPassword');
     const addRobotPasswordToggle = $('#toggleAddRobotPassword');
     const addRobotOverrideLowModelSelect = $('#addRobotOverrideLowModelSelect');
@@ -258,6 +260,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const editRobotNameInput = $('#editRobotName');
     const editRobotTypeSelect = $('#editRobotType');
     const editRobotIpInput = $('#editRobotIp');
+    const editRobotIpInfoButton = $('#editRobotIpInfoButton');
+    const editRobotIpInfo = $('#editRobotIpInfo');
     const editRobotOverrideLowModelSelect = $('#editRobotOverrideLowModelSelect');
     const editRobotOverrideHighModelSelect = $('#editRobotOverrideHighModelSelect');
     const editRobotLowModelField = $('#editRobotLowModelField');
@@ -344,6 +348,19 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageFlowModeHint = $('#manageFlowModeHint');
     const manageRecorderTestEditorPanel = $('#manageRecorderTestEditorPanel');
     const manageRecorderFixEditorPanel = $('#manageRecorderFixEditorPanel');
+    const recorderExperienceShell = $('#recorderExperienceShell');
+    const recorderModeBadge = $('#recorderModeBadge');
+    const recorderResetExperienceButton = $('#recorderResetExperienceButton');
+    const recorderChangeModeButton = $('#recorderChangeModeButton');
+    const recorderSelectSimpleModeButton = $('#recorderSelectSimpleMode');
+    const recorderSelectAdvancedModeButton = $('#recorderSelectAdvancedMode');
+    const recorderModeSelector = $('#recorderModeSelector');
+    const recorderSharedTopbar = $('#recorderSharedTopbar');
+    const recorderSharedTopbarMain = $('#recorderSharedTopbarMain');
+    const recorderTopbarNewDraftWrap = $('#recorderTopbarNewDraftWrap');
+    const recorderTopbarRobotWrap = $('#recorderTopbarRobotWrap');
+    const recorderTopbarDefinitionWrap = $('#recorderTopbarDefinitionWrap');
+    const recorderTopbarPublishWrap = $('#recorderTopbarPublishWrap');
     const recorderCreateNewTestButton = $('#recorderCreateNewTest');
     const recorderRobotSelect = $('#recorderRobotSelect');
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
@@ -376,6 +393,38 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderAddReadBtn = $('#recorderAddReadBtn');
     const recorderOutputs = $('#recorderOutputs');
     const recorderFlowBlocks = $('#recorderFlowBlocks');
+    const recorderWriteBlocks = $('#recorderWriteBlocks');
+    const recorderReadBlocks = $('#recorderReadBlocks');
+    const recorderAdvancedPreview = $('#recorderAdvancedPreview');
+    const recorderSimplePreview = $('#recorderSimplePreview');
+    const recorderAssignmentPanel = $('#recorderAssignmentPanel');
+    const recorderAdvancedWorkspace = $('#recorderAdvancedWorkspace');
+    const recorderWritePanel = $('#recorderWritePanel');
+    const recorderOutputsPanel = $('#recorderOutputsPanel');
+    const recorderReadsPanel = $('#recorderReadsPanel');
+    const recorderAdvancedPreviewPanel = $('#recorderAdvancedPreviewPanel');
+    const recorderTerminalPanel = $('#recorderTerminalPanel');
+    const recorderSimpleTerminalActions = $('#recorderSimpleTerminalActions');
+    const recorderSimpleSelectRobotStep = $('#recorderSimpleSelectRobotStep');
+    const recorderSimpleSelectRobotField = $('#recorderSimpleSelectRobotField');
+    const recorderSimpleSelectRobotNextButton = $('#recorderSimpleSelectRobotNext');
+    const recorderSimpleTerminalStep = $('#recorderSimpleTerminalStep');
+    const recorderSimplePromptStep = $('#recorderSimplePromptStep');
+    const recorderSimpleImportStep = $('#recorderSimpleImportStep');
+    const recorderSimplePreviewStep = $('#recorderSimplePreviewStep');
+    const recorderSimplePublishStep = $('#recorderSimplePublishStep');
+    const recorderSimpleTranscriptAcknowledge = $('#recorderSimpleTranscriptAcknowledge');
+    const recorderSimpleTerminalNextButton = $('#recorderSimpleTerminalNext');
+    const recorderSimplePromptBackButton = $('#recorderSimplePromptBack');
+    const recorderGeneratePromptButton = $('#recorderGeneratePromptButton');
+    const recorderSimplePromptNextButton = $('#recorderSimplePromptNext');
+    const recorderSimpleImportBackButton = $('#recorderSimpleImportBack');
+    const recorderValidateImportButton = $('#recorderValidateImportButton');
+    const recorderSimpleImportNextButton = $('#recorderSimpleImportNext');
+    const recorderSimplePreviewBackButton = $('#recorderSimplePreviewBack');
+    const recorderSimpleEditInAdvancedButton = $('#recorderSimpleEditInAdvancedButton');
+    const recorderSimplePreviewNextButton = $('#recorderSimplePreviewNext');
+    const recorderSimplePublishBackButton = $('#recorderSimplePublishBack');
     const recorderTerminalDisplay = $('#recorderTerminalDisplay');
     const recorderTerminalShell = recorderTerminalDisplay?.closest('.terminal-shell') || null;
     const recorderTerminalToolbar = $('#recorderTerminalToolbar');
@@ -499,6 +548,8 @@ const runtimeEnv = {
   addRobotPasswordInput,
   addRobotPasswordToggle,
   addRobotSavingHint,
+  addRobotIpInfoButton,
+  addRobotIpInfo,
   addRobotOverrideLowModelSelect,
   addRobotOverrideHighModelSelect,
   addRobotLowModelField,
@@ -544,6 +595,8 @@ const runtimeEnv = {
   editRobotForm,
   editRobotList,
   editRobotIpInput,
+  editRobotIpInfoButton,
+  editRobotIpInfo,
   editRobotOverrideLowModelSelect,
   editRobotOverrideHighModelSelect,
   editRobotLowModelField,
@@ -621,6 +674,19 @@ const runtimeEnv = {
   manageNewTestDefinitionButton,
   manageRecorderFixEditorPanel,
   manageRecorderTestEditorPanel,
+  recorderExperienceShell,
+  recorderModeBadge,
+  recorderResetExperienceButton,
+  recorderChangeModeButton,
+  recorderSelectSimpleModeButton,
+  recorderSelectAdvancedModeButton,
+  recorderModeSelector,
+  recorderSharedTopbar,
+  recorderSharedTopbarMain,
+  recorderTopbarNewDraftWrap,
+  recorderTopbarRobotWrap,
+  recorderTopbarDefinitionWrap,
+  recorderTopbarPublishWrap,
   manageTabButtons,
   manageTabPanels,
   manageTabStatus,
@@ -655,6 +721,38 @@ const runtimeEnv = {
   recorderRunAtConnectionInput,
   recorderRobotTypeTargets,
   recorderFlowBlocks,
+  recorderWriteBlocks,
+  recorderReadBlocks,
+  recorderAdvancedPreview,
+  recorderSimplePreview,
+  recorderAssignmentPanel,
+  recorderAdvancedWorkspace,
+  recorderWritePanel,
+  recorderOutputsPanel,
+  recorderReadsPanel,
+  recorderAdvancedPreviewPanel,
+  recorderTerminalPanel,
+  recorderSimpleTerminalActions,
+  recorderSimpleSelectRobotStep,
+  recorderSimpleSelectRobotField,
+  recorderSimpleSelectRobotNextButton,
+  recorderSimpleTerminalStep,
+  recorderSimplePromptStep,
+  recorderSimpleImportStep,
+  recorderSimplePreviewStep,
+  recorderSimplePublishStep,
+  recorderSimpleTranscriptAcknowledge,
+  recorderSimpleTerminalNextButton,
+  recorderSimplePromptBackButton,
+  recorderGeneratePromptButton,
+  recorderSimplePromptNextButton,
+  recorderSimpleImportBackButton,
+  recorderValidateImportButton,
+  recorderSimpleImportNextButton,
+  recorderSimplePreviewBackButton,
+  recorderSimpleEditInAdvancedButton,
+  recorderSimplePreviewNextButton,
+  recorderSimplePublishBackButton,
   recorderLastEditingOutputKey,
   recorderLastEditingReadBlockId,
   recorderOutputCountBadge,

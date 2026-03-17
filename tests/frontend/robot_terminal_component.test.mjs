@@ -97,3 +97,21 @@ test('robot terminal component resets transcript on dispose', () => {
 
   assert.equal(component.exportTranscript(), '');
 });
+
+test('robot terminal component emits transcript updates when output changes', () => {
+  const updates = [];
+  const component = new RobotTerminalComponent({
+    onTranscriptChange(nextTranscript) {
+      updates.push(nextTranscript);
+    },
+  });
+  component.terminal = {
+    write() {},
+  };
+
+  component._writeLine('line one', 'ok');
+  component.resetTranscript();
+
+  assert.equal(updates[0], 'line one\n');
+  assert.equal(updates.at(-1), '');
+});

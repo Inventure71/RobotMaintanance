@@ -55,14 +55,32 @@ function makeNode(value = '') {
     style: {},
     disabled: false,
     replaceChildren: (...children) => {
+      node.children.forEach((child) => {
+        if (child && typeof child === 'object') {
+          child.parentNode = null;
+        }
+      });
       node.children = [...children];
+      node.children.forEach((child) => {
+        if (child && typeof child === 'object') {
+          child.parentNode = node;
+        }
+      });
     },
     appendChild: (child) => {
+      if (child && child.parentNode && Array.isArray(child.parentNode.children)) {
+        child.parentNode.children = child.parentNode.children.filter((candidate) => candidate !== child);
+      }
       node.children.push(child);
+      if (child && typeof child === 'object') {
+        child.parentNode = node;
+      }
       return child;
     },
     append: (...children) => {
-      node.children.push(...children);
+      children.forEach((child) => {
+        node.appendChild(child);
+      });
     },
     addEventListener: (type, handler) => {
       if (!listeners.has(type)) listeners.set(type, []);
@@ -267,6 +285,9 @@ function makeEnv() {
       exportTranscript() {
         return 'robot@rosbot$ rostopic list\n/battery\n/camera';
       },
+      dispose() {
+        this.disposed = true;
+      },
     },
     workflowRecorder: {
       started: true,
@@ -331,8 +352,9 @@ function makeEnv() {
   };
 
   const manageTabButtons = [
-    { dataset: { tab: 'definitions' }, classList: makeClassList(['active']) },
-    { dataset: { tab: 'recorder' }, classList: makeClassList() },
+    Object.assign(makeNode(), { dataset: { tab: 'definitions' }, classList: makeClassList(['active']) }),
+    Object.assign(makeNode(), { dataset: { tab: 'recorder', recorderEditorMode: 'test' }, classList: makeClassList() }),
+    Object.assign(makeNode(), { dataset: { tab: 'recorder', recorderEditorMode: 'fix' }, classList: makeClassList() }),
   ];
   const manageTabPanels = [
     { dataset: { tabPanel: 'definitions' }, classList: makeClassList(['active']) },
@@ -359,6 +381,19 @@ function makeEnv() {
     manageFlowModeHint: makeNode(),
     manageRecorderTestEditorPanel: { classList: makeClassList(['active']) },
     manageRecorderFixEditorPanel: { classList: makeClassList(['hidden']) },
+    recorderExperienceShell: { classList: makeClassList(), dataset: {} },
+    recorderModeBadge: makeNode(),
+    recorderResetExperienceButton: makeNode(),
+    recorderChangeModeButton: makeNode(),
+    recorderSelectSimpleModeButton: makeNode(),
+    recorderSelectAdvancedModeButton: makeNode(),
+    recorderModeSelector: { classList: makeClassList() },
+    recorderSharedTopbar: Object.assign(makeNode(), { classList: makeClassList(['hidden']) }),
+    recorderSharedTopbarMain: makeNode(),
+    recorderTopbarNewDraftWrap: Object.assign(makeNode(), { classList: makeClassList() }),
+    recorderTopbarRobotWrap: Object.assign(makeNode(), { classList: makeClassList() }),
+    recorderTopbarDefinitionWrap: Object.assign(makeNode(), { classList: makeClassList() }),
+    recorderTopbarPublishWrap: Object.assign(makeNode(), { classList: makeClassList() }),
     manageTabButtons,
     manageTabPanels,
     manageFixIdInput: makeNode(),
@@ -375,6 +410,38 @@ function makeEnv() {
     recorderLastEditingOutputKey: '',
     recorderLastEditingReadBlockId: '',
     recorderRobotTypeTargets: makeNode(),
+    recorderWriteBlocks: makeNode(),
+    recorderReadBlocks: makeNode(),
+    recorderAdvancedPreview: makeNode(),
+    recorderSimplePreview: makeNode(),
+    recorderAssignmentPanel: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderAdvancedWorkspace: { classList: makeClassList(['hidden']) },
+    recorderWritePanel: { classList: makeClassList() },
+    recorderOutputsPanel: { classList: makeClassList() },
+    recorderReadsPanel: { classList: makeClassList() },
+    recorderAdvancedPreviewPanel: { classList: makeClassList() },
+    recorderTerminalPanel: { classList: makeClassList(['hidden']) },
+    recorderSimpleTerminalActions: { classList: makeClassList(['hidden']) },
+    recorderSimpleSelectRobotStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimpleSelectRobotField: makeNode(),
+    recorderSimpleSelectRobotNextButton: makeNode(),
+    recorderSimpleTerminalStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimplePromptStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimpleImportStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimplePreviewStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimplePublishStep: { classList: makeClassList(['hidden']), querySelector: () => null },
+    recorderSimpleTranscriptAcknowledge: { checked: false, addEventListener: () => {} },
+    recorderSimpleTerminalNextButton: makeNode(),
+    recorderSimplePromptBackButton: makeNode(),
+    recorderGeneratePromptButton: makeNode(),
+    recorderSimplePromptNextButton: makeNode(),
+    recorderSimpleImportBackButton: makeNode(),
+    recorderValidateImportButton: makeNode(),
+    recorderSimpleImportNextButton: makeNode(),
+    recorderSimplePreviewBackButton: makeNode(),
+    recorderSimpleEditInAdvancedButton: makeNode(),
+    recorderSimplePreviewNextButton: makeNode(),
+    recorderSimplePublishBackButton: makeNode(),
     recorderAskLlmButton: makeNode(),
     recorderAskLlmHelpButton: makeNode(),
     recorderLlmHelpPanel: makeNode(),
@@ -795,4 +862,168 @@ test('addRecorderWriteVisual adds a manual write block and seeds recorder draft 
     message: 'Write block added. Expand to edit.',
     tone: 'ok',
   });
+});
+
+test('setRecorderMode simple starts on robot selection before terminal context', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.setRecorderMode('simple', { targetStep: 'select-robot' });
+
+  assert.equal(env.state.recorderMode, 'simple');
+  assert.equal(env.state.recorderSimpleStep, 'select-robot');
+  assert.equal(env.recorderModeSelector.classList.contains('hidden'), true);
+  assert.equal(env.recorderSimpleSelectRobotStep.classList.contains('hidden'), false);
+  assert.equal(env.recorderSimpleTerminalStep.classList.contains('hidden'), true);
+  assert.equal(env.recorderTerminalPanel.classList.contains('hidden'), true);
+  assert.equal(env.recorderSimpleTerminalActions.classList.contains('hidden'), true);
+  assert.equal(env.recorderAdvancedWorkspace.classList.contains('hidden'), true);
+  assert.equal(env.recorderAssignmentPanel.classList.contains('hidden'), true);
+  assert.equal(env.recorderSharedTopbar.classList.contains('hidden'), true);
+  assert.equal(env.recorderTopbarRobotWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarDefinitionWrap.classList.contains('hidden'), true);
+  assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), true);
+  assert.equal(env.recorderTopbarRobotWrap.parentNode, env.recorderSimpleSelectRobotField);
+  assert.equal(env.recorderSimpleSelectRobotNextButton.disabled, true);
+});
+
+test('setRecorderMode advanced shows the full manual workspace', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.setRecorderMode('advanced');
+
+  assert.equal(env.state.recorderMode, 'advanced');
+  assert.equal(env.recorderSharedTopbar.classList.contains('hidden'), false);
+  assert.equal(env.recorderAdvancedWorkspace.classList.contains('hidden'), false);
+  assert.equal(env.recorderTerminalPanel.classList.contains('hidden'), false);
+  assert.equal(env.recorderSimpleTerminalActions.classList.contains('hidden'), true);
+  assert.equal(env.recorderAssignmentPanel.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarRobotWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarDefinitionWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarRobotWrap.parentNode, env.recorderSharedTopbarMain);
+});
+
+test('resetRecorderTestEntry clears the current recorder draft and returns to mode selector', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.state.recorderMode = 'advanced';
+  env.recorderRobotSelect.value = 'rosbot';
+  env.recorderDefinitionIdInput.value = 'battery_health';
+  env.recorderDefinitionLabelInput.value = 'Battery health';
+  env.recorderLlmSystemDetailsInput.value = 'ROS 2';
+  env.recorderLlmTestRequestInput.value = 'Check battery topic';
+  env.recorderSimpleTranscriptAcknowledge.checked = true;
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.resetRecorderTestEntry({ target: 'mode-selector' });
+
+  assert.equal(env.state.workflowRecorder.resetCalled, true);
+  assert.equal(env.state.recorderTerminalComponent.disposed, true);
+  assert.equal(env.state.recorderMode, '');
+  assert.equal(env.recorderRobotSelect.value, '');
+  assert.equal(env.recorderDefinitionIdInput.value, '');
+  assert.equal(env.recorderDefinitionLabelInput.value, '');
+  assert.equal(env.recorderLlmSystemDetailsInput.value, '');
+  assert.equal(env.recorderLlmTestRequestInput.value, '');
+  assert.equal(env.recorderSimpleTranscriptAcknowledge.checked, false);
+  assert.equal(env.recorderModeSelector.classList.contains('hidden'), false);
+});
+
+test('clicking Test Editor nav resets into mode selector', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.state.activeManageTab = 'recorder';
+  env.state.manageFlowEditorMode = 'test';
+  env.state.recorderMode = 'advanced';
+  env.recorderRobotSelect.value = 'rosbot';
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+  api.initManageTabs();
+
+  env.manageTabButtons[1].click();
+
+  assert.equal(env.state.workflowRecorder.resetCalled, true);
+  assert.equal(env.state.recorderMode, '');
+  assert.equal(env.state.recorderSimpleStep, 'select-robot');
+  assert.equal(env.recorderRobotSelect.value, '');
+  assert.equal(env.recorderModeSelector.classList.contains('hidden'), false);
+  assert.equal(env.recorderSimpleSelectRobotStep.classList.contains('hidden'), true);
+});
+
+test('clicking Simple mode card always starts at Select Robot step', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.state.recorderMode = '';
+  env.state.recorderSimpleStep = 'preview';
+  env.recorderCreateNewTestButton = makeNode();
+  env.recorderRunCaptureButton = makeNode();
+  env.recorderAddOutputBtn = makeNode();
+  env.recorderAddReadBtn = makeNode();
+  env.recorderPublishTestButton = makeNode();
+  env.RobotTerminalComponent = function MockRobotTerminalComponent() {};
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+  api.initWorkflowRecorder();
+
+  env.recorderSelectSimpleModeButton.click();
+
+  assert.equal(env.state.recorderMode, 'simple');
+  assert.equal(env.state.recorderSimpleStep, 'select-robot');
+  assert.equal(env.recorderModeSelector.classList.contains('hidden'), true);
+  assert.equal(env.recorderSimpleSelectRobotStep.classList.contains('hidden'), false);
+  assert.equal(env.recorderSimpleTerminalStep.classList.contains('hidden'), true);
+});
+
+test('Simple terminal step enables next when recorder transcript changes', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderRobotSelect.value = 'rosbot';
+  env.state.recorderMode = 'simple';
+  env.state.recorderSimpleStep = 'terminal';
+  env.recorderCreateNewTestButton = makeNode();
+  env.recorderRunCaptureButton = makeNode();
+  env.recorderAddOutputBtn = makeNode();
+  env.recorderAddWriteBtn = makeNode();
+  env.recorderAddReadBtn = makeNode();
+  env.recorderPublishTestButton = makeNode();
+  env.RobotTerminalComponent = function MockRobotTerminalComponent(options = {}) {
+    this.mode = 'live';
+    this._transcript = '';
+    this.dispose = () => {};
+    this.exportTranscript = () => this._transcript;
+    this.pushTranscript = (text) => {
+      this._transcript = text;
+      options.onTranscriptChange?.(text);
+    };
+  };
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.initWorkflowRecorder();
+  api.setRecorderMode('simple', { targetStep: 'terminal' });
+  assert.equal(env.recorderSimpleTerminalNextButton.disabled, true);
+
+  env.state.recorderTerminalComponent.pushTranscript('robot@rosbot$ rostopic list\n/battery');
+
+  assert.equal(env.recorderSimpleTerminalNextButton.disabled, false);
 });

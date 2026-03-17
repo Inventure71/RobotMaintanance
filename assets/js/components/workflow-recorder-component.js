@@ -56,6 +56,8 @@ export class WorkflowRecorderComponent {
     this.terminalOutputEl = options.terminalOutputEl;
     this.outputsEl = options.outputsEl;
     this.blocksEl = options.blocksEl;
+    this.writeBlocksEl = options.writeBlocksEl;
+    this.readBlocksEl = options.readBlocksEl;
     this.outputSelectEl = options.outputSelectEl;
     this.inputRefSelectEl = options.inputRefSelectEl;
     this.statusEl = options.statusEl;
@@ -1036,6 +1038,22 @@ export class WorkflowRecorderComponent {
   }
 
   _renderBlocks() {
+    const hasSeparatePanels = Boolean(this.writeBlocksEl || this.readBlocksEl);
+    if (hasSeparatePanels) {
+      if (this.writeBlocksEl) {
+        this.writeBlocksEl.replaceChildren();
+        this.writeBlocksEl.appendChild(this._renderWriteBlocks());
+      }
+      if (this.readBlocksEl) {
+        this.readBlocksEl.replaceChildren();
+        this.readBlocksEl.appendChild(this._renderReadBlocks());
+      }
+      if (this.blocksEl) {
+        this.blocksEl.replaceChildren();
+      }
+      return;
+    }
+
     if (!this.blocksEl) return;
     this.blocksEl.replaceChildren();
     if (!this.blocks.length) {
