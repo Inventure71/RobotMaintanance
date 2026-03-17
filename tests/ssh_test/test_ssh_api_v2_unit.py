@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 from queue import Queue
 
+import pytest
+
 from backend.ssh_client import InteractiveShell
 
 
@@ -233,3 +235,118 @@ def test_run_command_ignores_late_prompt_noise_until_completion_marker():
     assert sleep_calls["count"] >= 2
     assert "/scan" in output
     assert "__CODEX_CMD_DONE__" not in output
+
+
+def test_run_automation_command_returns_exit_code_and_strips_markers():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] == 1:
+            wrapped = fake_channel.sent[0]
+            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
+            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            shell._out_queue.put(f"hello\n{exit_marker}0\n{done_marker}\n$ ")
+
+    shell._sleep = fake_sleep
+
+    result = shell.run_automation_command("echo hello", timeout=1.0)
+
+    assert result.output == "hello"
+    assert result.exit_code == 0
+    assert result.timed_out is False
+    assert result.used_sudo is False
+    assert result.sudo_authenticated is False
+
+
+def test_run_automation_command_authenticates_sudo_once():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+    shell._reset_sudo_timestamp = lambda: None
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] == 1:
+            prompt_marker = fake_channel.sent[0].split("sudo -S -p '", 1)[1].split("'", 1)[0]
+            shell._out_queue.put(prompt_marker)
+        elif sleep_calls["count"] == 2:
+            shell._out_queue.put("$ ")
+        elif sleep_calls["count"] == 3:
+            wrapped = fake_channel.sent[2]
+            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
+            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            shell._out_queue.put(f"flashed\n{exit_marker}0\n{done_marker}\n$ ")
+
+    shell._sleep = fake_sleep
+
+    result = shell.run_automation_command("sudo rosbot.flash", timeout=2.0, sudo_password="pw")
+
+    assert fake_channel.sent[0].startswith("sudo -S -p '")
+    assert fake_channel.sent[1] == "pw\n"
+    assert "sudo rosbot.flash" in fake_channel.sent[2]
+    assert result.output == "flashed"
+    assert result.exit_code == 0
+    assert result.used_sudo is True
+    assert result.sudo_authenticated is True
+
+
+def test_run_automation_command_rejects_repeated_sudo_prompt():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+    shell._reset_sudo_timestamp = lambda: None
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        prompt_marker = fake_channel.sent[0].split("sudo -S -p '", 1)[1].split("'", 1)[0]
+        if sleep_calls["count"] == 1:
+            shell._out_queue.put(prompt_marker)
+        elif sleep_calls["count"] == 2:
+            shell._out_queue.put(prompt_marker)
+
+    shell._sleep = fake_sleep
+
+    with pytest.raises(RuntimeError, match="password was rejected"):
+        shell.run_automation_command("sudo rosbot.flash", timeout=1.0, sudo_password="pw")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from backend.connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from backend.test_executor import TestExecutor
+from backend.ssh_client import AutomationCommandResult
 
 
 def _test_definitions():
@@ -61,10 +62,22 @@ def test_composite_runner_executes_once_for_multiple_checks():
     observed_commands: list[str] = []
 
     class FakeShell:
-        def run_command(self, command: str, timeout: float = 0.0) -> str:
+        def run_automation_command(
+            self,
+            command: str,
+            timeout: float = 0.0,
+            sudo_password: str | None = None,
+        ) -> AutomationCommandResult:
             _ = timeout
+            _ = sudo_password
             observed_commands.append(command)
-            return "/battery\n/camera/color/image_raw\n/camera/depth/image_raw\n"
+            return AutomationCommandResult(
+                output="/battery\n/camera/color/image_raw\n/camera/depth/image_raw\n",
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
 
     fake_shell = FakeShell()
     close_calls: list[tuple[str, str]] = []
@@ -120,10 +133,22 @@ def test_composite_runner_executes_parent_for_single_subcheck_request():
     observed_commands: list[str] = []
 
     class FakeShell:
-        def run_command(self, command: str, timeout: float = 0.0) -> str:
+        def run_automation_command(
+            self,
+            command: str,
+            timeout: float = 0.0,
+            sudo_password: str | None = None,
+        ) -> AutomationCommandResult:
             _ = timeout
+            _ = sudo_password
             observed_commands.append(command)
-            return "/battery\n"
+            return AutomationCommandResult(
+                output="/battery\n",
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
 
     fake_shell = FakeShell()
     robot_type = {

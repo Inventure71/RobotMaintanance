@@ -170,12 +170,15 @@ class FixRunnerMixin:
             def emit_event(event_type: str, message: str, data: dict[str, Any] | None = None) -> None:
                 self._record_fix_event(robot_id, run_id, event_type, message, data)
 
-            def run_command(command: str, timeout_sec: float | None = None) -> str:
-                return self.run_command(
+            _, _, sudo_password, _ = self._resolve_credentials(robot_id)
+
+            def run_command(command: str, timeout_sec: float | None = None):
+                return self.run_automation_command(
                     page_session_id=page_session_id,
                     robot_id=robot_id,
                     command=command,
                     timeout_sec=timeout_sec,
+                    sudo_password=sudo_password,
                     source="auto-fix",
                 )
 

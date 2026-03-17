@@ -4,6 +4,7 @@ import time
 
 import pytest
 
+from backend.ssh_client import AutomationCommandResult
 from backend.terminal_manager import TerminalManager
 
 
@@ -76,10 +77,16 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     manager = _manager()
     observed = {"commands": [], "test_runs": 0}
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, source=None):
-        _ = (page_session_id, robot_id, timeout_sec, source)
+    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
+        _ = (page_session_id, robot_id, timeout_sec, sudo_password, source)
         observed["commands"].append(command)
-        return "ok"
+        return AutomationCommandResult(
+            output="ok",
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
 
     def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
         _ = (robot_id, page_session_id, dry_run)
@@ -95,7 +102,7 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(manager, "run_command", fake_run_command)
+    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
     monkeypatch.setattr(manager, "run_tests", fake_run_tests)
 
     started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
@@ -125,13 +132,13 @@ def test_fix_job_failure_still_finishes_fix_run(monkeypatch):
         finished.append(robot_id)
         return original_finish(robot_id)
 
-    def failing_run_command(*, page_session_id, robot_id, command, timeout_sec=None, source=None):
-        _ = (page_session_id, robot_id, command, timeout_sec, source)
+    def failing_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
+        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
         raise RuntimeError("boom")
 
     monkeypatch.setattr(manager, "start_fix_run", wrapped_start)
     monkeypatch.setattr(manager, "finish_fix_run", wrapped_finish)
-    monkeypatch.setattr(manager, "run_command", failing_run_command)
+    monkeypatch.setattr(manager, "run_automation_command", failing_run_command)
 
     run = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
     payload = _wait_for_terminal_status(manager, run["runId"])
@@ -140,6 +147,28 @@ def test_fix_job_failure_still_finishes_fix_run(monkeypatch):
     assert started == ["r1"]
     assert finished == ["r1"]
     assert "r1" not in manager._active_fix_runs
+
+
+def test_fix_job_fails_when_command_exit_code_is_non_zero(monkeypatch):
+    manager = _manager()
+
+    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
+        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
+        return AutomationCommandResult(
+            output="permission denied",
+            exit_code=1,
+            timed_out=False,
+            used_sudo=True,
+            sudo_authenticated=True,
+        )
+
+    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+
+    run = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
+    payload = _wait_for_terminal_status(manager, run["runId"])
+
+    assert payload["status"] == "failed"
+    assert "status 1" in str(payload.get("error") or "")
 
 
 def test_fix_job_rejects_start_when_robot_is_busy():
@@ -154,9 +183,15 @@ def test_fix_job_rejects_start_when_robot_is_busy():
 def test_fix_job_emits_post_test_events(monkeypatch):
     manager = _manager()
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, source=None):
-        _ = (page_session_id, robot_id, command, timeout_sec, source)
-        return "ok"
+    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
+        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
+        return AutomationCommandResult(
+            output="ok",
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
 
     def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
         _ = (robot_id, page_session_id, dry_run)
@@ -171,7 +206,7 @@ def test_fix_job_emits_post_test_events(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(manager, "run_command", fake_run_command)
+    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
     monkeypatch.setattr(manager, "run_tests", fake_run_tests)
 
     started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")

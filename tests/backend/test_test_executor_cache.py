@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from backend.connectors import OrchestrateConnector, ReadConnector, WriteConnector
+from backend.ssh_client import AutomationCommandResult
 from backend.test_executor import TestExecutor
 
 
@@ -8,12 +9,26 @@ def test_run_tests_reuses_rostopic_list_output_across_checks_in_same_definition(
     observed_commands: list[str] = []
 
     class FakeShell:
-        def run_command(self, command: str, timeout: float = 0.0) -> str:
+        def run_automation_command(
+            self,
+            command: str,
+            timeout: float = 0.0,
+            sudo_password: str | None = None,
+        ) -> AutomationCommandResult:
             _ = timeout
+            _ = sudo_password
             observed_commands.append(command)
             if "rostopic list" in command:
-                return "/scan\n/cmd_vel\n/odom\n"
-            return ""
+                output = "/scan\n/cmd_vel\n/odom\n"
+            else:
+                output = ""
+            return AutomationCommandResult(
+                output=output,
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
 
     fake_shell = FakeShell()
     close_calls: list[tuple[str, str]] = []

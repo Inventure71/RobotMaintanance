@@ -86,3 +86,20 @@ def test_contains_lines_unordered_ignores_prompt_and_ansi_noise() -> None:
     assert result["kind"] == "contains_lines_unordered"
     assert result["passed"] is True
     assert result["missing"] == []
+
+
+def test_normalize_lines_strips_only_known_prompt_lines() -> None:
+    lines = ReadConnector._normalize_lines(
+        "\n".join(
+            [
+                "robot@host:~$ ",
+                "robot@terminal$ ",
+                "(venv) user@host:/tmp$ ",
+                "done@step#",
+                "topic:ready#",
+                "/battery",
+            ]
+        )
+    )
+
+    assert lines == ["done@step#", "topic:ready#", "/battery"]

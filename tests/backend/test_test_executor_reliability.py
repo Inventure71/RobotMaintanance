@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.connectors import OrchestrateConnector, ReadConnector, WriteConnector
+from backend.ssh_client import AutomationCommandResult
 from backend.test_executor import TestExecutor
 
 
@@ -12,10 +13,22 @@ class _FakeShell:
         self.responses = responses or {}
         self.commands: list[str] = []
 
-    def run_command(self, command: str, timeout: float = 0.0) -> str:
+    def run_automation_command(
+        self,
+        command: str,
+        timeout: float = 0.0,
+        sudo_password: str | None = None,
+    ) -> AutomationCommandResult:
         _ = timeout
+        _ = sudo_password
         self.commands.append(command)
-        return self.responses.get(command, "")
+        return AutomationCommandResult(
+            output=self.responses.get(command, ""),
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
 
 
 def _executor_for_tests(robot_type: dict[str, object], shell: _FakeShell, *, definitions: dict[str, dict]) -> TestExecutor:

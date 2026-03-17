@@ -4,6 +4,8 @@ import re
 import time
 from typing import Any, Callable
 
+from ..ssh_client import AutomationCommandResult
+
 
 class WriteConnector:
     TOKEN_PATTERN = re.compile(r"^\$([A-Za-z0-9_.-]+)\$$")
@@ -45,7 +47,7 @@ class WriteConnector:
         vars_payload: dict[str, Any],
         run_scope: str,
         command_cache: dict[str, str],
-        run_command: Callable[[str, float | None], str],
+        run_command: Callable[[str, float | None], AutomationCommandResult],
     ) -> dict[str, Any]:
         if not callable(run_command):
             raise RuntimeError("run_command callback is not configured")
@@ -96,11 +98,19 @@ class WriteConnector:
 
         started_at = int(time.time() * 1000)
         last_error: Exception | None = None
-        output = ""
+        execution: AutomationCommandResult | None = None
         attempts = retries + 1
         for _ in range(attempts):
             try:
-                output = run_command(resolved_command, timeout_sec)
+                execution = run_command(resolved_command, timeout_sec)
+                if execution.timed_out:
+                    raise RuntimeError(
+                        f"Command timed out after {timeout_sec if timeout_sec is not None else 'default'} seconds"
+                    )
+                if execution.exit_code is None:
+                    raise RuntimeError("Command completed without a readable exit code")
+                if execution.exit_code != 0:
+                    raise RuntimeError(f"Command exited with status {execution.exit_code}")
                 last_error = None
                 break
             except Exception as exc:
@@ -109,6 +119,10 @@ class WriteConnector:
         elapsed = max(0, int(time.time() * 1000 - started_at))
         if last_error is not None:
             raise RuntimeError(f"Command failed: {last_error}")
+        if execution is None:
+            raise RuntimeError("Command failed: no execution result")
+
+        output = execution.output
 
         if save_as := str(step.get("saveAs") or "").strip():
             vars_payload[save_as] = output
@@ -124,14 +138,16 @@ class WriteConnector:
                 "ms": elapsed,
                 "output": output,
             },
-            "command": {
-                "id": step_id,
-                "command": resolved_command,
-                "timeoutSec": timeout_sec,
-                "output": output,
-                "exitCode": 0,
-                "ok": True,
-                "durationMs": elapsed,
-                "usedCache": False,
-            },
-        }
+                "command": {
+                    "id": step_id,
+                    "command": resolved_command,
+                    "timeoutSec": timeout_sec,
+                    "output": output,
+                    "exitCode": execution.exit_code,
+                    "ok": True,
+                    "durationMs": elapsed,
+                    "usedCache": False,
+                    "usedSudo": execution.used_sudo,
+                    "sudoAuthenticated": execution.sudo_authenticated,
+                },
+            }

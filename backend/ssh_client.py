@@ -40,6 +40,15 @@ class ShellOutput:
     text: str
 
 
+@dataclass
+class AutomationCommandResult:
+    output: str
+    exit_code: int | None
+    timed_out: bool
+    used_sudo: bool
+    sudo_authenticated: bool
+
+
 class InteractiveShell:
     """
     Persistent SSH shell session using paramiko.invoke_shell().
@@ -51,6 +60,16 @@ class InteractiveShell:
 
     READ_BLOCK_TIMEOUT_SEC = 0.2
     COMMAND_DONE_PREFIX = "__CODEX_CMD_DONE__"
+    AUTOMATION_DONE_PREFIX = "__CODEX_AUTO_DONE__"
+    AUTOMATION_EXIT_PREFIX = "__CODEX_AUTO_EXIT__"
+    SUDO_PROMPT_PREFIX = "__CODEX_SUDO_PROMPT__"
+    SUDO_FAILURE_PHRASES = (
+        "sorry, try again.",
+        "sudo: a password is required",
+        "sudo: 1 incorrect password attempt",
+        "sudo: 3 incorrect password attempts",
+        "is not in the sudoers file",
+    )
 
     def __init__(
         self,
@@ -173,8 +192,149 @@ class InteractiveShell:
         return marker, command
 
     @staticmethod
+    def _build_marker(prefix: str) -> str:
+        return f"{prefix}{uuid.uuid4().hex}__"
+
+    @staticmethod
     def _marker_pattern(marker: str) -> re.Pattern[str]:
         return re.compile(rf"(?:^|[\r\n]){re.escape(marker)}(?:[\r\n]|$)")
+
+    @staticmethod
+    def _contains_sudo_prefix(command: str) -> bool:
+        return bool(re.match(r"^\s*sudo(?:\s|$)", str(command or "")))
+
+    @staticmethod
+    def _strip_marker_lines(text: str, markers: list[str]) -> str:
+        if not text:
+            return ""
+        cleaned = []
+        for raw_line in str(text).replace("\r", "").split("\n"):
+            if any(marker and marker in raw_line for marker in markers):
+                continue
+            cleaned.append(raw_line)
+        return "\n".join(cleaned).strip("\n")
+
+    def _strip_trailing_prompt_lines(self, text: str) -> str:
+        lines = str(text or "").replace("\r", "").split("\n")
+        while lines and self._is_prompt(lines[-1]):
+            lines.pop()
+        return "\n".join(lines).strip("\n")
+
+    def _read_until_pattern(self, pattern: re.Pattern[str], timeout: float) -> tuple[str, bool]:
+        buf = ""
+        start = self._time()
+        while True:
+            chunk = self.read(wait_timeout=0.05)
+            if chunk:
+                buf += chunk
+                if pattern.search(buf):
+                    return buf, False
+            else:
+                self._sleep(0.01)
+            if (self._time() - start) > timeout:
+                return buf, True
+
+    def _reset_sudo_timestamp(self) -> None:
+        try:
+            self.run_command("sudo -k", timeout=2.0)
+        except Exception:
+            pass
+
+    def _authenticate_sudo(self, sudo_password: str, timeout: float) -> bool:
+        if not self.chan:
+            raise RuntimeError("Not connected")
+
+        prompt_marker = self._build_marker(self.SUDO_PROMPT_PREFIX)
+        _ = self.read()
+        self.sendline(f"sudo -S -p '{prompt_marker}' -v")
+
+        buf = ""
+        start = self._time()
+        password_sent = False
+        while True:
+            chunk = self.read(wait_timeout=0.05)
+            if chunk:
+                buf += chunk
+                cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
+                lowered = cleaned.lower()
+
+                if prompt_marker in cleaned:
+                    if password_sent:
+                        raise RuntimeError("sudo authentication failed: password was rejected")
+                    self.sendline(sudo_password)
+                    password_sent = True
+                    buf = self._strip_marker_lines(cleaned, [prompt_marker])
+                    continue
+
+                if any(phrase in lowered for phrase in self.SUDO_FAILURE_PHRASES):
+                    raise RuntimeError("sudo authentication failed")
+
+                if self._is_prompt(cleaned):
+                    return password_sent
+            else:
+                self._sleep(0.01)
+            if (self._time() - start) > timeout:
+                raise RuntimeError("sudo authentication timed out")
+
+    def run_automation_command(
+        self,
+        command: str,
+        timeout: float = 10.0,
+        sudo_password: str | None = None,
+    ) -> AutomationCommandResult:
+        if not self.chan:
+            raise RuntimeError("Not connected")
+
+        timeout_value = max(0.1, float(timeout))
+        used_sudo = self._contains_sudo_prefix(command)
+        sudo_authenticated = False
+
+        if used_sudo:
+            if not sudo_password:
+                raise RuntimeError("sudo command requires a sudo password")
+            self._reset_sudo_timestamp()
+            sudo_authenticated = self._authenticate_sudo(sudo_password=sudo_password, timeout=min(timeout_value, 10.0))
+
+        _ = self.read()
+        exit_marker = self._build_marker(self.AUTOMATION_EXIT_PREFIX)
+        done_marker = self._build_marker(self.AUTOMATION_DONE_PREFIX)
+        done_pattern = self._marker_pattern(done_marker)
+        exit_pattern = re.compile(rf"{re.escape(exit_marker)}(?P<exit>-?\d+)")
+        wrapped_command = (
+            "(\n"
+            f"{command}\n"
+            ")\n"
+            "__CODEX_AUTOMATION_STATUS=$?\n"
+            f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\"\n"
+            f"printf '\\n{done_marker}\\n'\n"
+        )
+        self.send(wrapped_command)
+
+        buf, timed_out = self._read_until_pattern(done_pattern, timeout=timeout_value)
+        match = exit_pattern.search(buf)
+        exit_code = None
+        if match:
+            try:
+                exit_code = int(match.group("exit"))
+            except Exception:
+                exit_code = None
+
+        output = self._strip_marker_lines(
+            strip_terminal_control_sequences(buf).replace("\r", ""),
+            [exit_marker, done_marker],
+        )
+        output = self._strip_trailing_prompt_lines(output)
+
+        if used_sudo:
+            self._reset_sudo_timestamp()
+
+        return AutomationCommandResult(
+            output=output,
+            exit_code=exit_code,
+            timed_out=timed_out,
+            used_sudo=used_sudo,
+            sudo_authenticated=sudo_authenticated,
+        )
 
     def send(self, text: str) -> None:
         """Send raw keystrokes/text (no newline added)."""

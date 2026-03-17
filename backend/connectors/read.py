@@ -7,7 +7,12 @@ from ..normalization import strip_terminal_control_sequences
 
 
 class ReadConnector:
-    _PROMPT_LINE_RE = re.compile(r"^(?:[^/\n]*[@:~][^/\n]*[$#]|[$#])\s*$")
+    _BARE_PROMPT_RE = re.compile(r"^[#$]\s*$")
+    _NAMED_PROMPT_RE = re.compile(
+        r"^(?:\([^)\n]+\)\s+)?"
+        r"[\w.-]+@(?:terminal|[\w.-]+:(?:~|/\S*))"
+        r"[#$]\s*$"
+    )
 
     @staticmethod
     def _normalize_bool(value: Any, default: bool = False) -> bool:
@@ -35,16 +40,23 @@ class ReadConnector:
         return raw if raw is not None else default
 
     @staticmethod
+    def _is_prompt_line(raw_line: str) -> bool:
+        if ReadConnector._BARE_PROMPT_RE.match(raw_line):
+            return True
+        return bool(ReadConnector._NAMED_PROMPT_RE.match(raw_line))
+
+    @staticmethod
     def _normalize_lines(raw_text: str) -> list[str]:
         cleaned = strip_terminal_control_sequences(raw_text).replace("\r", "")
         lines: list[str] = []
         for raw_line in cleaned.split("\n"):
-            line = raw_line.strip()
-            if not line:
+            raw = raw_line.rstrip("\r")
+            trimmed = raw.strip()
+            if not trimmed:
                 continue
-            if ReadConnector._PROMPT_LINE_RE.match(line):
+            if ReadConnector._is_prompt_line(raw):
                 continue
-            lines.append(line)
+            lines.append(trimmed)
         return lines
 
     def _evaluate_contains_string(self, read_spec: dict[str, Any], vars_payload: dict[str, Any]) -> dict[str, Any]:

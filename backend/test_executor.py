@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from .connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from .normalization import normalize_status, normalize_text
-from .ssh_client import InteractiveShell
+from .ssh_client import AutomationCommandResult, InteractiveShell
 
 
 class TestExecutor:
@@ -271,10 +271,14 @@ class TestExecutor:
             merged_params.update(one_params)
         merged_params["requestedCheckIds"] = [normalize_text(item.get("id"), "") for item in check_specs]
 
-        def _run_command(command: str, timeout_sec: float | None) -> str:
-            self._resolve_credentials(robot_id)
+        def _run_command(command: str, timeout_sec: float | None) -> AutomationCommandResult:
+            _, _, password, _ = self._resolve_credentials(robot_id)
             timeout = timeout_sec if timeout_sec is not None else 12.0
-            return shell.run_command(command, timeout=float(timeout))
+            return shell.run_automation_command(
+                command,
+                timeout=float(timeout),
+                sudo_password=password,
+            )
 
         orchestrated = self._orchestrate.run_definition(
             definition,
