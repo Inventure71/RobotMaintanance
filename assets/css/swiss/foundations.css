@@ -91,7 +91,7 @@ body::after {
 }
 
 .dashboard-layout {
-  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
+  grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr);
   gap: 1.2rem;
 }
 
