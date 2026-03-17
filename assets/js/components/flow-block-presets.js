@@ -10,6 +10,7 @@ function buildHeader({
   description = '',
   removeLabel = 'Remove',
   onRemove = null,
+  actionButtons = [],
 }) {
   const header = document.createElement('div');
   header.style.display = 'grid';
@@ -36,6 +37,23 @@ function buildHeader({
 
   const actionWrap = document.createElement('div');
   actionWrap.className = 'flow-block-actions';
+
+  actionButtons
+    .filter((action) => action && typeof action === 'object')
+    .forEach((action) => {
+      const button = document.createElement('button');
+      button.className = `button button-compact ${String(action.className || '').trim()}`.trim();
+      button.textContent = String(action.label || 'Action');
+      button.type = 'button';
+      button.disabled = Boolean(action.disabled);
+      if (action.title) button.title = String(action.title);
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (button.disabled || typeof action.onClick !== 'function') return;
+        action.onClick();
+      });
+      actionWrap.append(button);
+    });
 
   if (typeof onRemove === 'function') {
     const removeBtn = document.createElement('button');
@@ -71,10 +89,12 @@ export function createFlowBlockPreset({
   icon = '',
   title = '',
   description = '',
+  actionButtons = [],
   onRemove = null,
   removeLabel = 'Remove',
   onToggle = null,
   renderEditor = null,
+  startOpen = false,
 }) {
   const normalizedVariant = String(variant || 'read').toLowerCase() === 'write' ? 'write' : 'read';
   const row = document.createElement('div');
@@ -87,6 +107,7 @@ export function createFlowBlockPreset({
     description,
     removeLabel,
     onRemove,
+    actionButtons,
   });
 
   const editor = document.createElement('div');
@@ -134,6 +155,9 @@ export function createFlowBlockPreset({
       close: () => setEditing(false),
       open: () => setEditing(true),
     });
+    if (startOpen) {
+      setEditing(true);
+    }
   }
 
   row.append(header, editor);

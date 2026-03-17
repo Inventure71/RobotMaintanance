@@ -161,8 +161,12 @@ function makeEnv() {
     manageDefinitionsFilter: 'all',
     manageFlowEditorMode: 'test',
     workflowRecorder: {
+      started: true,
       loaded: null,
       publishStatus: null,
+      lastStatus: null,
+      lastWriteEditId: '',
+      lastWriteBlock: null,
       loadTestDefinition(definition) {
         this.loaded = definition;
         return { outputCount: 1, blockCount: 2 };
@@ -187,6 +191,16 @@ function makeEnv() {
       },
       setPublishStatus(message, tone) {
         this.publishStatus = { message, tone };
+      },
+      setStatus(message, tone) {
+        this.lastStatus = { message, tone };
+      },
+      addWriteBlock(payload) {
+        this.lastWriteBlock = payload;
+        return { id: 'write_2', ...payload };
+      },
+      setWriteEdit(blockId) {
+        this.lastWriteEditId = blockId;
       },
       getCheckIdsForDefinition(definitionId) {
         return [`${definitionId}__battery`];
@@ -241,6 +255,7 @@ function makeEnv() {
     recorderRobotTypeTargets: makeNode(),
     recorderPublishTestButton: {},
     recorderAddOutputBtn: {},
+    recorderAddWriteBtn: makeNode(),
     recorderAddReadBtn: {},
     recorderRunCaptureButton: {},
     recorderStateBadge: makeNode(),
@@ -406,4 +421,29 @@ test('setFlowEditorMode initializes fix robot type targets from definitions summ
   assert.equal(env.manageFixRobotTypeTargets.children[0].children[1].textContent, 'Rosbot');
   assert.equal(env.manageRecorderFixEditorPanel.classList.contains('active'), true);
   assert.equal(env.manageRecorderTestEditorPanel.classList.contains('hidden'), true);
+});
+
+test('addRecorderWriteVisual adds a manual write block and seeds recorder draft metadata', async () => {
+  const registerManageRecorderRuntime = await loadApi();
+  const env = makeEnv();
+  env.recorderCommandInput.value = 'echo battery';
+  env.recorderRobotSelect.value = 'rosbot';
+  const runtime = makeRuntime(env.state);
+  const api = registerManageRecorderRuntime(runtime, env);
+
+  api.addRecorderWriteVisual();
+
+  assert.equal(env.state.workflowRecorder.lastWriteBlock.command, 'echo battery');
+  assert.equal(
+    env.state.workflowRecorder.lastWriteBlock.outputPayload.stdout,
+    '[Manual write block. Edit command or capture live output later.]',
+  );
+  assert.equal(env.state.workflowRecorder.lastWriteEditId, 'write_2');
+  assert.equal(env.recorderDefinitionIdInput.value, 'rosbot_write_2');
+  assert.equal(env.recorderDefinitionLabelInput.value, 'Flow workflow (rosbot)');
+  assert.equal(env.recorderCommandInput.value, '');
+  assert.deepEqual(env.state.workflowRecorder.lastStatus, {
+    message: 'Write block added. Expand to edit.',
+    tone: 'ok',
+  });
 });

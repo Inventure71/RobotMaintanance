@@ -140,6 +140,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     onlineGrid,
     onlineSectionTitle,
     recorderAddOutputBtn,
+    recorderAddWriteBtn,
     recorderAddReadBtn,
     recorderCheckCountBadge,
     recorderCommandInput,
@@ -1475,6 +1476,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (recorderAddOutputBtn) {
           recorderAddOutputBtn.disabled = !recorderState.started;
         }
+        if (recorderAddWriteBtn) {
+          recorderAddWriteBtn.disabled = !recorderState.started;
+        }
         if (recorderAddReadBtn) {
           recorderAddReadBtn.disabled = !(
             recorderState.started
@@ -1565,16 +1569,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             outputPayload: { stdout: '[Output streaming in terminal session]' },
           });
           
-          if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
-            const suggested = slugifyRecorderValue(
-              `${robotIdValue}_${normalizeText(capturedStep?.id, 'workflow')}`,
-              'recorded_workflow',
-            );
-            recorderDefinitionIdInput.value = suggested;
-          }
-          if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
-            recorderDefinitionLabelInput.value = `Flow workflow (${robotIdValue})`;
-          }
+          applyRecorderDefinitionDraftDefaults(robotIdValue, capturedStep);
           if (recorderCommandInput) recorderCommandInput.value = '';
           state.workflowRecorder.setStatus('Write block added. Check terminal for output.', 'ok');
         } catch (error) {
@@ -1586,6 +1581,40 @@ export function registerManageRecorderRuntime(runtime, env) {
           if (recorderRunCaptureButton) {
             recorderRunCaptureButton.disabled = false;
           }
+          syncRecorderUiState();
+        }
+      }
+
+  function applyRecorderDefinitionDraftDefaults(robotIdValue, capturedStep) {
+        if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
+          const suggested = slugifyRecorderValue(
+            `${normalizeText(robotIdValue, 'workflow')}_${normalizeText(capturedStep?.id, 'workflow')}`,
+            'recorded_workflow',
+          );
+          recorderDefinitionIdInput.value = suggested;
+        }
+        if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
+          recorderDefinitionLabelInput.value = robotIdValue
+            ? `Flow workflow (${robotIdValue})`
+            : 'Recorded workflow';
+        }
+      }
+
+  function addRecorderWriteVisual() {
+        if (!state.workflowRecorder || !state.workflowRecorder.started) return;
+        try {
+          const manualCommand = normalizeText(recorderCommandInput?.value, 'echo "New Command"');
+          const capturedStep = state.workflowRecorder.addWriteBlock({
+            command: manualCommand,
+            outputPayload: { stdout: '[Manual write block. Edit command or capture live output later.]' },
+          });
+          state.workflowRecorder.setWriteEdit?.(capturedStep?.id);
+          applyRecorderDefinitionDraftDefaults(normalizeText(recorderRobotSelect?.value, ''), capturedStep);
+          if (recorderCommandInput) recorderCommandInput.value = '';
+          state.workflowRecorder.setStatus('Write block added. Expand to edit.', 'ok');
+        } catch (error) {
+          state.workflowRecorder.setStatus(error instanceof Error ? error.message : String(error), 'error');
+        } finally {
           syncRecorderUiState();
         }
       }
@@ -1826,6 +1855,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         recorderAddOutputBtn?.addEventListener('click', () => {
           addRecorderOutputVisual();
         });
+        recorderAddWriteBtn?.addEventListener('click', () => {
+          addRecorderWriteVisual();
+        });
         recorderAddReadBtn?.addEventListener('click', () => {
           addRecorderReadVisual();
         });
@@ -1904,6 +1936,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     runRecorderCommandAndCapture,
     publishRecorderAsTest,
     addRecorderOutputVisual,
+    addRecorderWriteVisual,
     addRecorderReadVisual,
     initManageTabs,
     initWorkflowRecorder,

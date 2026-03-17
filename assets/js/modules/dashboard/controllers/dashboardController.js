@@ -363,6 +363,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderOutputPassDetailsInput = $('#recorderOutputPassDetails');
     const recorderOutputFailDetailsInput = $('#recorderOutputFailDetails');
     const recorderAddOutputBtn = $('#recorderAddOutputBtn');
+    const recorderAddWriteBtn = $('#recorderAddWriteBtn');
     const recorderReadOutputKeySelect = $('#recorderReadOutputKey');
     const recorderReadInputRefSelect = $('#recorderReadInputRef');
     const recorderReadKindSelect = $('#recorderReadKind');
@@ -626,6 +627,7 @@ const runtimeEnv = {
   onlineGrid,
   onlineSectionTitle,
   recorderAddOutputBtn,
+  recorderAddWriteBtn,
   recorderAddReadBtn,
   recorderCheckCountBadge,
   recorderCommandInput,

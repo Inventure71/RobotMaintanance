@@ -739,6 +739,36 @@
   padding: 10px 0;
 }
 
+.flow-block-sections {
+  display: grid;
+  gap: 22px;
+}
+
+.flow-block-section {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-block-section-header {
+  display: grid;
+  gap: 4px;
+}
+
+.flow-block-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  font-family: 'Orbitron', sans-serif;
+}
+
+.flow-block-section-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .flow-block {
   border-radius: 12px;
   padding: 14px 18px;
@@ -1035,6 +1065,14 @@ body::after {
   border: 1px solid color-mix(in srgb, var(--ring-focus) 65%, transparent);
   border-radius: var(--radius-sm);
   background: linear-gradient(165deg, color-mix(in srgb, var(--surface-panel) 95%, transparent), color-mix(in srgb, var(--surface-panel-strong) 95%, transparent));
+}
+
+.flow-block-section-title {
+  color: var(--text-primary);
+}
+
+.flow-block-section-copy {
+  color: var(--text-secondary);
 }
 
 :is(button, .button, input, select, textarea):focus-visible {

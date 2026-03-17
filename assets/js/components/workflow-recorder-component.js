@@ -70,6 +70,7 @@ export class WorkflowRecorderComponent {
     this.outputs = [];
     this.blocks = [];
     this.outputEditKey = '';
+    this.writeEditBlockId = '';
     this.readEditBlockId = '';
     this._writeCount = 0;
     this._readCount = 0;
@@ -115,6 +116,7 @@ export class WorkflowRecorderComponent {
       writeCount: this._getWriteBlocks().length,
       readCount: this._getReadBlocks().length,
       editingOutputKey: this.outputEditKey,
+      editingWriteBlockId: this.writeEditBlockId,
       editingReadBlockId: this.readEditBlockId,
       publishReady: issues.length === 0,
       blockingIssues: issues,
@@ -160,6 +162,7 @@ export class WorkflowRecorderComponent {
     this.outputs = [];
     this.blocks = [];
     this.outputEditKey = '';
+    this.writeEditBlockId = '';
     this.readEditBlockId = '';
     this._writeCount = 0;
     this._readCount = 0;
@@ -174,6 +177,7 @@ export class WorkflowRecorderComponent {
     this.outputs = [];
     this.blocks = [];
     this.outputEditKey = '';
+    this.writeEditBlockId = '';
     this.readEditBlockId = '';
     this._writeCount = 0;
     this._readCount = 0;
@@ -213,6 +217,7 @@ export class WorkflowRecorderComponent {
     this.outputs = [];
     this.blocks = [];
     this.outputEditKey = '';
+    this.writeEditBlockId = '';
     this.readEditBlockId = '';
     this._writeCount = 0;
     this._readCount = 0;
@@ -301,6 +306,11 @@ export class WorkflowRecorderComponent {
     return this.blocks.find((block) => block.id === id && block.type === 'read') || null;
   }
 
+  getWriteBlock(blockId) {
+    const id = normalizeText(blockId, '');
+    return this.blocks.find((block) => block.id === id && block.type === 'write') || null;
+  }
+
   setOutputEdit(outputKey) {
     const output = this.getOutput(outputKey);
     this.outputEditKey = output?.key || '';
@@ -310,6 +320,18 @@ export class WorkflowRecorderComponent {
 
   clearOutputEdit() {
     this.outputEditKey = '';
+    this._emitState();
+  }
+
+  setWriteEdit(blockId) {
+    const block = this.getWriteBlock(blockId);
+    this.writeEditBlockId = block?.id || '';
+    this._emitState();
+    return block;
+  }
+
+  clearWriteEdit() {
+    this.writeEditBlockId = '';
     this._emitState();
   }
 
@@ -430,6 +452,39 @@ export class WorkflowRecorderComponent {
     });
   }
 
+  moveWriteBlock(blockId, targetIndex) {
+    const normalizedBlockId = normalizeText(blockId, '');
+    const writes = this._getWriteBlocks().map((block) => ({ ...block }));
+    const currentIndex = writes.findIndex((block) => block.id === normalizedBlockId);
+    if (currentIndex === -1) {
+      throw new Error('Write block not found.');
+    }
+
+    const boundedTarget = Math.max(0, Math.min(Number(targetIndex), writes.length - 1));
+    if (!Number.isInteger(boundedTarget)) {
+      throw new Error('Target write index must be an integer.');
+    }
+    if (boundedTarget === currentIndex) {
+      return {
+        moved: false,
+        block: writes[currentIndex],
+        fromIndex: currentIndex,
+        toIndex: boundedTarget,
+      };
+    }
+
+    const [movedBlock] = writes.splice(currentIndex, 1);
+    writes.splice(boundedTarget, 0, movedBlock);
+    this.blocks = [...writes, ...this._getReadBlocks()];
+    this.render();
+    return {
+      moved: true,
+      block: movedBlock,
+      fromIndex: currentIndex,
+      toIndex: boundedTarget,
+    };
+  }
+
   addWriteBlock({ command, outputPayload }) {
     if (!this.started) {
       throw new Error('Create a new test draft first.');
@@ -540,6 +595,7 @@ export class WorkflowRecorderComponent {
   removeBlock(blockId) {
     const normalizedBlockId = normalizeText(blockId, '');
     this.blocks = this.blocks.filter((block) => block.id !== normalizedBlockId);
+    if (this.writeEditBlockId === normalizedBlockId) this.writeEditBlockId = '';
     if (this.readEditBlockId === normalizedBlockId) this.readEditBlockId = '';
     this.render();
   }
@@ -721,6 +777,226 @@ export class WorkflowRecorderComponent {
     this.outputsEl.appendChild(container);
   }
 
+  _createBlockSection({ title, description }) {
+    const section = document.createElement('section');
+    section.className = 'flow-block-section';
+    const header = document.createElement('div');
+    header.className = 'flow-block-section-header';
+
+    const titleNode = document.createElement('h3');
+    titleNode.className = 'flow-block-section-title';
+    titleNode.textContent = title;
+    header.appendChild(titleNode);
+
+    if (description) {
+      const descriptionNode = document.createElement('p');
+      descriptionNode.className = 'flow-block-section-copy';
+      descriptionNode.textContent = description;
+      header.appendChild(descriptionNode);
+    }
+
+    section.appendChild(header);
+    return section;
+  }
+
+  _renderWriteEditor(editor, block) {
+    editor.innerHTML = `
+      <label class="form-field">Command
+        <input type="text" class="form-input cmd-input" value="${block.command || ''}">
+      </label>
+      <label class="form-field">Save As
+        <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
+      </label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="button" class="button save-btn">Save Block</button>
+      </div>
+    `;
+    const saveBtn = editor.querySelector('.save-btn');
+    saveBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const nextCommand = editor.querySelector('.cmd-input').value.trim();
+      const nextSaveAs = editor.querySelector('.save-input').value.trim();
+      try {
+        this.updateWriteBlock(block.id, {
+          command: nextCommand,
+          saveAs: nextSaveAs,
+        });
+        this.setStatus(`Updated ${block.id}.`, 'ok');
+      } catch (error) {
+        this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+      }
+    });
+  }
+
+  _renderReadEditor(editor, block) {
+    const isStr = block.read?.kind === 'contains_string';
+    const isAny = block.read?.kind === 'contains_any_string';
+    const isLines = block.read?.kind === 'contains_lines_unordered';
+    let needleVal = block.read?.needle || '';
+    if (isAny && block.read?.needles) needleVal = block.read.needles.join(', ');
+    if (isLines && block.read?.lines) needleVal = block.read.lines.join('\n');
+    const currentOutputKey = normalizeToken(block.outputKey, '');
+    const currentInputRef = normalizeText(block.read?.inputRef, '');
+    const outputOptions = this.outputs
+      .map((output) => {
+        const selected = output.key === currentOutputKey ? ' selected' : '';
+        const label = `${normalizeText(output.label, output.key)} (${output.key})`;
+        return `<option value="${escapeHtml(output.key)}"${selected}>${escapeHtml(label)}</option>`;
+      })
+      .join('');
+    const writeRefOptions = this.getWriteRefs()
+      .map((writeRef) => {
+        const selected = normalizeText(writeRef.saveAs, '') === currentInputRef ? ' selected' : '';
+        const label = `${writeRef.saveAs} (${writeRef.command})`;
+        return `<option value="${escapeHtml(writeRef.saveAs)}"${selected}>${escapeHtml(label)}</option>`;
+      })
+      .join('');
+
+    editor.innerHTML = `
+      <label class="form-field">Output Key Binding
+        <select class="form-input id-input">
+          ${outputOptions}
+        </select>
+      </label>
+      <label class="form-field">Read from (Input Ref)
+        <select class="form-input ref-input">
+          ${writeRefOptions}
+        </select>
+      </label>
+      <label class="form-field">Matcher Kind
+        <select class="form-input kind-input">
+          <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
+          <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
+          <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
+        </select>
+      </label>
+      <label class="form-field">Matching Value (String / Comma sep / Lines)
+        <textarea class="form-input needle-input" rows="3">${needleVal}</textarea>
+      </label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="button" class="button save-btn">Save Read Block</button>
+      </div>
+    `;
+    const saveBtn = editor.querySelector('.save-btn');
+    saveBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const outKey = normalizeText(editor.querySelector('.id-input').value, '');
+      const refVal = normalizeText(editor.querySelector('.ref-input').value, '');
+      const kindVal = editor.querySelector('.kind-input').value;
+      const needleRaw = editor.querySelector('.needle-input').value;
+
+      let needle = '';
+      let needles = [];
+      let lines = [];
+
+      if (kindVal === 'contains_lines_unordered') {
+        lines = needleRaw.split('\n').map((s) => s.trim()).filter(Boolean);
+      } else if (kindVal === 'contains_any_string') {
+        needles = needleRaw.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        needle = needleRaw.trim();
+      }
+
+      try {
+        this.setReadEdit(block.id);
+        this.addOrUpdateReadBlock({
+          outputKey: outKey,
+          inputRef: refVal,
+          kind: kindVal,
+          needle,
+          needles: needles.join(','),
+          lines: lines.join('\n'),
+          requireAll: true,
+        });
+        this.setStatus('Read block updated.', 'ok');
+      } catch (error) {
+        this.setStatus(error instanceof Error ? error.message : String(error), 'error');
+      }
+    });
+  }
+
+  _renderWriteBlocks() {
+    const section = this._createBlockSection({
+      title: 'Execution Steps',
+      description: 'Only write blocks define runtime order. Move these to change execute[] sequencing.',
+    });
+    const writes = this._getWriteBlocks();
+    if (!writes.length) {
+      section.appendChild(createFlowEmptyState('No write blocks yet.'));
+      return section;
+    }
+
+    const container = createFlowBlockContainer();
+    writes.forEach((block, writeIndex) => {
+      const row = createFlowBlockPreset({
+        variant: 'write',
+        icon: '✍️',
+        title: `STEP ${writeIndex + 1} · WRITE ${block.command}`,
+        description: `Saves as: ${block.saveAs}`,
+        actionButtons: [
+          {
+            label: 'Move up',
+            disabled: writeIndex === 0,
+            onClick: () => this.moveWriteBlock(block.id, writeIndex - 1),
+          },
+          {
+            label: 'Move down',
+            disabled: writeIndex === writes.length - 1,
+            onClick: () => this.moveWriteBlock(block.id, writeIndex + 1),
+          },
+        ],
+        onRemove: () => this.removeBlock(block.id),
+        onToggle: (open) => {
+          if (open) {
+            this.setWriteEdit(block.id);
+          } else if (this.writeEditBlockId === block.id) {
+            this.clearWriteEdit();
+          }
+        },
+        renderEditor: (editor) => this._renderWriteEditor(editor, block),
+        startOpen: this.writeEditBlockId === block.id,
+      });
+      container.appendChild(row);
+    });
+    section.appendChild(container);
+    return section;
+  }
+
+  _renderReadBlocks() {
+    const section = this._createBlockSection({
+      title: 'Checks / Validations',
+      description: 'Read blocks validate captured outputs. Their visual order does not affect runtime execution.',
+    });
+    const reads = this._getReadBlocks();
+    if (!reads.length) {
+      section.appendChild(createFlowEmptyState('No read blocks yet.'));
+      return section;
+    }
+
+    const container = createFlowBlockContainer();
+    reads.forEach((block) => {
+      const row = createFlowBlockPreset({
+        variant: 'read',
+        icon: '🔍',
+        title: `READ ${block.outputKey}`,
+        description: `${block.read.kind} from ${block.read.inputRef}`,
+        onRemove: () => this.removeBlock(block.id),
+        onToggle: (open) => {
+          if (open) {
+            this.setReadEdit(block.id);
+          } else if (this.readEditBlockId === block.id) {
+            this.clearReadEdit();
+          }
+        },
+        renderEditor: (editor) => this._renderReadEditor(editor, block),
+        startOpen: this.readEditBlockId === block.id,
+      });
+      container.appendChild(row);
+    });
+    section.appendChild(container);
+    return section;
+  }
+
   _renderBlocks() {
     if (!this.blocksEl) return;
     this.blocksEl.replaceChildren();
@@ -729,147 +1005,13 @@ export class WorkflowRecorderComponent {
       return;
     }
 
-    const container = createFlowBlockContainer();
-
-    this.blocks.forEach((block) => {
-      const isWrite = block.type === 'write';
-      const description = isWrite
-        ? `Saves as: ${block.saveAs}`
-        : `${block.read.kind} from ${block.read.inputRef}`;
-      const row = createFlowBlockPreset({
-        variant: isWrite ? 'write' : 'read',
-        icon: isWrite ? '✍️' : '🔍',
-        title: isWrite ? `WRITE ${block.command}` : `READ ${block.outputKey}`,
-        description,
-        onRemove: () => this.removeBlock(block.id),
-        onToggle: (open) => {
-          if (isWrite) return;
-          if (open) {
-            this.setReadEdit(block.id);
-          } else if (this.readEditBlockId === block.id) {
-            this.clearReadEdit();
-          }
-        },
-        renderEditor: (editor) => {
-          if (isWrite) {
-            editor.innerHTML = `
-              <label class="form-field">Command
-                <input type="text" class="form-input cmd-input" value="${block.command || ''}">
-              </label>
-              <label class="form-field">Save As
-                <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
-              </label>
-              <div style="display:flex; justify-content:flex-end;">
-                <button type="button" class="button save-btn">Save Block</button>
-              </div>
-            `;
-            const saveBtn = editor.querySelector('.save-btn');
-            saveBtn.addEventListener('click', (event) => {
-              event.stopPropagation();
-              const nextCommand = editor.querySelector('.cmd-input').value.trim();
-              const nextSaveAs = editor.querySelector('.save-input').value.trim();
-              try {
-                this.updateWriteBlock(block.id, {
-                  command: nextCommand,
-                  saveAs: nextSaveAs,
-                });
-                this.setStatus(`Updated ${block.id}.`, 'ok');
-              } catch (error) {
-                this.setStatus(error instanceof Error ? error.message : String(error), 'error');
-              }
-            });
-            return;
-          }
-
-          const isStr = block.read?.kind === 'contains_string';
-          const isAny = block.read?.kind === 'contains_any_string';
-          const isLines = block.read?.kind === 'contains_lines_unordered';
-          let needleVal = block.read?.needle || '';
-          if (isAny && block.read?.needles) needleVal = block.read.needles.join(', ');
-          if (isLines && block.read?.lines) needleVal = block.read.lines.join('\n');
-          const currentOutputKey = normalizeToken(block.outputKey, '');
-          const currentInputRef = normalizeText(block.read?.inputRef, '');
-          const outputOptions = this.outputs
-            .map((output) => {
-              const selected = output.key === currentOutputKey ? ' selected' : '';
-              const label = `${normalizeText(output.label, output.key)} (${output.key})`;
-              return `<option value="${escapeHtml(output.key)}"${selected}>${escapeHtml(label)}</option>`;
-            })
-            .join('');
-          const writeRefOptions = this.getWriteRefs()
-            .map((writeRef) => {
-              const selected = normalizeText(writeRef.saveAs, '') === currentInputRef ? ' selected' : '';
-              const label = `${writeRef.saveAs} (${writeRef.command})`;
-              return `<option value="${escapeHtml(writeRef.saveAs)}"${selected}>${escapeHtml(label)}</option>`;
-            })
-            .join('');
-
-          editor.innerHTML = `
-            <label class="form-field">Output Key Binding
-              <select class="form-input id-input">
-                ${outputOptions}
-              </select>
-            </label>
-            <label class="form-field">Read from (Input Ref)
-              <select class="form-input ref-input">
-                ${writeRefOptions}
-              </select>
-            </label>
-            <label class="form-field">Matcher Kind
-              <select class="form-input kind-input">
-                <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
-                <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
-                <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
-              </select>
-            </label>
-            <label class="form-field">Matching Value (String / Comma sep / Lines)
-              <textarea class="form-input needle-input" rows="3">${needleVal}</textarea>
-            </label>
-            <div style="display:flex; justify-content:flex-end;">
-              <button type="button" class="button save-btn">Save Read Block</button>
-            </div>
-          `;
-          const saveBtn = editor.querySelector('.save-btn');
-          saveBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            const outKey = normalizeText(editor.querySelector('.id-input').value, '');
-            const refVal = normalizeText(editor.querySelector('.ref-input').value, '');
-            const kindVal = editor.querySelector('.kind-input').value;
-            const needleRaw = editor.querySelector('.needle-input').value;
-
-            let needle = '';
-            let needles = [];
-            let lines = [];
-
-            if (kindVal === 'contains_lines_unordered') {
-              lines = needleRaw.split('\n').map((s) => s.trim()).filter(Boolean);
-            } else if (kindVal === 'contains_any_string') {
-              needles = needleRaw.split(',').map((s) => s.trim()).filter(Boolean);
-            } else {
-              needle = needleRaw.trim();
-            }
-
-            try {
-              this.setReadEdit(block.id);
-              this.addOrUpdateReadBlock({
-                outputKey: outKey,
-                inputRef: refVal,
-                kind: kindVal,
-                needle,
-                needles: needles.join(','),
-                lines: lines.join('\n'),
-                requireAll: true,
-              });
-              this.setStatus('Read block updated.', 'ok');
-            } catch (error) {
-              this.setStatus(error instanceof Error ? error.message : String(error), 'error');
-            }
-          });
-        },
-      });
-      container.appendChild(row);
-    });
-    this.blocksEl.appendChild(container);
+    const sections = document.createElement('div');
+    sections.className = 'flow-block-sections';
+    sections.append(
+      this._renderWriteBlocks(),
+      this._renderReadBlocks(),
+    );
+    this.blocksEl.appendChild(sections);
   }
 
   render() {
