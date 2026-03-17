@@ -46,6 +46,30 @@ def test_tests_run_rejects_duplicate_active_robot_session():
     assert "already active" in response.json()["detail"]
 
 
+def test_tests_run_rejects_explicit_empty_selection():
+    class FakeManager:
+        def start_test_run(self, *_args, **_kwargs):
+            return True
+
+        def finish_test_run(self, *_args, **_kwargs):
+            return None
+
+        def run_tests(self, *_args, **_kwargs):
+            raise AssertionError("run_tests should not be called for an empty selection")
+
+    app = FastAPI()
+    app.include_router(create_tests_router(FakeManager()))
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/robots/r1/tests/run",
+        json={"pageSessionId": "p1", "testIds": []},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "No tests selected."
+
+
 def test_online_batch_uses_safe_parallelism_cap(monkeypatch):
     class FakeManager:
         def __init__(self):

@@ -71,6 +71,7 @@ class TestExecutor:
 
         requested_ids: list[str] = []
         requested: set[str] = set()
+        requested_explicitly = test_ids is not None
         for test_id in (test_ids or []):
             normalized_test_id = normalize_text(test_id, "")
             if not normalized_test_id or normalized_test_id in requested:
@@ -89,13 +90,10 @@ class TestExecutor:
             if not test_id:
                 continue
 
-            if requested:
+            if requested_explicitly:
                 if test_id not in requested:
                     continue
                 matched_requested.add(test_id)
-            else:
-                if entry.get("manualOnly", True) is False:
-                    continue
 
             if entry.get("enabled", True) is False:
                 continue
@@ -302,11 +300,13 @@ class TestExecutor:
         test_ids: list[str] | None = None,
         dry_run: bool = False,
     ) -> list[dict[str, Any]]:
+        if test_ids is not None and not [normalize_text(test_id, "") for test_id in test_ids if normalize_text(test_id, "")]:
+            raise HTTPException(status_code=400, detail="No tests selected.")
         tests, resolution_errors, unknown_requested = self._resolve_tests(robot_id, test_ids)
-        if test_ids and not tests:
+        if test_ids is not None and not tests:
             raise HTTPException(status_code=400, detail="No matching tests found for this robot type.")
         if not tests and not resolution_errors:
-            raise HTTPException(status_code=400, detail="No manual tests available for this robot type.")
+            raise HTTPException(status_code=400, detail="No enabled tests configured for this robot type.")
 
         results: list[dict[str, Any]] = []
         for unknown_test_id in unknown_requested:

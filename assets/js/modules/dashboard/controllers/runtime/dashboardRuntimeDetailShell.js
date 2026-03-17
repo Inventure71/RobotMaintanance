@@ -722,7 +722,7 @@ export function registerDetailShellRuntime(runtime, env) {
             }
   
             const body = { ...options.body };
-            const includeOnline = !!options.includeOnline;
+            const includeOnline = options.includeOnline !== false;
             const hasExplicitTestIds = Array.isArray(body.testIds) && body.testIds.length;
             const defaultTestIds = getConfiguredDefaultTestIds(robot, includeOnline);
   
@@ -809,6 +809,52 @@ export function registerDetailShellRuntime(runtime, env) {
             appendTerminalLine('Ready.', 'ok');
           }
         }
+      }
+
+  function reconcileLoadedRobotDefinitions() {
+        const changedRobotIds = new Set();
+        mapRobots((robot) => {
+          const id = robotId(robot);
+          if (!id || !robot || typeof robot !== 'object') return robot;
+
+          const typeConfig = getRobotTypeConfig(robot.typeId);
+          const normalized = normalizeRobotTests(robot.tests || {}, robot.typeId);
+          const nextDefinitions = Array.isArray(normalized.definitions) ? normalized.definitions : [];
+          const nextTests = normalized.tests && typeof normalized.tests === 'object' ? normalized.tests : {};
+          const nextTopics = Array.isArray(typeConfig?.topics) ? typeConfig.topics : [];
+          const nextAutoFixes = Array.isArray(typeConfig?.autoFixes) ? typeConfig.autoFixes : [];
+
+          const definitionsChanged = JSON.stringify(robot.testDefinitions || []) !== JSON.stringify(nextDefinitions);
+          const testsChanged = haveRuntimeTestsChanged(robot.tests || {}, nextTests);
+          const topicsChanged = JSON.stringify(robot.topics || []) !== JSON.stringify(nextTopics);
+          const autoFixesChanged = JSON.stringify(robot.autoFixes || []) !== JSON.stringify(nextAutoFixes);
+
+          if (!definitionsChanged && !testsChanged && !topicsChanged && !autoFixesChanged) {
+            return robot;
+          }
+
+          changedRobotIds.add(id);
+          return {
+            ...robot,
+            tests: nextTests,
+            testDefinitions: nextDefinitions,
+            topics: nextTopics,
+            autoFixes: nextAutoFixes,
+          };
+        });
+
+        if (!changedRobotIds.size) return changedRobotIds;
+
+        if (dashboard.classList.contains('active')) {
+          renderDashboard();
+        }
+        if (detail.classList.contains('active')) {
+          const activeRobot = getRobotById(state.detailRobotId);
+          if (activeRobot) {
+            renderDetail(activeRobot);
+          }
+        }
+        return changedRobotIds;
       }
 
   function normalizeManageTab(tabId) {
@@ -2629,6 +2675,7 @@ export function registerDetailShellRuntime(runtime, env) {
           const refreshed = await loadRobotsFromBackend();
           setRobots(refreshed);
         } catch (_error) {
+          reconcileLoadedRobotDefinitions();
           return false;
         }
   
@@ -2679,6 +2726,7 @@ export function registerDetailShellRuntime(runtime, env) {
   return {
     renderDetail,
     runManualTests,
+    reconcileLoadedRobotDefinitions,
     normalizeManageTab,
     getPersistedManageTab,
     persistManageTab,

@@ -41,3 +41,8 @@ def to_bool(value: Any) -> bool:
 
 def strip_ansi(text: str) -> str:
     return re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", text)
+
+
+def strip_terminal_control_sequences(text: str) -> str:
+    without_osc = re.sub(r"\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)", "", str(text or ""))
+    return strip_ansi(without_osc)

@@ -231,3 +231,136 @@ def test_contains_string_fail_is_stable_and_explicit():
     results = executor.run_tests(robot_id="r1", page_session_id="page-1", test_ids=["string-check"])
     assert results[0]["status"] == "error"
     assert results[0]["value"] == "missing"
+
+
+def test_run_tests_without_explicit_ids_executes_all_enabled_mapped_tests():
+    robot_type = {
+        "typeId": "rosbot-2-pro",
+        "tests": [
+            {
+                "id": "online",
+                "definitionId": "online_probe",
+                "manualOnly": False,
+                "runAtConnection": False,
+                "enabled": True,
+            },
+            {
+                "id": "automatic-health",
+                "definitionId": "auto_def",
+                "manualOnly": False,
+                "runAtConnection": True,
+                "enabled": True,
+            },
+            {
+                "id": "manual-health",
+                "definitionId": "manual_def",
+                "manualOnly": True,
+                "runAtConnection": False,
+                "enabled": True,
+            },
+            {
+                "id": "disabled-check",
+                "definitionId": "disabled_def",
+                "manualOnly": True,
+                "runAtConnection": True,
+                "enabled": False,
+            },
+        ],
+    }
+    shell = _FakeShell(
+        {
+            "echo auto": "auto",
+            "echo manual": "manual",
+        }
+    )
+    definitions = {
+        "online_probe": {
+            "id": "online_probe",
+            "mode": "online_probe",
+            "checks": [{"id": "online"}],
+        },
+        "auto_def": {
+            "id": "auto_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "auto", "command": "echo auto", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "automatic-health",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "auto"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+        "manual_def": {
+            "id": "manual_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "manual", "command": "echo manual", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "manual-health",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "manual"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+        "disabled_def": {
+            "id": "disabled_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "disabled", "command": "echo disabled", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "disabled-check",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "disabled"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    }
+    executor = _executor_for_tests(robot_type, shell, definitions=definitions)
+
+    results = executor.run_tests(robot_id="r1", page_session_id="page-1", test_ids=None)
+
+    by_id = {result["id"]: result for result in results}
+    assert set(by_id) == {"online", "automatic-health", "manual-health"}
+    assert all(result["status"] == "ok" for result in results)
+    assert shell.commands == ["echo auto", "echo manual"]
+
+
+def test_explicit_empty_test_ids_raise_no_tests_selected():
+    robot_type = {
+        "typeId": "rosbot-2-pro",
+        "tests": [
+            {
+                "id": "good",
+                "definitionId": "good_def",
+                "manualOnly": True,
+                "runAtConnection": True,
+                "enabled": True,
+            }
+        ],
+    }
+    shell = _FakeShell({"echo ok": "ok"})
+    definitions = {
+        "good_def": {
+            "id": "good_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "s1", "command": "echo ok", "saveAs": "out"}],
+            "checks": [
+                {
+                    "id": "good",
+                    "read": {"kind": "contains_string", "inputRef": "out", "needle": "ok"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        }
+    }
+    executor = _executor_for_tests(robot_type, shell, definitions=definitions)
+
+    with pytest.raises(HTTPException) as exc_info:
+        executor.run_tests(robot_id="r1", page_session_id="page-1", test_ids=[])
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "No tests selected."

@@ -157,13 +157,32 @@ def test_auto_monitor_tick_recovers_offline_and_reads_battery(monkeypatch):
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
-    manager = _manager()
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [],
+                "autoMonitor": {
+                    "batteryCommand": "custom battery probe",
+                },
+            }
+        },
+        auto_monitor=False,
+    )
     manager._run_auto_monitor_tick()
     runtime = manager.get_runtime_tests("r1")
 
     assert runtime["online"]["status"] == "ok"
     assert runtime["battery"]["value"] == "75%"
-    assert any("/battery" in command for command in observed["commands"])
+    assert "custom battery probe" in observed["commands"]
     assert observed["connect_calls"] >= 2
 
 
@@ -247,6 +266,9 @@ def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch
                     {"id": "battery", "enabled": True},
                     {"id": "general", "enabled": True},
                 ],
+                "autoMonitor": {
+                    "batteryCommand": "custom battery probe",
+                },
             }
         },
         auto_monitor=False,
@@ -791,6 +813,17 @@ def test_auto_monitor_defers_when_recent_manual_activity(monkeypatch):
     assert observed["commands"] == []
 
 
+def test_start_test_run_rejects_same_robot_across_different_sessions():
+    manager = _manager()
+
+    assert manager.start_test_run("r1", "session-a") is True
+    assert manager.start_test_run("r1", "session-b") is False
+
+    manager.finish_test_run("r1", "session-a")
+
+    assert manager.start_test_run("r1", "session-b") is True
+
+
 def test_auto_monitor_emits_connected_event_only_on_offline_to_online_transition():
     manager = _manager()
     manager._refresh_battery_state = lambda _robot_id: None
@@ -1174,3 +1207,29 @@ def test_connection_event_runner_reconnect_replaces_prior_token():
             break
         time.sleep(0.01)
     assert max_active_attempts == 1
+
+
+def test_connection_retry_attempt_returns_explicit_error_results_on_executor_failure():
+    manager = _connection_retry_manager()
+
+    def fail_run_tests(**_kwargs):
+        raise RuntimeError("retry explosion")
+
+    manager._executor.run_tests = fail_run_tests
+
+    results = manager._run_connection_retry_attempt(
+        robot_id="r1",
+        test_ids=["general"],
+        source="auto-monitor",
+    )
+
+    assert results == [
+        {
+            "id": "general",
+            "status": "error",
+            "value": "execution_error",
+            "details": "retry explosion",
+            "ms": 0,
+            "steps": [],
+        }
+    ]

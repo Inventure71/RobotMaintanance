@@ -4,11 +4,14 @@ import re
 import socket
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import Any, Callable, Optional, Protocol
 
 import paramiko
+
+from .normalization import strip_terminal_control_sequences
 
 
 class ShellChannel(Protocol):
@@ -47,6 +50,7 @@ class InteractiveShell:
     """
 
     READ_BLOCK_TIMEOUT_SEC = 0.2
+    COMMAND_DONE_PREFIX = "__CODEX_CMD_DONE__"
 
     def __init__(
         self,
@@ -159,9 +163,18 @@ class InteractiveShell:
     def _is_prompt(self, buf: str) -> bool:
         if self._prompt_detector:
             return bool(self._prompt_detector(buf))
-        cleaned = re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", buf).replace("\r", "")
+        cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
         tail = cleaned[-1024:]
         return bool(re.search(rf"(?:{self.prompt_re.pattern})\s*$", tail))
+
+    def _build_completion_marker(self) -> tuple[str, str]:
+        marker = f"{self.COMMAND_DONE_PREFIX}{uuid.uuid4().hex}__"
+        command = f"printf '\\n%s\\n' '{marker}'"
+        return marker, command
+
+    @staticmethod
+    def _marker_pattern(marker: str) -> re.Pattern[str]:
+        return re.compile(rf"(?:^|[\r\n]){re.escape(marker)}(?:[\r\n]|$)")
 
     def send(self, text: str) -> None:
         """Send raw keystrokes/text (no newline added)."""
@@ -200,8 +213,9 @@ class InteractiveShell:
 
         # Drain any old output so we only return output from this command onward.
         _ = self.read()
-
-        self.sendline(command)
+        marker, marker_command = self._build_completion_marker()
+        marker_pattern = self._marker_pattern(marker)
+        self.send(f"{command}\n{marker_command}\n")
 
         buf = ""
         start = self._time()
@@ -209,10 +223,10 @@ class InteractiveShell:
             chunk = self.read(wait_timeout=0.05)
             if chunk:
                 buf += chunk
+                match = marker_pattern.search(buf)
+                if match:
+                    return buf[: match.start()]
             else:
                 self._sleep(0.01)
-            # Heuristic: if prompt appears at end, command likely finished.
-            if self._is_prompt(buf):
-                return buf
             if (self._time() - start) > timeout:
                 return buf  # return what we got so far (don't hang forever)

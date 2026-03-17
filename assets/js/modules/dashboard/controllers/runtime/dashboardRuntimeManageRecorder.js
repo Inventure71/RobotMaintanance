@@ -1717,7 +1717,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             setManageTabStatus(`Saved test definition '${testId}'.`, 'ok');
           } else {
             setManageTabStatus(
-              `Saved test definition '${testId}', but robot views did not refresh. Reload the page if needed.`,
+              `Saved test definition '${testId}'. Local robot test mappings were updated immediately; backend snapshot refresh will catch up automatically.`,
               'warn',
             );
           }
@@ -1769,7 +1769,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             setManageTabStatus(`Deleted test definition '${testId}'.`, 'ok');
           } else {
             setManageTabStatus(
-              `Deleted test definition '${testId}', but robot views did not refresh. Reload the page if needed.`,
+              `Deleted test definition '${testId}'. Local robot test mappings were updated immediately; backend snapshot refresh will catch up automatically.`,
               'warn',
             );
           }
@@ -1857,7 +1857,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             setManageTabStatus(`Saved fix definition '${fixId}'.`, 'ok');
           } else {
             setManageTabStatus(
-              `Saved fix definition '${fixId}', but robot views did not refresh. Reload the page if needed.`,
+              `Saved fix definition '${fixId}'. Local robot mappings were updated immediately; backend snapshot refresh will catch up automatically.`,
               'warn',
             );
           }
@@ -1901,7 +1901,7 @@ export function registerManageRecorderRuntime(runtime, env) {
             setManageTabStatus(`Deleted fix definition '${fixId}'.`, 'ok');
           } else {
             setManageTabStatus(
-              `Deleted fix definition '${fixId}', but robot views did not refresh. Reload the page if needed.`,
+              `Deleted fix definition '${fixId}'. Local robot mappings were updated immediately; backend snapshot refresh will catch up automatically.`,
               'warn',
             );
           }

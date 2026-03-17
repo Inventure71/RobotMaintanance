@@ -92,10 +92,9 @@ class ActivityGuardMixin:
         if not normalized_robot_id or not normalized_page_session_id:
             return False
         with self._lock:
-            key = (normalized_robot_id, normalized_page_session_id)
-            if key in self._active_test_runs:
+            if any(active_robot_id == normalized_robot_id for active_robot_id, _session in self._active_test_runs):
                 return False
-            self._active_test_runs.add(key)
+            self._active_test_runs.add((normalized_robot_id, normalized_page_session_id))
             self._manual_activity_by_robot[normalized_robot_id] = time.time()
             return True
 

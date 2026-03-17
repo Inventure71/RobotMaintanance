@@ -83,8 +83,19 @@ class TestRunnerMixin:
                 source=source,
             )
             return normalized_results
-        except Exception:
-            return []
+        except Exception as exc:
+            return [
+                {
+                    "id": normalize_text(test_id, "test"),
+                    "status": "error",
+                    "value": "execution_error",
+                    "details": normalize_text(str(exc), "Connection retry test execution failed."),
+                    "ms": 0,
+                    "steps": [],
+                }
+                for test_id in test_ids
+                if normalize_text(test_id, "")
+            ]
         finally:
             elapsed = time.time() - started_at
             min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))

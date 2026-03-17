@@ -1492,14 +1492,10 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
             ? robot.testDefinitions
             : env.TEST_DEFINITIONS;
         const testIds = byDefinition
-          .filter((item) => item && typeof item === 'object' && item.runAtConnection === true)
+          .filter((item) => item && typeof item === 'object' && item.enabled !== false)
           .map((item) => normalizeText(item?.id, ''))
           .filter((id) => id && (includeOnline || id !== 'online'));
-        if (includeOnline) {
-          const candidates = new Set(['online', ...testIds]);
-          return Array.from(candidates).filter(Boolean);
-        }
-        return testIds;
+        return Array.from(new Set(testIds)).filter(Boolean);
       }
 
   function normalizeStepDebug(step) {

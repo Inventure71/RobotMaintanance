@@ -52,9 +52,11 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
         page_session_id = (body.pageSessionId or f"test-{robot_id}-{uuid.uuid4().hex[:8]}").strip()
         started_at = time.time()
         normalized_test_ids = None
-        if body.testIds:
+        if body.testIds is not None:
             normalized_test_ids = [normalize_text(test_id, "") for test_id in body.testIds]
             normalized_test_ids = [test_id for test_id in normalized_test_ids if test_id]
+            if not normalized_test_ids:
+                raise HTTPException(status_code=400, detail="No tests selected.")
 
         started_run = False
         if hasattr(terminal_manager, "start_test_run"):
@@ -67,14 +69,14 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
             if not started_run:
                 raise HTTPException(
                     status_code=409,
-                    detail="A test run is already active for this robot/session.",
+                    detail="A test run is already active for this robot.",
                 )
 
         try:
             results = terminal_manager.run_tests(
                 robot_id=robot_id,
                 page_session_id=page_session_id,
-                test_ids=normalized_test_ids or None,
+                test_ids=normalized_test_ids,
                 dry_run=body.dryRun,
             )
         finally:

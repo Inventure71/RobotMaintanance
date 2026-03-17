@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import re
 from typing import Any
+
+from ..normalization import strip_terminal_control_sequences
 
 
 class ReadConnector:
+    _PROMPT_LINE_RE = re.compile(r"^(?:[^/\n]*[@:~][^/\n]*[$#]|[$#])\s*$")
+
     @staticmethod
     def _normalize_bool(value: Any, default: bool = False) -> bool:
         if isinstance(value, bool):
@@ -31,7 +36,16 @@ class ReadConnector:
 
     @staticmethod
     def _normalize_lines(raw_text: str) -> list[str]:
-        return [line.strip() for line in str(raw_text or "").replace("\r", "").split("\n") if line.strip()]
+        cleaned = strip_terminal_control_sequences(raw_text).replace("\r", "")
+        lines: list[str] = []
+        for raw_line in cleaned.split("\n"):
+            line = raw_line.strip()
+            if not line:
+                continue
+            if ReadConnector._PROMPT_LINE_RE.match(line):
+                continue
+            lines.append(line)
+        return lines
 
     def _evaluate_contains_string(self, read_spec: dict[str, Any], vars_payload: dict[str, Any]) -> dict[str, Any]:
         haystack = str(self._resolve_value(read_spec.get("inputRef"), vars_payload, default=""))

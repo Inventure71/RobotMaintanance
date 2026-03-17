@@ -331,6 +331,7 @@ export function registerDataInitRuntime(runtime, env) {
   const queryCardByRobotId = (...args) => runtime.queryCardByRobotId(...args);
   const readRobotField = (...args) => runtime.readRobotField(...args);
   const rebuildRobotIndex = (...args) => runtime.rebuildRobotIndex(...args);
+  const reconcileLoadedRobotDefinitions = (...args) => runtime.reconcileLoadedRobotDefinitions(...args);
   const refreshRobotsFromBackendSnapshot = (...args) => runtime.refreshRobotsFromBackendSnapshot(...args);
   const refreshTestingCountdowns = (...args) => runtime.refreshTestingCountdowns(...args);
   const removeRobotIdsFromSelection = (...args) => runtime.removeRobotIdsFromSelection(...args);
@@ -481,15 +482,20 @@ export function registerDataInitRuntime(runtime, env) {
           const response = await fetch(buildApiUrl('/api/robot-types'));
           if (!response.ok) throw new Error('api unavailable');
           const payload = await response.json();
-          return setRobotTypeDefinitions(payload);
+          const nextTypes = setRobotTypeDefinitions(payload);
+          reconcileLoadedRobotDefinitions();
+          return nextTypes;
         } catch (_error) {
           try {
             const response = await fetch(ROBOT_TYPES_CONFIG_URL);
             if (!response.ok) throw new Error('config unavailable');
             const payload = await response.json();
-            return setRobotTypeDefinitions(payload);
+            const nextTypes = setRobotTypeDefinitions(payload);
+            reconcileLoadedRobotDefinitions();
+            return nextTypes;
           } catch (_fallbackError) {
             setRobotTypeDefinitions([]);
+            reconcileLoadedRobotDefinitions();
             return [];
           }
         }

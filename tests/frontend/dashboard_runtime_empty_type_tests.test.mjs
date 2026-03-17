@@ -168,6 +168,31 @@ test('getConfiguredDefaultTestIds does not inject global tests for known empty t
   );
 });
 
+test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include online', async () => {
+  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'registerRuntimeFixTestsRuntime',
+  );
+  const env = makeEnv();
+  const runtime = makeRuntime();
+  const api = registerRuntimeFixTestsRuntime(runtime, env);
+
+  assert.deepEqual(
+    Array.from(api.getConfiguredDefaultTestIds(
+      {
+        testDefinitions: [
+          { id: 'online', enabled: true, runAtConnection: false },
+          { id: 'general', enabled: true, runAtConnection: true },
+          { id: 'movement', enabled: true, runAtConnection: false },
+          { id: 'disabled-check', enabled: false, runAtConnection: true },
+        ],
+      },
+      true,
+    )),
+    ['online', 'general', 'movement'],
+  );
+});
+
 test('setRobotTypeDefinitions preserves robot type test refs and battery command metadata', async () => {
   const registerMonitorConfigRuntime = await loadNamedExport(
     MONITOR_MODULE_PATH,
@@ -194,4 +219,37 @@ test('setRobotTypeDefinitions preserves robot type test refs and battery command
   assert.deepEqual(Array.from(typeConfig.testRefs), ['battery', 'online']);
   assert.deepEqual(Array.from(typeConfig.fixRefs), ['flash_fix']);
   assert.equal(typeConfig.batteryCommand, 'echo battery state');
+});
+
+test('normalizeTestDefinition preserves enabled manualOnly and runAtConnection metadata', async () => {
+  const registerMonitorConfigRuntime = await loadNamedExport(
+    MONITOR_MODULE_PATH,
+    'registerMonitorConfigRuntime',
+  );
+  const env = makeEnv();
+  const runtime = makeRuntime();
+  const api = registerMonitorConfigRuntime(runtime, env);
+
+  api.setRobotTypeDefinitions([
+    {
+      typeId: 'rosbot-2-pro',
+      label: 'Rosbot 2 Pro',
+      tests: [
+        {
+          id: 'general',
+          label: 'General',
+          enabled: false,
+          manualOnly: false,
+          runAtConnection: true,
+        },
+      ],
+      autoFixes: [],
+      topics: [],
+    },
+  ]);
+
+  const typeConfig = env.ROBOT_TYPE_BY_ID.get('rosbot-2-pro');
+  assert.equal(typeConfig.tests[0].enabled, false);
+  assert.equal(typeConfig.tests[0].manualOnly, false);
+  assert.equal(typeConfig.tests[0].runAtConnection, true);
 });

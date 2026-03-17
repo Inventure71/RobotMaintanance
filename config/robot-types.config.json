@@ -17,8 +17,7 @@
         "battery",
         "lidar",
         "proximity",
-        "camera",
-        "lidar_working_scan_topic__scan_present"
+        "camera"
       ],
       "fixRefs": [
         "flash_fix"

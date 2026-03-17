@@ -54,6 +54,10 @@ class FakeClient:
         self.closed = True
 
 
+def _sent_completion_marker(sent_payload: str) -> str:
+    return sent_payload.split("printf '\\n%s\\n' '", 1)[1].split("'", 1)[0]
+
+
 def test_connect_calls_paramiko_like_client_methods():
     fake_client = FakeClient()
     shell = InteractiveShell(
@@ -116,15 +120,17 @@ def test_run_command_returns_prompt_bound_output():
     def fake_sleep(_: float) -> None:
         sleep_calls["count"] += 1
         if sleep_calls["count"] == 1:
-            shell._out_queue.put("running\r\n$ ")
+            completion_marker = _sent_completion_marker(fake_channel.sent[0])
+            shell._out_queue.put(f"running\r\n{completion_marker}\r\n$ ")
 
     shell._sleep = fake_sleep
 
     output = shell.run_command("echo hi", timeout=1.0)
 
-    assert fake_channel.sent == ["echo hi\n"]
+    assert len(fake_channel.sent) == 1
+    assert fake_channel.sent[0].startswith("echo hi\nprintf '\\n%s\\n' '")
     assert "running" in output
-    assert output.endswith("$ ")
+    assert "__CODEX_CMD_DONE__" not in output
 
 
 def test_run_command_times_out_and_returns_partial_output():
@@ -179,13 +185,51 @@ def test_run_command_waits_for_prompt_at_end_not_echoed_prompt():
         sleep_calls["count"] += 1
         if sleep_calls["count"] == 1:
             shell._out_queue.put("/scan\r\n/odom\r\n")
-            shell._out_queue.put("husarion@agamemnon:~$ ")
+            completion_marker = _sent_completion_marker(fake_channel.sent[0])
+            shell._out_queue.put(f"{completion_marker}\r\nhusarion@agamemnon:~$ ")
 
     shell._sleep = fake_sleep
 
     output = shell.run_command("timeout 12s rostopic list", timeout=2.0)
 
-    assert fake_channel.sent == ["timeout 12s rostopic list\n"]
+    assert len(fake_channel.sent) == 1
+    assert fake_channel.sent[0].startswith("timeout 12s rostopic list\nprintf '\\n%s\\n' '")
     assert sleep_calls["count"] >= 1
     assert "/scan" in output
-    assert output.rstrip().endswith("$")
+    assert "__CODEX_CMD_DONE__" not in output
+
+
+def test_run_command_ignores_late_prompt_noise_until_completion_marker():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        completion_marker = _sent_completion_marker(fake_channel.sent[0])
+        if sleep_calls["count"] == 1:
+            shell._out_queue.put("husarion@alexander:~$ ")
+        elif sleep_calls["count"] == 2:
+            shell._out_queue.put("/scan\r\n/odom\r\n")
+            shell._out_queue.put(f"{completion_marker}\r\nhusarion@alexander:~$ ")
+
+    shell._sleep = fake_sleep
+
+    output = shell.run_command("timeout 12s rostopic list", timeout=2.0)
+
+    assert sleep_calls["count"] >= 2
+    assert "/scan" in output
+    assert "__CODEX_CMD_DONE__" not in output

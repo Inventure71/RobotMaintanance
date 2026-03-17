@@ -705,6 +705,8 @@ export function registerMonitorConfigRuntime(runtime, env) {
           icon: normalizeText(raw.icon, '⚙️'),
           okText: normalizeText(raw.okText, 'Healthy'),
           failText: normalizeText(raw.failText, 'Needs attention'),
+          enabled: raw.enabled !== false,
+          manualOnly: raw.manualOnly !== false,
           runAtConnection: raw.runAtConnection === true,
           possibleResults,
           defaultStatus: normalizeStatus(raw.defaultStatus),

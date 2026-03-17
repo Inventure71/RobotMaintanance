@@ -238,6 +238,51 @@ test('loadRobotsFromBackend preserves empty fleet snapshots', async () => {
   assert.deepEqual(robots, []);
 });
 
+test('loadRobotTypeConfig reconciles loaded robot definitions immediately', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    if (text.includes('/api/robot-types')) {
+      return {
+        ok: true,
+        json: async () => ([
+          {
+            typeId: 'picker',
+            tests: [{ id: 'online' }, { id: 'general', enabled: true }],
+          },
+        ]),
+      };
+    }
+    throw new Error(`Unexpected fetch URL: ${text}`);
+  };
+
+  const registerDataInitRuntime = await loadApi(fetchImpl);
+  const state = {
+    fixingRobotIds: new Set(),
+    robots: [],
+    runtimeVersion: 0,
+    searchingRobotIds: new Set(),
+    testingRobotIds: new Set(),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(env);
+  runtime.setRobotTypeDefinitions = (payload) => {
+    calls.push(['setRobotTypeDefinitions', payload]);
+    return payload;
+  };
+  runtime.reconcileLoadedRobotDefinitions = () => {
+    calls.push(['reconcileLoadedRobotDefinitions']);
+  };
+
+  const api = registerDataInitRuntime(runtime, env);
+  await api.loadRobotTypeConfig();
+
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ['setRobotTypeDefinitions', 'reconcileLoadedRobotDefinitions'],
+  );
+});
+
 test('mergeRuntimeRobotsIntoList keeps auto-monitor battery out of live test rows', async () => {
   const registerDataInitRuntime = await loadApi(async () => ({ ok: false }));
   const state = {
