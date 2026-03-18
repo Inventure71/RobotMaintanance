@@ -12,12 +12,12 @@
       },
       "testRefs": [
         "online",
-        "general",
-        "movement",
-        "battery",
-        "lidar",
-        "proximity",
-        "camera"
+        "topics_snapshot_rosbot_2_pro__battery",
+        "topics_snapshot_rosbot_2_pro__camera",
+        "topics_snapshot_rosbot_2_pro__general",
+        "topics_snapshot_rosbot_2_pro__lidar",
+        "topics_snapshot_rosbot_2_pro__movement",
+        "topics_snapshot_rosbot_2_pro__proximity"
       ],
       "fixRefs": [
         "flash_fix"

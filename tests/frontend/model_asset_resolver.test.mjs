@@ -97,3 +97,28 @@ test('resolveModelUrl falls back to first candidate when none exists', async () 
     'HEAD assets/models/LowRes/rosbot-2-pro.glb',
   ]);
 });
+
+test('bindModelViewerSource does not rewrite the same src on repeated bindings', async () => {
+  const { createModelAssetResolver } = await loadModule();
+  const resolver = createModelAssetResolver();
+  let srcWriteCount = 0;
+  const attributes = new Map();
+  const modelViewer = {
+    dataset: {},
+    getAttribute(name) {
+      return attributes.get(name) ?? null;
+    },
+    setAttribute(name, value) {
+      if (name === 'src') {
+        srcWriteCount += 1;
+      }
+      attributes.set(name, String(value));
+    },
+  };
+
+  resolver.bindModelViewerSource(modelViewer, 'assets/models/rosbot-2-pro.glb', 'low');
+  resolver.bindModelViewerSource(modelViewer, 'assets/models/rosbot-2-pro.glb', 'low');
+
+  assert.equal(modelViewer.getAttribute('src'), 'assets/models/LowRes/rosbot-2-pro.glb');
+  assert.equal(srcWriteCount, 1);
+});

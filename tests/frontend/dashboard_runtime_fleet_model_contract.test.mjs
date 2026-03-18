@@ -87,6 +87,7 @@ class FakeElement {
     this.title = '';
     this.type = '';
     this._className = '';
+    this.parentNode = null;
     this.classList = new FakeClassList(this);
   }
 
@@ -100,12 +101,54 @@ class FakeElement {
   }
 
   appendChild(child) {
+    if (child?.parentNode && child.parentNode !== this) {
+      child.parentNode.removeChild(child);
+    } else if (child?.parentNode === this) {
+      this.removeChild(child);
+    }
+    if (child) {
+      child.parentNode = this;
+    }
     this.children.push(child);
     return child;
   }
 
+  insertBefore(child, referenceChild) {
+    if (!referenceChild) return this.appendChild(child);
+    const referenceIndex = this.children.indexOf(referenceChild);
+    if (referenceIndex === -1) return this.appendChild(child);
+    if (child?.parentNode && child.parentNode !== this) {
+      child.parentNode.removeChild(child);
+    } else if (child?.parentNode === this) {
+      this.removeChild(child);
+    }
+    if (child) {
+      child.parentNode = this;
+    }
+    this.children.splice(referenceIndex, 0, child);
+    return child;
+  }
+
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index === -1) return child;
+    this.children.splice(index, 1);
+    if (child) {
+      child.parentNode = null;
+    }
+    return child;
+  }
+
   replaceChildren(...children) {
-    this.children = [...children];
+    this.children.forEach((child) => {
+      if (child) {
+        child.parentNode = null;
+      }
+    });
+    this.children = [];
+    children.forEach((child) => {
+      this.appendChild(child);
+    });
   }
 
   setAttribute(name, value) {
@@ -125,6 +168,17 @@ class FakeElement {
 
   addEventListener(eventName, handler) {
     this.listeners.set(eventName, handler);
+  }
+
+  get firstChild() {
+    return this.children[0] ?? null;
+  }
+
+  get nextSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.children.indexOf(this);
+    if (index === -1) return null;
+    return this.parentNode.children[index + 1] ?? null;
   }
 
   querySelector() {
@@ -403,5 +457,63 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
     assert.equal(env.offlineGrid.children[2].children[0].textContent, 'Inspector');
     assert.equal(env.offlineGrid.children[1].getAttribute('data-robot-id'), 'robot-offline-a');
     assert.equal(env.offlineGrid.children[3].getAttribute('data-robot-id'), 'robot-offline-b');
+  });
+});
+
+test('renderDashboard reuses existing robot card nodes on repeated runtime renders', async () => {
+  await withFakeDocument(async () => {
+    const createFleetFeature = await loadApi();
+    const env = makeEnv();
+    env.CAN_USE_MODEL_VIEWER = false;
+    env.normalizeStatus = (value) => normalizeText(value, 'warning').toLowerCase();
+    const runtime = makeRuntime(env);
+    const api = createFleetFeature(runtime, env);
+
+    api.setRobots([
+      {
+        id: 'robot-online-a',
+        name: 'Atlas',
+        type: 'Inspector',
+        typeId: 'inspector',
+        tests: {
+          online: { status: 'ok', value: 'reachable', details: 'up' },
+          movement: { status: 'warning', value: 'slow' },
+        },
+        battery: { value: '58%', status: 'ok', reason: '' },
+        activity: {},
+      },
+    ]);
+    api.renderDashboard();
+
+    const firstCard = env.onlineGrid.children.find(
+      (child) => child?.getAttribute?.('data-robot-id') === 'robot-online-a',
+    );
+
+    api.setRobots([
+      {
+        id: 'robot-online-a',
+        name: 'Atlas',
+        type: 'Inspector',
+        typeId: 'inspector',
+        tests: {
+          online: { status: 'ok', value: 'reachable', details: 'up' },
+          movement: { status: 'ok', value: 'clear' },
+        },
+        battery: { value: '61%', status: 'ok', reason: '' },
+        activity: { testing: true },
+      },
+    ]);
+    api.renderDashboard();
+
+    const secondCard = env.onlineGrid.children.find(
+      (child) => child?.getAttribute?.('data-robot-id') === 'robot-online-a',
+    );
+
+    assert.ok(firstCard);
+    assert.equal(secondCard, firstCard);
+    assert.equal(
+      env.onlineGrid.children.filter((child) => child?.getAttribute?.('data-robot-id') === 'robot-online-a').length,
+      1,
+    );
   });
 });

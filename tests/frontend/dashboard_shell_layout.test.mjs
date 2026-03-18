@@ -85,15 +85,20 @@ test('manage shell keeps the back action inside the tabs panel and removes the t
 
 test('recorder import step uses a visible manual-copy prompt field and removes the copy button', async () => {
   const html = await fs.readFile(INDEX_PATH, 'utf8');
+  const recorderPromptStart = html.indexOf('<div id="recorderSimplePromptStep"');
   const recorderImportStart = html.indexOf('<div id="recorderSimpleImportStep"');
   const recorderTerminalStart = html.indexOf('<div id="recorderTerminalPanel"');
 
+  assert.notEqual(recorderPromptStart, -1, 'expected recorder prompt step in index.html');
   assert.notEqual(recorderImportStart, -1, 'expected recorder import step in index.html');
   assert.notEqual(recorderTerminalStart, -1, 'expected recorder terminal panel after import step');
   assert.ok(recorderTerminalStart > recorderImportStart, 'expected recorder terminal panel after import step');
 
+  const recorderPromptSection = collapseWhitespace(html.slice(recorderPromptStart, recorderImportStart));
   const recorderImportSection = collapseWhitespace(html.slice(recorderImportStart, recorderTerminalStart));
 
+  assert.match(recorderPromptSection, /generated automatically when you continue/i);
+  assert.doesNotMatch(recorderPromptSection, /id="recorderGeneratePromptButton"/);
   assert.match(recorderImportSection, /Prompt to copy/);
   assert.match(recorderImportSection, /Ctrl\/Cmd\+A/);
   assert.match(recorderImportSection, /Ctrl\/Cmd\+C/);

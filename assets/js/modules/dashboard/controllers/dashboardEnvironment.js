@@ -412,7 +412,6 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderSimpleTranscriptAcknowledge = $('#recorderSimpleTranscriptAcknowledge');
     const recorderSimpleTerminalNextButton = $('#recorderSimpleTerminalNext');
     const recorderSimplePromptBackButton = $('#recorderSimplePromptBack');
-    const recorderGeneratePromptButton = $('#recorderGeneratePromptButton');
     const recorderSimplePromptNextButton = $('#recorderSimplePromptNext');
     const recorderSimpleImportBackButton = $('#recorderSimpleImportBack');
     const recorderValidateImportButton = $('#recorderValidateImportButton');
@@ -435,7 +434,6 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderPasteLlmResultButton = $('#recorderPasteLlmResultButton');
     const recorderLlmPromptModal = $('#recorderLlmPromptModal');
     const recorderLlmPromptCancelButton = $('#recorderLlmPromptCancelButton');
-    const recorderLlmCopyPromptButton = $('#recorderLlmCopyPromptButton');
     const recorderLlmSystemDetailsInput = $('#recorderLlmSystemDetailsInput');
     const recorderLlmTestRequestInput = $('#recorderLlmTestRequestInput');
     const recorderLlmPromptPreview = $('#recorderLlmPromptPreview');
@@ -742,7 +740,6 @@ const runtimeEnv = {
   recorderSimpleTranscriptAcknowledge,
   recorderSimpleTerminalNextButton,
   recorderSimplePromptBackButton,
-  recorderGeneratePromptButton,
   recorderSimplePromptNextButton,
   recorderSimpleImportBackButton,
   recorderValidateImportButton,
@@ -784,7 +781,6 @@ const runtimeEnv = {
   recorderPasteLlmResultButton,
   recorderLlmPromptModal,
   recorderLlmPromptCancelButton,
-  recorderLlmCopyPromptButton,
   recorderLlmSystemDetailsInput,
   recorderLlmTestRequestInput,
   recorderLlmPromptPreview,

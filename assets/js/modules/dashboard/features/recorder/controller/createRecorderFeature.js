@@ -191,7 +191,6 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderSimpleTranscriptAcknowledge,
     recorderSimpleTerminalNextButton,
     recorderSimplePromptBackButton,
-    recorderGeneratePromptButton,
     recorderSimplePromptNextButton,
     recorderSimpleImportBackButton,
     recorderValidateImportButton,
@@ -229,7 +228,6 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderPasteLlmResultButton,
     recorderLlmPromptModal,
     recorderLlmPromptCancelButton,
-    recorderLlmCopyPromptButton,
     recorderLlmSystemDetailsInput,
     recorderLlmTestRequestInput,
     recorderLlmPromptPreview,
@@ -760,7 +758,7 @@ export function createRecorderFeature(context, maybeEnv) {
           );
         }
         if (normalizedMode === 'advanced') {
-          if (!preserveDraft || !state.workflowRecorder?.started) {
+          if (!preserveDraft) {
             startNewTestDraft();
             return;
           }
@@ -904,21 +902,7 @@ export function createRecorderFeature(context, maybeEnv) {
         return normalizeText(state.recorderTerminalComponent?.exportTranscript?.(), '');
       }
 
-  function buildRecorderLlmPromptPayload({ systemDetails, userRequest, transcript }) {
-        return buildRecorderLlmPromptPayloadValue({
-          normalizeText,
-          renderRecorderLlmPromptTemplate,
-          definitionIdValue: recorderDefinitionIdInput?.value,
-          exportDraftContext: state.workflowRecorder?.exportDraftContext?.bind(state.workflowRecorder),
-          buildRobotContext: buildRecorderLlmRobotContext,
-          buildDefinitionContext: buildRecorderLlmDefinitionContext,
-          systemDetails,
-          userRequest,
-          transcript,
-        });
-      }
-
-  function getRecorderLlmPromptBuildResult() {
+  function getRecorderLlmPromptReadiness() {
         const transcript = getRecorderTerminalTranscript();
         const allowEmptyTranscript = Boolean(recorderSimpleTranscriptAcknowledge?.checked);
         if (!transcript && !allowEmptyTranscript) {
@@ -941,6 +925,34 @@ export function createRecorderFeature(context, maybeEnv) {
             error: 'What do you want to test? is required.',
           };
         }
+        return {
+          ok: true,
+          transcript,
+          systemDetails,
+          userRequest,
+        };
+      }
+
+  function buildRecorderLlmPromptPayload({ systemDetails, userRequest, transcript }) {
+        return buildRecorderLlmPromptPayloadValue({
+          normalizeText,
+          renderRecorderLlmPromptTemplate,
+          definitionIdValue: recorderDefinitionIdInput?.value,
+          exportDraftContext: state.workflowRecorder?.exportDraftContext?.bind(state.workflowRecorder),
+          buildRobotContext: buildRecorderLlmRobotContext,
+          buildDefinitionContext: buildRecorderLlmDefinitionContext,
+          systemDetails,
+          userRequest,
+          transcript,
+        });
+      }
+
+  function getRecorderLlmPromptBuildResult() {
+        const readiness = getRecorderLlmPromptReadiness();
+        if (!readiness.ok) {
+          return readiness;
+        }
+        const { transcript, systemDetails, userRequest } = readiness;
         const payload = buildRecorderLlmPromptPayload({ systemDetails, userRequest, transcript });
         return {
           ok: true,
@@ -1972,10 +1984,10 @@ export function createRecorderFeature(context, maybeEnv) {
         const suggestedId = robotIdValue
           ? slugifyRecorderValue(`${robotIdValue}_flow`, 'recorded_workflow')
           : 'recorded_workflow';
-        if (recorderDefinitionIdInput) {
+        if (recorderDefinitionIdInput && !normalizeText(recorderDefinitionIdInput.value, '')) {
           recorderDefinitionIdInput.value = suggestedId;
         }
-        if (recorderDefinitionLabelInput) {
+        if (recorderDefinitionLabelInput && !normalizeText(recorderDefinitionLabelInput.value, '')) {
           recorderDefinitionLabelInput.value = robotIdValue ? `Flow workflow (${robotIdValue})` : 'Recorded workflow';
         }
         if (recorderDefinitionDescriptionInput && !normalizeText(recorderDefinitionDescriptionInput.value, '')) {
@@ -1993,6 +2005,7 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderSimpleTranscriptAcknowledge) recorderSimpleTranscriptAcknowledge.checked = false;
         resetRecorderLlmImportState({ clearInput: true });
         setManageTabStatus('New test draft ready.', 'ok');
+        syncRecorderUiState();
       }
 
   function startNewFixDraft() {
@@ -2057,7 +2070,7 @@ export function createRecorderFeature(context, maybeEnv) {
         const commandReady = normalizeText(recorderCommandInput?.value, '') !== '';
         const transcriptReady = normalizeText(getRecorderTerminalTranscript(), '') !== '';
         const transcriptBypass = Boolean(recorderSimpleTranscriptAcknowledge?.checked);
-        const promptReady = normalizeText(state.recorderSimplePromptBundle, '') !== '';
+        const promptReady = getRecorderLlmPromptReadiness().ok;
         const importReady = Boolean(state.recorderSimpleImportValidated);
   
         if (recorderStateBadge) {
@@ -2077,7 +2090,7 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderCreateNewTestButton) {
           applyActionButton(recorderCreateNewTestButton, {
             intent: 'create',
-            label: 'Create new test',
+            label: 'Start creation of new test',
           });
         }
         if (recorderRunCaptureButton) {
@@ -2097,7 +2110,11 @@ export function createRecorderFeature(context, maybeEnv) {
           );
         }
         if (recorderPublishTestButton) {
-          recorderPublishTestButton.disabled = !recorderState.publishReady;
+          applyActionButton(recorderPublishTestButton, {
+            intent: 'create',
+            label: 'Publish test',
+            disabled: !recorderState.publishReady,
+          });
         }
 
         if (recorderModeSelector) {
@@ -2123,11 +2140,13 @@ export function createRecorderFeature(context, maybeEnv) {
         const showSimple = recorderMode === 'simple';
         const showAdvanced = recorderMode === 'advanced';
         const showTopbar = showAdvanced || (showSimple && simpleStep === 'publish');
+        const showStartDraft = showTopbar && showAdvanced && !recorderState.started;
+        const showPublishTest = showTopbar && recorderState.started;
         if (recorderSharedTopbar) {
           recorderSharedTopbar.classList.toggle('hidden', !showTopbar);
         }
         if (recorderTopbarNewDraftWrap) {
-          recorderTopbarNewDraftWrap.classList.toggle('hidden', !showAdvanced);
+          recorderTopbarNewDraftWrap.classList.toggle('hidden', !showStartDraft);
         }
         if (recorderTopbarRobotWrap) {
           recorderTopbarRobotWrap.classList.toggle('hidden', !(showAdvanced || (showSimple && simpleStep === 'select-robot')));
@@ -2136,7 +2155,7 @@ export function createRecorderFeature(context, maybeEnv) {
           recorderTopbarDefinitionWrap.classList.toggle('hidden', !(showAdvanced || (showSimple && simpleStep === 'publish')));
         }
         if (recorderTopbarPublishWrap) {
-          recorderTopbarPublishWrap.classList.toggle('hidden', !(showAdvanced || (showSimple && simpleStep === 'publish')));
+          recorderTopbarPublishWrap.classList.toggle('hidden', !showPublishTest);
         }
 
         if (recorderSimpleSelectRobotStep) {
@@ -2175,9 +2194,6 @@ export function createRecorderFeature(context, maybeEnv) {
         }
         if (recorderSimpleSelectRobotNextButton) {
           recorderSimpleSelectRobotNextButton.disabled = !robotSelected;
-        }
-        if (recorderGeneratePromptButton) {
-          recorderGeneratePromptButton.disabled = false;
         }
         if (recorderSimplePromptNextButton) {
           recorderSimplePromptNextButton.disabled = !promptReady;
@@ -2247,7 +2263,7 @@ export function createRecorderFeature(context, maybeEnv) {
           return;
         }
         if (!state.workflowRecorder.started) {
-          state.workflowRecorder.setStatus('Click "Create new test" first.', 'warn');
+          state.workflowRecorder.setStatus('Click "Start creation of new test" first.', 'warn');
           return;
         }
         if (!command) {
@@ -2603,11 +2619,9 @@ export function createRecorderFeature(context, maybeEnv) {
         recorderSimplePromptBackButton?.addEventListener('click', () => {
           setRecorderSimpleStep('terminal');
         });
-        recorderGeneratePromptButton?.addEventListener('click', () => {
-          refreshRecorderLlmPromptPreview();
-        });
         recorderSimplePromptNextButton?.addEventListener('click', () => {
-          if (normalizeText(state.recorderSimplePromptBundle, '')) {
+          const result = refreshRecorderLlmPromptPreview();
+          if (result.ok) {
             setRecorderSimpleStep('import');
           }
         });

@@ -1329,8 +1329,8 @@ export function createFleetFeature(context, maybeEnv) {
         const modelMarkup = buildRobotModelMarkup(robot, isOffline, preferredResolution);
         const is3D = modelMarkup.includes('model-viewer');
         return is3D
-          ? `<div class="robot-model-slot ${failureClasses} ${isOffline ? 'offline' : ''}">${modelMarkup}</div>`
-          : `<div class="robot-3d ${failureClasses} ${isOffline ? 'offline' : ''}">${modelMarkup}</div>`;
+          ? `<div class="robot-model-slot ${failureClasses} ${isOffline ? 'offline' : ''}" data-role="robot-model-container">${modelMarkup}</div>`
+          : `<div class="robot-3d ${failureClasses} ${isOffline ? 'offline' : ''}" data-role="robot-model-container">${modelMarkup}</div>`;
       }
 
   function issueSummary(robot) {
@@ -1382,18 +1382,30 @@ export function createFleetFeature(context, maybeEnv) {
         return divider;
       }
 
-  function renderRobotTypeGroups(container, robots) {
-        if (!container) return;
-        container.replaceChildren();
-        groupRobotsByType(robots).forEach((group) => {
-          container.appendChild(buildRobotTypeDivider(group));
-          group.robots.forEach((robot) => {
-            container.appendChild(renderCard(robot));
-          });
-        });
+  function syncRobotTypeDivider(divider, group) {
+        if (!divider) return divider;
+        divider.className = 'robot-type-divider';
+        divider.setAttribute('data-robot-type-group', group.key);
+
+        let label = divider.querySelector('.robot-type-divider-label');
+        if (!label) {
+          label = document.createElement('span');
+          label.className = 'robot-type-divider-label';
+          divider.appendChild(label);
+        }
+        label.textContent = group.label;
+
+        let count = divider.querySelector('.robot-type-divider-count');
+        if (!count) {
+          count = document.createElement('span');
+          count.className = 'robot-type-divider-count';
+          divider.appendChild(count);
+        }
+        count.textContent = `${group.robots.length} robot${group.robots.length === 1 ? '' : 's'}`;
+        return divider;
       }
 
-  function renderCard(robot) {
+  function describeRobotCard(robot) {
         const stateKey = statusFromScore(robot);
         const isCritical = stateKey === 'critical';
         const normalizedRobotId = robotId(robot);
@@ -1412,60 +1424,311 @@ export function createFleetFeature(context, maybeEnv) {
           isFixing,
           compactAutoSearch,
         });
-        const card = document.createElement('article');
-        card.className = ['robot-card', isCritical ? 'error' : '', stateClass, selected ? 'selected' : '', isTesting || isSearching || isFixing ? 'testing' : '', isOffline ? 'offline' : '']
-          .filter(Boolean)
-          .join(' ');
-        card.setAttribute('data-robot-id', normalizedRobotId);
         const issues = issueSummary(robot);
-        const list = issues.map((i) => `<span class="error-badge">${i}</span>`).join('');
-  
+        const badgeMarkup = issues.map((issue) => `<span class="error-badge">${issue}</span>`).join('');
         const failureClasses = nonBatteryTestEntries(robot)
           .filter(([, test]) => test.status !== 'ok')
           .map(([id]) => `fault-${id}`)
           .join(' ');
-  
-        const title = robot.name;
-        const tests = issueSummary(robot).join(', ') || 'No active errors';
-        const batteryState = getRobotBatteryState(robot);
-        const lastFullTestLabel = buildLastFullTestPillLabel(robot);
+
+        return {
+          stateKey,
+          isCritical,
+          normalizedRobotId,
+          isOffline,
+          selected,
+          isTesting,
+          isSearching,
+          isFixing,
+          compactAutoSearch,
+          isCountingDown,
+          testCountdown,
+          stateClass,
+          overlayMarkup,
+          badgeMarkup,
+          failureClasses,
+          title: robot.name,
+          subtitle: robot.type,
+          issueSummaryText: issues.join(', ') || 'No active errors',
+          batteryState: getRobotBatteryState(robot),
+          lastFullTestLabel: buildLastFullTestPillLabel(robot),
+        };
+      }
+
+  function syncStatusChipNode(node, stateKey) {
+        if (!node) return;
+        const tone = getStatusChipTone(stateKey);
+        node.className = `status-chip ${tone.css}`;
+        node.textContent = tone.text;
+      }
+
+  function syncSelectRobotButton(button, normalizedRobotId, selected) {
+        if (!button) return;
+        button.className = `button robot-select-btn ${selected ? 'selected' : ''}`.trim();
+        button.type = 'button';
+        button.setAttribute('data-action', 'select-robot');
+        button.setAttribute('data-button-intent', 'selection');
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        const label = selected ? 'Deselect robot' : 'Select robot';
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+        button.textContent = selected ? '[x]' : '[ ]';
+        if (normalizedRobotId) {
+          button.setAttribute('data-robot-id', normalizedRobotId);
+        }
+      }
+
+  function createNodeFromMarkup(markup) {
+        if (!markup) return null;
+        const template = document.createElement('template');
+        template.innerHTML = markup.trim();
+        return template.content.firstElementChild;
+      }
+
+  function syncModelWrapContent(card, robot, descriptor) {
+        if (!card) return;
+        const modelWrap = card.querySelector('.model-wrap');
+        if (!modelWrap) return;
+
+        const badgeStrip = modelWrap.querySelector('[data-role="badge-strip"]');
+        if (badgeStrip && badgeStrip.innerHTML !== descriptor.badgeMarkup) {
+          badgeStrip.innerHTML = descriptor.badgeMarkup;
+        }
+
+        const desiredConnectionMarkup = buildConnectionCornerIconMarkup(
+          descriptor.isOffline,
+          descriptor.compactAutoSearch,
+        );
+        const existingConnectionIcon = modelWrap.querySelector('[data-role="connection-corner-icon"]');
+        if (existingConnectionIcon) {
+          const replacementConnectionIcon = createNodeFromMarkup(desiredConnectionMarkup);
+          if (replacementConnectionIcon) {
+            existingConnectionIcon.replaceWith(replacementConnectionIcon);
+          }
+        } else {
+          const insertedConnectionIcon = createNodeFromMarkup(desiredConnectionMarkup);
+          if (insertedConnectionIcon) {
+            modelWrap.insertBefore(insertedConnectionIcon, modelWrap.firstChild);
+          }
+        }
+
+        const existingCountdown = modelWrap.querySelector('.scan-countdown');
+        if (descriptor.isCountingDown) {
+          if (existingCountdown) {
+            existingCountdown.className = 'scan-countdown';
+            existingCountdown.setAttribute('data-robot-id', descriptor.normalizedRobotId);
+            existingCountdown.textContent = descriptor.testCountdown;
+          } else {
+            const countdownNode = document.createElement('div');
+            countdownNode.className = 'scan-countdown';
+            countdownNode.setAttribute('data-robot-id', descriptor.normalizedRobotId);
+            countdownNode.textContent = descriptor.testCountdown;
+            const modelContainer = modelWrap.querySelector('[data-role="robot-model-container"]');
+            modelWrap.insertBefore(countdownNode, modelContainer || null);
+          }
+        } else if (existingCountdown) {
+          existingCountdown.remove();
+        }
+
+        const existingOverlay = modelWrap.querySelector('[data-role="activity-overlay"]');
+        if (descriptor.overlayMarkup) {
+          const overlayNode = createNodeFromMarkup(descriptor.overlayMarkup);
+          if (existingOverlay) {
+            if (overlayNode) {
+              existingOverlay.replaceWith(overlayNode);
+            }
+          } else if (overlayNode) {
+            modelWrap.appendChild(overlayNode);
+          }
+        } else if (existingOverlay) {
+          existingOverlay.remove();
+        }
+
+        const desiredModelContainer = createNodeFromMarkup(
+          buildRobotModelContainer(robot, descriptor.failureClasses, descriptor.isOffline),
+        );
+        const existingModelContainer = modelWrap.querySelector('[data-role="robot-model-container"]');
+        const existingUsesModelViewer = Boolean(existingModelContainer?.querySelector?.('model-viewer'));
+        const desiredUsesModelViewer = Boolean(desiredModelContainer?.querySelector?.('model-viewer'));
+        const existingBaseModelUrl = normalizeText(
+          existingModelContainer?.querySelector?.('model-viewer')?.dataset?.modelResolutionBaseUrl,
+          '',
+        );
+        const desiredBaseModelUrl = normalizeText(
+          desiredModelContainer?.querySelector?.('model-viewer')?.dataset?.modelResolutionBaseUrl,
+          '',
+        );
+        const shouldReplaceModelContainer =
+          !existingModelContainer
+          || !desiredModelContainer
+          || existingUsesModelViewer !== desiredUsesModelViewer
+          || existingBaseModelUrl !== desiredBaseModelUrl;
+        if (shouldReplaceModelContainer) {
+          if (existingModelContainer && desiredModelContainer) {
+            existingModelContainer.replaceWith(desiredModelContainer);
+          } else if (!existingModelContainer && desiredModelContainer) {
+            modelWrap.appendChild(desiredModelContainer);
+          }
+        } else {
+          existingModelContainer.className = desiredModelContainer.className;
+          existingModelContainer.setAttribute('data-role', 'robot-model-container');
+        }
+
+        syncModelViewerRotationForContainer(card, descriptor.isOffline);
+      }
+
+  function syncRobotCard(card, robot) {
+        if (!card) return card;
+        const descriptor = describeRobotCard(robot);
+        card.className = [
+          'robot-card',
+          descriptor.isCritical ? 'error' : '',
+          descriptor.stateClass,
+          descriptor.selected ? 'selected' : '',
+          descriptor.isTesting || descriptor.isSearching || descriptor.isFixing ? 'testing' : '',
+          descriptor.isOffline ? 'offline' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        card.setAttribute('data-robot-id', descriptor.normalizedRobotId);
+
+        const titleNode = card.querySelector('.robot-card-title');
+        if (titleNode) {
+          titleNode.textContent = descriptor.title;
+        }
+
+        const subtitleNode = card.querySelector('.robot-card-sub');
+        if (subtitleNode) {
+          subtitleNode.textContent = descriptor.subtitle;
+        }
+
+        syncStatusChipNode(card.querySelector('[data-role="card-status-chip"]'), descriptor.stateKey);
+        syncSelectRobotButton(
+          card.querySelector('[data-action="select-robot"]'),
+          descriptor.normalizedRobotId,
+          descriptor.selected,
+        );
+        syncModelWrapContent(card, robot, descriptor);
+
+        const issuesPill = card.querySelector('[data-role="issues-pill"]');
+        if (issuesPill) {
+          issuesPill.textContent = `Issue cluster: ${descriptor.issueSummaryText}`;
+        }
+
+        const movementPill = card.querySelector('[data-role="movement-pill"]');
+        if (movementPill) {
+          movementPill.textContent = `Movement: ${robot.tests.movement?.value || 'n/a'}`;
+        }
+
+        const lastFullTestPill = card.querySelector('[data-role="last-full-test-pill"]');
+        if (lastFullTestPill) {
+          lastFullTestPill.textContent = descriptor.lastFullTestLabel;
+        }
+
+        const batteryHost = card.querySelector('[data-role="summary-battery-pill"]');
+        if (batteryHost) {
+          batteryHost.innerHTML = renderBatteryPill({
+            value: descriptor.batteryState.value,
+            status: descriptor.batteryState.status,
+            reason: descriptor.batteryState.reason,
+            size: 'default',
+          });
+        }
+
+        hydrateActionButtons(card);
+        return card;
+      }
+
+  function renderRobotTypeGroups(container, robots) {
+        if (!container) return;
+        const existingCardsById = new Map();
+        const existingDividersByGroup = new Map();
+        Array.from(container.children || []).forEach((child) => {
+          if (!child) return;
+          const childRobotId = normalizeText(child.getAttribute?.('data-robot-id'), '');
+          if (childRobotId) {
+            existingCardsById.set(childRobotId, child);
+            return;
+          }
+          const childGroupKey = normalizeText(child.getAttribute?.('data-robot-type-group'), '');
+          if (childGroupKey) {
+            existingDividersByGroup.set(childGroupKey, child);
+          }
+        });
+
+        const desiredNodes = [];
+        groupRobotsByType(robots).forEach((group) => {
+          const divider = syncRobotTypeDivider(
+            existingDividersByGroup.get(group.key) || buildRobotTypeDivider(group),
+            group,
+          );
+          desiredNodes.push(divider);
+          group.robots.forEach((robot) => {
+            const normalizedRobotId = robotId(robot);
+            const existingCard = existingCardsById.get(normalizedRobotId);
+            desiredNodes.push(existingCard ? syncRobotCard(existingCard, robot) : renderCard(robot));
+          });
+        });
+
+        let cursor = container.firstChild;
+        desiredNodes.forEach((node) => {
+          if (node !== cursor) {
+            container.insertBefore(node, cursor || null);
+          }
+          cursor = node.nextSibling;
+        });
+
+        while (cursor) {
+          const next = cursor.nextSibling;
+          container.removeChild(cursor);
+          cursor = next;
+        }
+      }
+
+  function renderCard(robot) {
+        const descriptor = describeRobotCard(robot);
+        const card = document.createElement('article');
+        card.className = ['robot-card', descriptor.isCritical ? 'error' : '', descriptor.stateClass, descriptor.selected ? 'selected' : '', descriptor.isTesting || descriptor.isSearching || descriptor.isFixing ? 'testing' : '', descriptor.isOffline ? 'offline' : '']
+          .filter(Boolean)
+          .join(' ');
+        card.setAttribute('data-robot-id', descriptor.normalizedRobotId);
   
         card.innerHTML = `
           <div class="glow-bar"></div>
           <div class="robot-card-header">
             <div>
-              <h3 class="robot-card-title">${title}</h3>
-              <p class="robot-card-sub">${robot.type}</p>
+              <h3 class="robot-card-title">${descriptor.title}</h3>
+              <p class="robot-card-sub">${descriptor.subtitle}</p>
             </div>
             <div class="robot-card-header-actions">
-              ${statusChip(stateKey, 'card-status-chip')}
+              ${statusChip(descriptor.stateKey, 'card-status-chip')}
               <button
-                class="button robot-select-btn ${selected ? 'selected' : ''}"
+                class="button robot-select-btn ${descriptor.selected ? 'selected' : ''}"
                 type="button"
                 data-action="select-robot"
                 data-button-intent="selection"
-                aria-pressed="${selected ? 'true' : 'false'}"
-                aria-label="${selected ? 'Deselect robot' : 'Select robot'}"
-                title="${selected ? 'Deselect robot' : 'Select robot'}">
-                ${selected ? '[x]' : '[ ]'}
+                aria-pressed="${descriptor.selected ? 'true' : 'false'}"
+                aria-label="${descriptor.selected ? 'Deselect robot' : 'Select robot'}"
+                title="${descriptor.selected ? 'Deselect robot' : 'Select robot'}">
+                ${descriptor.selected ? '[x]' : '[ ]'}
               </button>
             </div>
           </div>
           <div class="model-wrap">
-            <div class="badge-strip" data-role="badge-strip">${list}</div>
-            ${buildConnectionCornerIconMarkup(isOffline, compactAutoSearch)}
-            ${isCountingDown ? `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>` : ''}
-            ${buildRobotModelContainer(robot, failureClasses, isOffline)}
-            ${overlayMarkup}
+            <div class="badge-strip" data-role="badge-strip">${descriptor.badgeMarkup}</div>
+            ${buildConnectionCornerIconMarkup(descriptor.isOffline, descriptor.compactAutoSearch)}
+            ${descriptor.isCountingDown ? `<div class="scan-countdown" data-robot-id="${descriptor.normalizedRobotId}">${descriptor.testCountdown}</div>` : ''}
+            ${buildRobotModelContainer(robot, descriptor.failureClasses, descriptor.isOffline)}
+            ${descriptor.overlayMarkup}
           </div>
           <div class="summary">
-            <span class="pill" data-role="issues-pill">Issue cluster: ${tests}</span>
+            <span class="pill" data-role="issues-pill">Issue cluster: ${descriptor.issueSummaryText}</span>
             <span class="pill" data-role="movement-pill">Movement: ${robot.tests.movement?.value || 'n/a'}</span>
-            <span class="pill" data-role="last-full-test-pill">${lastFullTestLabel}</span>
+            <span class="pill" data-role="last-full-test-pill">${descriptor.lastFullTestLabel}</span>
             <span data-role="summary-battery-pill">${renderBatteryPill({
-              value: batteryState.value,
-              status: batteryState.status,
-              reason: batteryState.reason,
+              value: descriptor.batteryState.value,
+              status: descriptor.batteryState.status,
+              reason: descriptor.batteryState.reason,
               size: 'default',
             })}</span>
           </div>`.trim().replace(/>\s+</g, '><');
@@ -1475,7 +1738,7 @@ export function createFleetFeature(context, maybeEnv) {
           if (selectButton) {
             event.preventDefault();
             event.stopPropagation();
-                setRobotSelection(normalizedRobotId, !isRobotSelected(normalizedRobotId));
+                setRobotSelection(descriptor.normalizedRobotId, !isRobotSelected(descriptor.normalizedRobotId));
                 return;
               }
   
@@ -1483,7 +1746,7 @@ export function createFleetFeature(context, maybeEnv) {
         });
   
         hydrateActionButtons(card);
-        syncModelViewerRotationForContainer(card, isOffline);
+        syncModelViewerRotationForContainer(card, descriptor.isOffline);
   
         return card;
       }

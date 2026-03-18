@@ -467,7 +467,19 @@ function makeEnv() {
     normalizeText,
     buildApiUrl: (route) => `http://localhost${route}`,
     state,
-    applyActionButton: () => {},
+    applyActionButton: (button, options = {}) => {
+      if (!button) return;
+      if (typeof options.label === 'string') {
+        button.textContent = options.label;
+      }
+      if (options.disabled !== undefined) {
+        button.disabled = Boolean(options.disabled);
+      }
+      button.dataset = button.dataset || {};
+      if (typeof options.intent === 'string') {
+        button.dataset.buttonIntent = options.intent;
+      }
+    },
     manageDefinitionFilterButtons,
     manageDefinitionsList: makeNode(),
     manageFlowModeButtons,
@@ -526,7 +538,6 @@ function makeEnv() {
     recorderSimpleTranscriptAcknowledge: { checked: false, addEventListener: () => {} },
     recorderSimpleTerminalNextButton: makeNode(),
     recorderSimplePromptBackButton: makeNode(),
-    recorderGeneratePromptButton: makeNode(),
     recorderSimplePromptNextButton: makeNode(),
     recorderSimpleImportBackButton: makeNode(),
     recorderValidateImportButton: makeNode(),
@@ -541,7 +552,6 @@ function makeEnv() {
     recorderPasteLlmResultButton: makeNode(),
     recorderLlmPromptModal: makeNode(),
     recorderLlmPromptCancelButton: makeNode(),
-    recorderLlmCopyPromptButton: makeNode(),
     recorderLlmSystemDetailsInput: makeNode(),
     recorderLlmTestRequestInput: makeNode(),
     recorderLlmPromptPreview: makeNode(),
@@ -551,16 +561,16 @@ function makeEnv() {
     recorderLlmImportLoadButton: makeNode(),
     recorderLlmImportInput: makeNode(),
     recorderLlmImportStatus: makeNode(),
-    recorderPublishTestButton: {},
-    recorderAddOutputBtn: {},
+    recorderPublishTestButton: makeNode(),
+    recorderAddOutputBtn: makeNode(),
     recorderAddWriteBtn: makeNode(),
-    recorderAddReadBtn: {},
-    recorderRunCaptureButton: {},
+    recorderAddReadBtn: makeNode(),
+    recorderRunCaptureButton: makeNode(),
     recorderStateBadge: makeNode(),
     recorderStepCountBadge: makeNode(),
     recorderCheckCountBadge: makeNode(),
     recorderOutputCountBadge: makeNode(),
-    recorderCreateNewTestButton: {},
+    recorderCreateNewTestButton: makeNode(),
     recorderCommandInput: makeNode(),
     recorderRobotSelect: makeNode(),
     recorderOutputKeyInput: makeNode(),
@@ -826,6 +836,46 @@ test('refreshRecorderLlmPromptPreview fills the manual-copy prompt box and updat
   assert.match(env.recorderLlmPromptStatus.textContent, /copy it from the box in the next step/i);
 });
 
+test('Simple prompt step auto-generates the prompt and advances to import on Next', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.recorderRobotSelect.value = 'rosbot';
+  env.recorderDefinitionIdInput.value = 'battery_health';
+  env.recorderDefinitionLabelInput.value = 'Battery health';
+  env.recorderLlmSystemDetailsInput.value = 'ROS 2 Humble, Ubuntu 22.04, rostopic available';
+  env.recorderLlmTestRequestInput.value = 'Verify battery and camera topics are present after startup.';
+  env.state.recorderMode = 'simple';
+  env.state.recorderSimpleStep = 'prompt';
+  env.recorderCreateNewTestButton = makeNode();
+  env.recorderRunCaptureButton = makeNode();
+  env.recorderAddOutputBtn = makeNode();
+  env.recorderAddWriteBtn = makeNode();
+  env.recorderAddReadBtn = makeNode();
+  env.recorderPublishTestButton = makeNode();
+  env.RobotTerminalComponent = function MockRobotTerminalComponent() {
+    this.exportTranscript = () => 'robot@rosbot$ rostopic list\n/battery\n/camera';
+    this.dispose = () => {};
+  };
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.initWorkflowRecorder();
+  api.setRecorderMode('simple', { targetStep: 'prompt' });
+  assert.equal(env.recorderSimplePromptNextButton.disabled, false);
+
+  env.recorderSimplePromptNextButton.click();
+
+  assert.equal(env.state.recorderSimpleStep, 'import');
+  assert.match(env.recorderLlmPromptPreview.value, /"id": "battery_health"/);
+  assert.match(env.recorderLlmPromptStatus.textContent, /copy it from the box in the next step/i);
+});
+
 test('loadRecorderLlmImportResult rejects invalid JSON without mutating the current draft', async () => {
   const createRecorderFeature = await loadApi();
   const env = makeEnv();
@@ -1002,6 +1052,36 @@ test('setRecorderMode simple starts on robot selection before terminal context',
   assert.equal(env.recorderSimpleSelectRobotNextButton.disabled, true);
 });
 
+test('setRecorderMode advanced shows the start CTA before a draft exists', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.state.workflowRecorder.started = false;
+  env.state.workflowRecorder.getState = () => ({
+    started: false,
+    writeCount: 0,
+    readCount: 0,
+    outputCount: 0,
+    publishReady: false,
+    blockingIssues: ['Click "Start creation of new test" to start a draft.'],
+    editingOutputKey: '',
+    editingReadBlockId: '',
+  });
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.setRecorderMode('advanced');
+
+  assert.equal(env.state.recorderMode, 'advanced');
+  assert.equal(env.recorderSharedTopbar.classList.contains('hidden'), false);
+  assert.equal(env.recorderAdvancedWorkspace.classList.contains('hidden'), false);
+  assert.equal(env.recorderTerminalPanel.classList.contains('hidden'), false);
+  assert.equal(env.recorderAssignmentPanel.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), true);
+  assert.equal(env.recorderCreateNewTestButton.textContent, 'Start creation of new test');
+  assert.equal(env.recorderPublishTestButton.textContent, 'Publish test');
+});
+
 test('setRecorderMode advanced shows the full manual workspace', async () => {
   const createRecorderFeature = await loadApi();
   const env = makeEnv();
@@ -1016,11 +1096,30 @@ test('setRecorderMode advanced shows the full manual workspace', async () => {
   assert.equal(env.recorderTerminalPanel.classList.contains('hidden'), false);
   assert.equal(env.recorderSimpleTerminalActions.classList.contains('hidden'), true);
   assert.equal(env.recorderAssignmentPanel.classList.contains('hidden'), false);
-  assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), true);
   assert.equal(env.recorderTopbarRobotWrap.classList.contains('hidden'), false);
   assert.equal(env.recorderTopbarDefinitionWrap.classList.contains('hidden'), false);
   assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderCreateNewTestButton.textContent, 'Start creation of new test');
+  assert.equal(env.recorderPublishTestButton.textContent, 'Publish test');
   assert.equal(env.recorderTopbarRobotWrap.parentNode, env.recorderSharedTopbarMain);
+});
+
+test('setRecorderMode simple publish step only shows the publish CTA', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.setRecorderMode('simple', { targetStep: 'publish' });
+
+  assert.equal(env.state.recorderMode, 'simple');
+  assert.equal(env.state.recorderSimpleStep, 'publish');
+  assert.equal(env.recorderSharedTopbar.classList.contains('hidden'), false);
+  assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), true);
+  assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), false);
+  assert.equal(env.recorderCreateNewTestButton.textContent, 'Start creation of new test');
+  assert.equal(env.recorderPublishTestButton.textContent, 'Publish test');
 });
 
 test('resetRecorderTestEntry clears the current recorder draft and returns to mode selector', async () => {

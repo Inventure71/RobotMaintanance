@@ -159,7 +159,7 @@ export function createModelAssetResolver(options = {}) {
     modelViewer.dataset.modelResolutionBaseUrl = normalizedBaseUrl;
 
     const initialUrl = getInitialModelUrl(normalizedBaseUrl, normalizedQuality);
-    if (initialUrl) {
+    if (initialUrl && modelViewer.getAttribute('src') !== initialUrl) {
       modelViewer.setAttribute('src', initialUrl);
     }
 

@@ -661,7 +661,7 @@
                       </div>
                       <div class="recorder-topbar-actions">
                         <div id="recorderTopbarNewDraftWrap" class="recorder-topbar-slot">
-                          <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Create new test</button>
+                          <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Start creation of new test</button>
                         </div>
                         <div id="recorderTopbarPublishWrap" class="recorder-topbar-slot">
                           <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish test</button>
@@ -763,7 +763,7 @@
                 <div id="recorderSimplePromptStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="prompt">
                   <div class="recorder-simple-step-header">
                     <h2 id="recorderSimplePromptTitle">3. Ask Your LLM</h2>
-                    <p class="muted-copy">Describe the stack and the exact test objective, then generate the prompt bundle.</p>
+                    <p class="muted-copy">Describe the stack and the exact test objective. The prompt bundle will be generated automatically when you continue.</p>
                   </div>
                   <label class="recorder-llm-label" for="recorderLlmSystemDetailsInput">System / stack details</label>
                   <textarea id="recorderLlmSystemDetailsInput" class="recorder-llm-textarea" rows="5"
@@ -775,8 +775,6 @@
                   <div class="recorder-step-actions">
                     <button id="recorderSimplePromptBack" class="button" type="button"
                       data-button-intent="navigation">Back</button>
-                    <button id="recorderGeneratePromptButton" class="button" type="button"
-                      data-button-intent="utility">Generate prompt</button>
                     <button id="recorderSimplePromptNext" class="button" type="button"
                       data-button-intent="create">Next: Copy And Paste Result</button>
                   </div>
