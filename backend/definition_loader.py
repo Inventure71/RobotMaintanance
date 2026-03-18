@@ -194,6 +194,7 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": definition_id,
         "label": normalize_text(raw.get("label"), definition_id),
+        "description": normalize_text(raw.get("description"), ""),
         "enabled": bool(raw.get("enabled", True)),
         "mode": mode,
         "execute": normalized_execute,
@@ -229,8 +230,6 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
                 normalized_step[key] = raw_step.get(key)
         normalized_execute.append(normalized_step)
 
-    post_test_ids = raw.get("postTestIds") if isinstance(raw.get("postTestIds"), list) else []
-    post_test_ids = [normalize_text(item, "") for item in post_test_ids if normalize_text(item, "")]
     run_at_connection = raw.get("runAtConnection", False)
     if not isinstance(run_at_connection, bool):
         raise ValueError(f"Fix definition '{fix_id}' must define boolean runAtConnection")
@@ -242,7 +241,6 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
         "enabled": bool(raw.get("enabled", True)),
         "runAtConnection": run_at_connection,
         "execute": normalized_execute,
-        "postTestIds": post_test_ids,
         "params": raw.get("params") if isinstance(raw.get("params"), dict) else {},
     }
 

@@ -182,7 +182,6 @@ export function registerDetailShellRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,
@@ -491,7 +490,7 @@ export function registerDetailShellRuntime(runtime, env) {
         if (titleBar) {
           titleBar.innerHTML = `
             <span class="detail-title-main">${robot.name}</span>
-            <span class="detail-title-type">(${robot.type})</span>`;
+            <span class="detail-title-type">(${robot.type})</span>`.trim().replace(/>\s+</g, '><');
         }
         if (statusBar) {
           statusBar.innerHTML = `
@@ -503,7 +502,7 @@ export function registerDetailShellRuntime(runtime, env) {
               size: 'small',
             })}
             <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-            <span class="detail-issue-count">${errorCount} issue(s)</span>`;
+            <span class="detail-issue-count">${errorCount} issue(s)</span>`.trim().replace(/>\s+</g, '><');
         }
   
         const modelMarkup = buildRobotModelContainer(
@@ -550,7 +549,7 @@ export function registerDetailShellRuntime(runtime, env) {
               <div class="test-actions">
               <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${def.id}" title="Show detailed output">Info</button>
               <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
-            </div>`;
+            </div>`.trim().replace(/>\s+</g, '><');
           const valueNode = row.querySelector('[data-role="detail-test-value"]');
           if (valueNode) {
             valueNode.title = previewText;
@@ -585,9 +584,9 @@ export function registerDetailShellRuntime(runtime, env) {
                 <span class="test-value" data-role="detail-test-value">${previewText}</span>
               </div>
               <div class="test-actions">
-                <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
-                <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
-              </div>`;
+              <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
+              <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
+            </div>`.trim().replace(/>\s+</g, '><');
             const valueNode = row.querySelector('[data-role="detail-test-value"]');
             if (valueNode) {
               valueNode.title = previewText;
@@ -611,6 +610,7 @@ export function registerDetailShellRuntime(runtime, env) {
           setTerminalActive();
         }
         hydrateActionButtons(detail);
+        setRunningButtonState(Boolean(state.isTestRunInProgress));
         if (state.fixModeOpen.detail) {
           renderFixModeActionsForContext(FIX_MODE_CONTEXT_DETAIL);
         }
@@ -1934,7 +1934,7 @@ export function registerDetailShellRuntime(runtime, env) {
           <option value="warning">Warnings</option>
           <option value="critical">Critical</option>
           <option value="error">Any error</option>
-        `;
+        `.trim().replace(/>\s+</g, '><');
   
         Array.from(knownTestDefinitions.values()).forEach((test) => {
           const option = document.createElement('option');

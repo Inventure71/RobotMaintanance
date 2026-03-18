@@ -400,12 +400,12 @@ function makeEnv() {
     manageFixLabelInput: makeNode(),
     manageFixDescriptionInput: makeNode(),
     manageFixExecuteJsonInput: makeNode(),
-    manageFixPostTestsInput: makeNode(),
     manageFixRunAtConnectionInput: { checked: false },
     manageFixRobotTypeTargets: makeNode(),
     manageDeleteFixButton: { style: {}, addEventListener: () => {} },
     recorderDefinitionIdInput: makeNode(),
     recorderDefinitionLabelInput: makeNode(),
+    recorderDefinitionDescriptionInput: makeNode(),
     recorderRunAtConnectionInput: { checked: true },
     recorderLastEditingOutputKey: '',
     recorderLastEditingReadBlockId: '',
@@ -502,6 +502,7 @@ test('loadExistingTestIntoRecorder hydrates the full flow builder and switches t
   const definition = {
     id: 'battery_health',
     label: 'Battery health',
+    description: 'Verify the battery topic is present.',
     checks: [
       {
         id: 'battery_health__battery',
@@ -521,6 +522,7 @@ test('loadExistingTestIntoRecorder hydrates the full flow builder and switches t
   assert.equal(env.state.workflowRecorder.loaded, definition);
   assert.equal(env.recorderDefinitionIdInput.value, 'battery_health');
   assert.equal(env.recorderDefinitionLabelInput.value, 'Battery health');
+  assert.equal(env.recorderDefinitionDescriptionInput.value, 'Verify the battery topic is present.');
   assert.equal(env.recorderRunAtConnectionInput.checked, false);
   assert.equal(env.state.activeManageTab, 'recorder');
   assert.equal(env.manageTabPanels[0].classList.contains('active'), false);
@@ -547,7 +549,6 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
       label: 'Flash fix',
       description: 'Reflash firmware',
       execute: [{ id: 'fix_step_1', command: 'flash' }],
-      postTestIds: ['battery_health'],
       runAtConnection: true,
     },
   ];

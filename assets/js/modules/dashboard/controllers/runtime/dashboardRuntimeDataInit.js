@@ -111,7 +111,6 @@ export function registerDataInitRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,

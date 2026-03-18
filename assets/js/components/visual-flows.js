@@ -1,4 +1,9 @@
-import { createFlowBlockContainer, createFlowBlockPreset, createFlowEmptyState } from './flow-block-presets.js';
+import {
+  commandUsesSudo,
+  createFlowBlockContainer,
+  createFlowBlockPreset,
+  createFlowEmptyState,
+} from './flow-block-presets.js';
 
 export function initVisualFlows() {
   const tExecInput = document.getElementById('manageTestExecuteJson');
@@ -66,10 +71,13 @@ export function initVisualFlows() {
     }
   }
 
-  function createFlowBlock(isWrite, data, onRemove, onSave) {
+function createFlowBlock(isWrite, data, onRemove, onSave) {
+    const usesSudo = isWrite && commandUsesSudo(data.command);
     const title = isWrite ? `WRITE ${data.command || '???'}` : `READ ${data.id || '???'}`;
     const description = isWrite
-      ? `Saves as: ${data.saveAs || data.id}`
+      ? usesSudo
+        ? `Saves as: ${data.saveAs || data.id} · Risk: executes with sudo privileges`
+        : `Saves as: ${data.saveAs || data.id}`
       : `${data.read?.kind || 'unknown'} from ${data.read?.inputRef || 'unknown'}`;
 
     return createFlowBlockPreset({
@@ -77,6 +85,9 @@ export function initVisualFlows() {
       icon: isWrite ? '✍️' : '🔍',
       title,
       description,
+      riskLevel: usesSudo ? 'sudo' : '',
+      riskLabel: 'sudo risk',
+      riskTitle: 'This write block runs with sudo privileges.',
       onRemove,
       renderEditor: (editor) => {
         if (isWrite) {
@@ -90,7 +101,7 @@ export function initVisualFlows() {
             <div style="display:flex; justify-content:flex-end;">
               <button type="button" class="button save-btn">Save Block</button>
             </div>
-          `;
+          `.trim().replace(/>\s+</g, '><');
           const saveBtn = editor.querySelector('.save-btn');
           saveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -104,6 +115,9 @@ export function initVisualFlows() {
         const isStr = data.read?.kind === 'contains_string';
         const isAny = data.read?.kind === 'contains_any_string';
         const isLines = data.read?.kind === 'contains_lines_unordered';
+        const selectedReadString = isStr ? ' selected="selected"' : '';
+        const selectedReadAny = isAny ? ' selected="selected"' : '';
+        const selectedReadLines = isLines ? ' selected="selected"' : '';
         let needleVal = data.read?.needle || '';
         if (isAny && data.read?.needles) needleVal = data.read.needles.join(', ');
         if (isLines && data.read?.lines) needleVal = data.read.lines.join('\n');
@@ -117,9 +131,9 @@ export function initVisualFlows() {
           </label>
           <label class="form-field">Matcher Kind
             <select class="form-input kind-input">
-              <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
-              <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
-              <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
+              <option value="contains_string"${selectedReadString}>Contains String</option>
+              <option value="contains_any_string"${selectedReadAny}>Contains Any String</option>
+              <option value="contains_lines_unordered"${selectedReadLines}>Contains Lines Unordered</option>
             </select>
           </label>
           <label class="form-field">Matching Value (String / Comma sep / Lines)
@@ -134,7 +148,7 @@ export function initVisualFlows() {
           <div style="display:flex; justify-content:flex-end;">
             <button type="button" class="button save-btn">Save Block</button>
           </div>
-        `;
+        `.trim().replace(/>\s+</g, '><');
         const saveBtn = editor.querySelector('.save-btn');
         saveBtn.addEventListener('click', (e) => {
           e.stopPropagation();

@@ -148,7 +148,9 @@ class DefinitionExecuteStep(BaseModel):
 
 class TestDefinitionUpsertRequest(BaseModel):
     id: str = Field(min_length=1)
+    previousId: str | None = None
     label: str | None = None
+    description: str | None = None
     mode: Literal["orchestrate", "online_probe"] = "orchestrate"
     enabled: bool = True
     execute: list[DefinitionExecuteStep] | None = None
@@ -158,12 +160,12 @@ class TestDefinitionUpsertRequest(BaseModel):
 
 class FixDefinitionUpsertRequest(BaseModel):
     id: str = Field(min_length=1)
+    previousId: str | None = None
     label: str | None = None
     description: str | None = None
     enabled: bool = True
     runAtConnection: bool = False
     execute: list[DefinitionExecuteStep] = Field(min_length=1)
-    postTestIds: list[str] | None = None
     params: dict[str, Any] | None = None
 
 

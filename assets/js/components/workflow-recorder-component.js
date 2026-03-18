@@ -1,5 +1,10 @@
 import { normalizeText } from '../lib/normalize.js';
-import { createFlowBlockContainer, createFlowBlockPreset, createFlowEmptyState } from './flow-block-presets.js';
+import {
+  commandUsesSudo,
+  createFlowBlockContainer,
+  createFlowBlockPreset,
+  createFlowEmptyState,
+} from './flow-block-presets.js';
 
 function normalizeToken(rawValue, fallback = '') {
   const token = normalizeText(rawValue, '')
@@ -652,7 +657,7 @@ export class WorkflowRecorderComponent {
     };
   }
 
-  buildTestDefinition({ definitionId, label }) {
+  buildTestDefinition({ definitionId, label, description }) {
     const normalizedDefinitionId = normalizeToken(definitionId, '');
     if (!normalizedDefinitionId) {
       throw new Error('Definition ID is required.');
@@ -702,6 +707,7 @@ export class WorkflowRecorderComponent {
     return {
       id: normalizedDefinitionId,
       label: normalizeText(label, normalizedDefinitionId),
+      description: normalizeText(description, ''),
       enabled: true,
       mode: 'orchestrate',
       execute,
@@ -791,7 +797,7 @@ export class WorkflowRecorderComponent {
             <div style="display:flex; justify-content:flex-end;">
               <button type="button" class="button save-btn">Save Output</button>
             </div>
-          `;
+          `.trim().replace(/>\s+</g, '><');
           const saveBtn = editor.querySelector('.save-btn');
           saveBtn.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -850,7 +856,7 @@ export class WorkflowRecorderComponent {
       <div style="display:flex; justify-content:flex-end;">
         <button type="button" class="button save-btn">Save Block</button>
       </div>
-    `;
+    `.trim().replace(/>\s+</g, '><');
     const saveBtn = editor.querySelector('.save-btn');
     saveBtn.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -879,18 +885,21 @@ export class WorkflowRecorderComponent {
     const currentInputRef = normalizeText(block.read?.inputRef, '');
     const outputOptions = this.outputs
       .map((output) => {
-        const selected = output.key === currentOutputKey ? ' selected' : '';
+        const selected = output.key === currentOutputKey ? ' selected="selected"' : '';
         const label = `${normalizeText(output.label, output.key)} (${output.key})`;
         return `<option value="${escapeHtml(output.key)}"${selected}>${escapeHtml(label)}</option>`;
       })
       .join('');
     const writeRefOptions = this.getWriteRefs()
       .map((writeRef) => {
-        const selected = normalizeText(writeRef.saveAs, '') === currentInputRef ? ' selected' : '';
+        const selected = normalizeText(writeRef.saveAs, '') === currentInputRef ? ' selected="selected"' : '';
         const label = `${writeRef.saveAs} (${writeRef.command})`;
         return `<option value="${escapeHtml(writeRef.saveAs)}"${selected}>${escapeHtml(label)}</option>`;
       })
       .join('');
+    const outputSelected = isStr ? ' selected="selected"' : '';
+    const anyOutputSelected = isAny ? ' selected="selected"' : '';
+    const linesOutputSelected = isLines ? ' selected="selected"' : '';
 
     editor.innerHTML = `
       <label class="form-field">Output Key Binding
@@ -905,9 +914,9 @@ export class WorkflowRecorderComponent {
       </label>
       <label class="form-field">Matcher Kind
         <select class="form-input kind-input">
-          <option value="contains_string" ${isStr ? 'selected' : ''}>Contains String</option>
-          <option value="contains_any_string" ${isAny ? 'selected' : ''}>Contains Any String</option>
-          <option value="contains_lines_unordered" ${isLines ? 'selected' : ''}>Contains Lines Unordered</option>
+          <option value="contains_string"${outputSelected}>Contains String</option>
+          <option value="contains_any_string"${anyOutputSelected}>Contains Any String</option>
+          <option value="contains_lines_unordered"${linesOutputSelected}>Contains Lines Unordered</option>
         </select>
       </label>
       <label class="form-field">Matching Value (String / Comma sep / Lines)
@@ -916,7 +925,7 @@ export class WorkflowRecorderComponent {
       <div style="display:flex; justify-content:flex-end;">
         <button type="button" class="button save-btn">Save Read Block</button>
       </div>
-    `;
+    `.trim().replace(/>\s+</g, '><');
     const saveBtn = editor.querySelector('.save-btn');
     saveBtn.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -968,11 +977,18 @@ export class WorkflowRecorderComponent {
 
     const container = createFlowBlockContainer();
     writes.forEach((block, writeIndex) => {
+      const usesSudo = commandUsesSudo(block.command);
       const row = createFlowBlockPreset({
         variant: 'write',
         icon: '✍️',
         title: `STEP ${writeIndex + 1} · WRITE ${block.command}`,
-        description: `Saves as: ${block.saveAs}`,
+        description: usesSudo
+          ? `Saves as: ${block.saveAs} · Risk: executes with sudo privileges`
+          : `Saves as: ${block.saveAs}`,
+        actionLayout: 'two-column',
+        riskLevel: usesSudo ? 'sudo' : '',
+        riskLabel: 'sudo risk',
+        riskTitle: 'This write block runs with sudo privileges.',
         actionButtons: [
           {
             label: 'Move up',
@@ -985,6 +1001,7 @@ export class WorkflowRecorderComponent {
             onClick: () => this.moveWriteBlock(block.id, writeIndex + 1),
           },
         ],
+        editButtonPlacement: 'before-remove',
         onRemove: () => this.removeBlock(block.id),
         onToggle: (open) => {
           if (open) {

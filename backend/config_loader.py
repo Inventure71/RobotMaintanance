@@ -289,11 +289,6 @@ def _resolve_fix_entry(
         reserved_keys={"label", "description", "enabled", "runAtConnection", "params", "postTestIds", "execute"},
     )
 
-    override_post_tests = override.get("postTestIds") if isinstance(override.get("postTestIds"), list) else None
-    source_post_tests = source.get("postTestIds") if isinstance(source.get("postTestIds"), list) else []
-    post_test_ids = override_post_tests if override_post_tests is not None else source_post_tests
-    post_test_ids = [normalize_text(item, "") for item in post_test_ids if normalize_text(item, "")]
-
     execute_steps = override.get("execute") if isinstance(override.get("execute"), list) else None
     if execute_steps is None:
         execute_steps = source.get("execute") if isinstance(source.get("execute"), list) else []
@@ -314,7 +309,6 @@ def _resolve_fix_entry(
         "enabled": bool(override.get("enabled", source.get("enabled", True))),
         "runAtConnection": run_at_connection,
         "params": params,
-        "postTestIds": post_test_ids,
         "execute": execute_steps,
     }
 
@@ -389,11 +383,6 @@ def normalize_robot_types(
                 raise ValueError(f"Robot type '{type_id}' references unknown fix id '{fix_id}'")
             override = raw_fix_overrides.get(fix_id) if isinstance(raw_fix_overrides.get(fix_id), dict) else {}
             resolved_fix = _resolve_fix_entry(fix_id, fix_definition, override)
-            for post_test_id in resolved_fix.get("postTestIds") or []:
-                if post_test_id not in check_definitions_by_id:
-                    raise ValueError(
-                        f"Fix '{fix_id}' references unknown postTestId '{post_test_id}' in robot type '{type_id}'"
-                    )
             auto_fixes.append(resolved_fix)
 
         raw_auto_monitor = raw.get("autoMonitor") if isinstance(raw.get("autoMonitor"), dict) else {}

@@ -108,7 +108,6 @@ export function registerManageRecorderRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRunAtConnectionInput,
     manageFixRobotTypeTargets,
     manageFixesList,
@@ -162,6 +161,7 @@ export function registerManageRecorderRuntime(runtime, env) {
     recorderCreateNewTestButton,
     recorderDefinitionIdInput,
     recorderDefinitionLabelInput,
+    recorderDefinitionDescriptionInput,
     recorderRunAtConnectionInput,
     recorderRobotTypeTargets,
     recorderFlowBlocks,
@@ -765,6 +765,7 @@ export function registerManageRecorderRuntime(runtime, env) {
 
   function resetRecorderTestEntry({ target = 'mode-selector' } = {}) {
         const normalizedTarget = target === 'simple-start' ? 'simple-start' : 'mode-selector';
+        state.editingTestSourceId = '';
         setFlowEditorMode('test', { announce: false });
         setActiveManageTab('recorder', { syncHash: true, persist: true });
         state.workflowRecorder?.reset?.();
@@ -779,6 +780,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         }
         if (recorderDefinitionLabelInput) {
           recorderDefinitionLabelInput.value = '';
+        }
+        if (recorderDefinitionDescriptionInput) {
+          recorderDefinitionDescriptionInput.value = '';
         }
         if (recorderRunAtConnectionInput) {
           recorderRunAtConnectionInput.checked = true;
@@ -1187,13 +1191,21 @@ export function registerManageRecorderRuntime(runtime, env) {
           ? state.definitionsSummary.robotTypes
           : [];
         const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
+        const sourceDefinitionId = normalizeText(state.editingTestSourceId, '');
         const normalizedDefinitionId = slugifyRecorderValue(definitionId, '');
         const checkIdPrefix = normalizedDefinitionId ? `${normalizedDefinitionId}__` : '';
         const recorderCheckIdsRaw = state.workflowRecorder?.getCheckIdsForDefinition?.(definitionId);
         const recorderCheckIds = Array.isArray(recorderCheckIdsRaw) ? recorderCheckIdsRaw : [];
+        const sourceDefinition = Array.isArray(state.definitionsSummary?.tests)
+          ? state.definitionsSummary.tests.find((item) => normalizeText(item?.id, '') === sourceDefinitionId)
+          : null;
+        const sourceCheckIds = Array.isArray(sourceDefinition?.checks)
+          ? sourceDefinition.checks.map((check) => normalizeText(check?.id, '')).filter(Boolean)
+          : [];
+        const sourceCheckIdPrefix = sourceDefinitionId ? `${sourceDefinitionId}__` : '';
         const mappedTypeIds = new Set();
   
-        if (checkIdPrefix) {
+        if (checkIdPrefix || sourceDefinitionId) {
           robotTypes.forEach((typePayload) => {
             const typeId = normalizeText(typePayload?.id, '');
             if (!typeId) return;
@@ -1201,7 +1213,12 @@ export function registerManageRecorderRuntime(runtime, env) {
             const isMappedByRef = recorderCheckIds.length
               ? recorderCheckIds.some((checkId) => testRefs.includes(checkId))
               : testRefs.some((ref) => ref.startsWith(checkIdPrefix));
-            if (isMappedByRef) {
+            const isMappedBySourceRef = sourceDefinitionId
+              ? sourceCheckIds.length
+                ? sourceCheckIds.some((checkId) => testRefs.includes(checkId))
+                : testRefs.some((ref) => ref.startsWith(sourceCheckIdPrefix))
+              : false;
+            if (isMappedByRef || isMappedBySourceRef) {
               mappedTypeIds.add(typeId);
             }
           });
@@ -1294,6 +1311,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           ? state.definitionsSummary.robotTypes
           : [];
         const fixIdKey = normalizeText(fixId, '');
+        const sourceFixId = normalizeText(state.editingFixSourceId, '');
 
         if (!robotTypes.length) {
           const empty = document.createElement('div');
@@ -1308,7 +1326,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           if (!typeId) return;
           const label = normalizeText(typePayload?.name, typeId);
           const fixRefs = Array.isArray(typePayload?.fixRefs) ? typePayload.fixRefs : [];
-          const isMapped = fixRefs.includes(fixIdKey);
+          const isMapped = fixRefs.includes(fixIdKey) || (sourceFixId ? fixRefs.includes(sourceFixId) : false);
   
           const row = document.createElement('label');
           row.className = 'recorder-type-option';
@@ -1416,8 +1434,7 @@ export function registerManageRecorderRuntime(runtime, env) {
         const definition = item?.definition || {};
         if (item?.kind === 'fix') {
           const stepCount = Array.isArray(definition?.execute) ? definition.execute.length : 0;
-          const postTests = Array.isArray(definition?.postTestIds) ? definition.postTestIds.length : 0;
-          return `${stepCount} step(s) • ${postTests} post-test(s)`;
+          return `${stepCount} step(s)`;
         }
         const checkCount = Array.isArray(definition?.checks) ? definition.checks.length : 0;
         return `${checkCount} check(s)`;
@@ -1685,9 +1702,13 @@ export function registerManageRecorderRuntime(runtime, env) {
             checksInput,
             getManageTestRunAtConnectionValue(),
           );
+          const existingTestDefinition = (Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [])
+            .find((definition) => normalizeText(definition?.id, '') === (normalizeText(state.editingTestSourceId, '') || testId));
           const payload = {
             id: testId,
+            previousId: normalizeText(state.editingTestSourceId, '') || undefined,
             label: normalizeText(manageTestLabelInput?.value, testId),
+            description: normalizeText(existingTestDefinition?.description, ''),
             mode: 'orchestrate',
             enabled: true,
             execute,
@@ -1706,6 +1727,7 @@ export function registerManageRecorderRuntime(runtime, env) {
   
           const selectedTypeIds = getSelectedMappingTypeIds(manageTestRobotTypeTargets);
           const mappingResult = await updateTestMappings(testId, selectedTypeIds);
+          state.editingTestSourceId = testId;
           state.definitionsSummary = normalizeDefinitionsSummary(
             mappingResult?.summary || body?.summary || body,
           );
@@ -1750,11 +1772,13 @@ export function registerManageRecorderRuntime(runtime, env) {
           const refreshed = await refreshRobotsFromBackendSnapshot();
           const loadedRecorderId = normalizeText(recorderDefinitionIdInput?.value, '');
           if (loadedRecorderId === testId) {
+            state.editingTestSourceId = '';
             state.workflowRecorder?.reset?.();
             clearRecorderOutputForm();
             clearRecorderReadForm();
             if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = '';
             if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = '';
+            if (recorderDefinitionDescriptionInput) recorderDefinitionDescriptionInput.value = '';
             renderRecorderRobotTypeTargets();
           }
           if (manageTestIdInput && normalizeText(manageTestIdInput.value, '') === testId) manageTestIdInput.value = '';
@@ -1819,20 +1843,14 @@ export function registerManageRecorderRuntime(runtime, env) {
             throw new Error('Fix ID is required.');
           }
           const execute = parseJsonInput(manageFixExecuteJsonInput, 'Execute steps');
-          const postTests = normalizeIdList(
-            normalizeText(manageFixPostTestsInput?.value, '')
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean),
-          );
           const payload = {
             id: fixId,
+            previousId: normalizeText(state.editingFixSourceId, '') || undefined,
             label: normalizeText(manageFixLabelInput?.value, fixId),
             description: normalizeText(manageFixDescriptionInput?.value, ''),
             enabled: true,
             runAtConnection: Boolean(manageFixRunAtConnectionInput?.checked),
             execute,
-            postTestIds: postTests,
           };
           const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
             method: 'POST',
@@ -1847,6 +1865,7 @@ export function registerManageRecorderRuntime(runtime, env) {
   
           const selectedTypeIds = getSelectedMappingTypeIds(manageFixRobotTypeTargets);
           const mappingResult = await updateFixMappings(fixId, selectedTypeIds);
+          state.editingFixSourceId = fixId;
           state.definitionsSummary = normalizeDefinitionsSummary(
             mappingResult?.summary || body?.summary || body,
           );
@@ -1889,10 +1908,10 @@ export function registerManageRecorderRuntime(runtime, env) {
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
           if (manageFixIdInput && normalizeText(manageFixIdInput.value, '') === fixId) manageFixIdInput.value = '';
+          state.editingFixSourceId = '';
           if (manageFixLabelInput) manageFixLabelInput.value = '';
           if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
           if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
-          if (manageFixPostTestsInput) manageFixPostTestsInput.value = '';
           if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
           if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
           if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
@@ -1975,11 +1994,11 @@ export function registerManageRecorderRuntime(runtime, env) {
       }
 
   function clearManageFixEditor() {
+        state.editingFixSourceId = '';
         if (manageFixIdInput) manageFixIdInput.value = '';
         if (manageFixLabelInput) manageFixLabelInput.value = '';
         if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
         if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
-        if (manageFixPostTestsInput) manageFixPostTestsInput.value = '';
         if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
         if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
         if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
@@ -1990,6 +2009,7 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (!state.workflowRecorder || !testDefinition) return;
         const definitionId = normalizeText(testDefinition?.id, '');
         const definitionLabel = normalizeText(testDefinition?.label, definitionId);
+        state.editingTestSourceId = definitionId;
         setFlowEditorMode('test', { announce: false });
         setRecorderLlmHelpExpanded(false);
         resetRecorderLlmImportState();
@@ -1998,6 +2018,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         clearRecorderReadForm();
         if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = definitionId;
         if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = definitionLabel;
+        if (recorderDefinitionDescriptionInput) {
+          recorderDefinitionDescriptionInput.value = normalizeText(testDefinition?.description, '');
+        }
         if (recorderRunAtConnectionInput) {
           const uniform = inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true);
           recorderRunAtConnectionInput.checked = uniform !== null ? uniform : true;
@@ -2023,6 +2046,7 @@ export function registerManageRecorderRuntime(runtime, env) {
         const nextId = duplicate
           ? slugifyRecorderValue(`${sourceId}_copy`, 'copied_fix')
           : sourceId;
+        state.editingFixSourceId = duplicate ? '' : sourceId;
         const nextLabel = duplicate
           ? `${normalizeText(fixDefinition?.label, sourceId)} Copy`
           : normalizeText(fixDefinition?.label, sourceId);
@@ -2036,10 +2060,6 @@ export function registerManageRecorderRuntime(runtime, env) {
         if (manageFixExecuteJsonInput) {
           const execute = Array.isArray(fixDefinition?.execute) ? fixDefinition.execute : [];
           manageFixExecuteJsonInput.value = JSON.stringify(execute, null, 2);
-        }
-        if (manageFixPostTestsInput) {
-          const postTests = Array.isArray(fixDefinition?.postTestIds) ? fixDefinition.postTestIds : [];
-          manageFixPostTestsInput.value = postTests.join(', ');
         }
         if (manageFixRunAtConnectionInput) {
           manageFixRunAtConnectionInput.checked = Boolean(fixDefinition?.runAtConnection);
@@ -2066,9 +2086,13 @@ export function registerManageRecorderRuntime(runtime, env) {
         const sourceId = normalizeText(testDefinition?.id, '');
         const nextId = slugifyRecorderValue(`${sourceId}_copy`, 'copied_test');
         loadExistingTestIntoRecorder(testDefinition);
+        state.editingTestSourceId = '';
         if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = nextId;
         if (recorderDefinitionLabelInput) {
           recorderDefinitionLabelInput.value = `${normalizeText(testDefinition?.label, sourceId)} Copy`;
+        }
+        if (recorderDefinitionDescriptionInput) {
+          recorderDefinitionDescriptionInput.value = normalizeText(testDefinition?.description, '');
         }
         renderRecorderRobotTypeTargets();
         clearCheckedMappings(recorderRobotTypeTargets);
@@ -2085,6 +2109,7 @@ export function registerManageRecorderRuntime(runtime, env) {
 
   function startNewTestDraft() {
         if (!state.workflowRecorder) return;
+        state.editingTestSourceId = '';
         setFlowEditorMode('test', { announce: false });
         setActiveManageTab('recorder', { syncHash: true, persist: true });
         setRecorderLlmHelpExpanded(false);
@@ -2102,6 +2127,9 @@ export function registerManageRecorderRuntime(runtime, env) {
         }
         if (recorderDefinitionLabelInput) {
           recorderDefinitionLabelInput.value = robotIdValue ? `Flow workflow (${robotIdValue})` : 'Recorded workflow';
+        }
+        if (recorderDefinitionDescriptionInput && !normalizeText(recorderDefinitionDescriptionInput.value, '')) {
+          recorderDefinitionDescriptionInput.value = '';
         }
         renderRecorderRobotTypeTargets();
         if (!robotIdValue) {
@@ -2456,6 +2484,7 @@ export function registerManageRecorderRuntime(runtime, env) {
           const definition = state.workflowRecorder.buildTestDefinition({
             definitionId,
             label: normalizeText(recorderDefinitionLabelInput?.value, ''),
+            description: normalizeText(recorderDefinitionDescriptionInput?.value, ''),
           });
           definition.checks = applyRunAtConnection(
             definition.checks,

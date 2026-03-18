@@ -4,6 +4,10 @@ function applyRowLayoutStyles(row) {
   row.style.alignItems = 'stretch';
 }
 
+export function commandUsesSudo(rawCommand) {
+  return /^\s*sudo(?:\s|$)/i.test(String(rawCommand || ''));
+}
+
 function buildHeader({
   icon = '',
   title = '',
@@ -55,8 +59,9 @@ function buildHeader({
       actionWrap.append(button);
     });
 
+  let removeBtn = null;
   if (typeof onRemove === 'function') {
-    const removeBtn = document.createElement('button');
+    removeBtn = document.createElement('button');
     removeBtn.className = 'button button-compact';
     removeBtn.textContent = removeLabel;
     removeBtn.type = 'button';
@@ -68,7 +73,7 @@ function buildHeader({
   }
 
   header.append(iconWrap, content, actionWrap);
-  return header;
+  return { header, actionWrap, removeBtn };
 }
 
 export function createFlowBlockContainer() {
@@ -90,18 +95,24 @@ export function createFlowBlockPreset({
   title = '',
   description = '',
   actionButtons = [],
+  actionLayout = 'inline',
+  riskLevel = '',
+  riskLabel = '',
+  riskTitle = '',
   onRemove = null,
   removeLabel = 'Remove',
   onToggle = null,
   renderEditor = null,
   startOpen = false,
+  editButtonPlacement = 'start',
 }) {
   const normalizedVariant = String(variant || 'read').toLowerCase() === 'write' ? 'write' : 'read';
+  const normalizedRiskLevel = String(riskLevel || '').trim().toLowerCase();
   const row = document.createElement('div');
   row.className = `flow-block ${normalizedVariant}-block`;
   applyRowLayoutStyles(row);
 
-  const header = buildHeader({
+  const { header, actionWrap, removeBtn } = buildHeader({
     icon,
     title,
     description,
@@ -110,11 +121,29 @@ export function createFlowBlockPreset({
     actionButtons,
   });
 
+  if (actionWrap && actionLayout === 'two-column') {
+    actionWrap.classList.add('flow-block-actions--two-column');
+  }
+
+  if (normalizedRiskLevel) {
+    row.classList.add('flow-block-risk', `flow-block-risk--${normalizedRiskLevel}`);
+    row.dataset.riskLevel = normalizedRiskLevel;
+    row.dataset.riskyCommand = 'true';
+
+    const content = header.querySelector('.flow-block-content');
+    if (content) {
+      const badge = document.createElement('div');
+      badge.className = 'flow-block-risk-badge';
+      badge.textContent = String(riskLabel || `${normalizedRiskLevel} risk`);
+      if (riskTitle) badge.title = String(riskTitle);
+      content.appendChild(badge);
+    }
+  }
+
   const editor = document.createElement('div');
   editor.className = 'flow-block-editor-modal';
   editor.style.display = 'none';
   const hasEditor = typeof renderEditor === 'function';
-  const actionWrap = header.querySelector('.flow-block-actions');
   let editBtn = null;
 
   if (hasEditor && actionWrap) {
@@ -126,7 +155,12 @@ export function createFlowBlockPreset({
       event.stopPropagation();
       setEditing(!isEditing);
     });
-    actionWrap.prepend(editBtn);
+    if (editButtonPlacement === 'before-remove' && removeBtn) {
+      const existingChildren = Array.from(actionWrap.children || []).filter((child) => child !== removeBtn);
+      actionWrap.replaceChildren(...existingChildren, editBtn, removeBtn);
+    } else {
+      actionWrap.prepend(editBtn);
+    }
   }
 
   let isEditing = false;

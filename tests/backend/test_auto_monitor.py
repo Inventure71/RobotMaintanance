@@ -5,6 +5,7 @@ import time
 
 from backend.terminal_manager import TerminalManager
 import backend.terminal_manager as tm_module
+from backend.ssh_client import AutomationCommandResult
 
 
 def _manager(auto_monitor: bool = False) -> TerminalManager:
@@ -312,6 +313,16 @@ def test_manual_run_persists_runtime_results(monkeypatch):
                 return "ok"
             return ""
 
+        def run_automation_command(self, command, timeout, sudo_password=None):
+            _ = sudo_password
+            return AutomationCommandResult(
+                output=self.run_command(command, timeout),
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
+
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
     definitions = {
@@ -403,6 +414,16 @@ def test_partial_manual_run_does_not_update_last_full_test_activity(monkeypatch)
             if command == "echo battery":
                 return "ok"
             return ""
+
+        def run_automation_command(self, command, timeout, sudo_password=None):
+            _ = sudo_password
+            return AutomationCommandResult(
+                output=self.run_command(command, timeout),
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
@@ -813,6 +834,125 @@ def test_auto_monitor_defers_when_recent_manual_activity(monkeypatch):
     assert observed["commands"] == []
 
 
+def test_connection_retry_attempt_uses_dedicated_auto_monitor_test_session():
+    manager = _connection_retry_manager()
+    observed = {}
+
+    def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
+        observed["robot_id"] = robot_id
+        observed["page_session_id"] = page_session_id
+        observed["test_ids"] = list(test_ids or [])
+        observed["dry_run"] = dry_run
+        return [{"id": "general", "status": "ok", "value": "ok", "details": "ok", "ms": 1}]
+
+    manager._executor.run_tests = fake_run_tests
+
+    results = manager._run_connection_retry_attempt(
+        robot_id="r1",
+        test_ids=["general"],
+        source="auto-monitor",
+    )
+
+    assert observed == {
+        "robot_id": "r1",
+        "page_session_id": manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID,
+        "test_ids": ["general"],
+        "dry_run": False,
+    }
+    assert results[0]["status"] == "ok"
+
+
+def test_auto_monitor_test_session_does_not_cancel_connection_retry_session(monkeypatch):
+    class FakeShell:
+        def __init__(self, **_kwargs):
+            pass
+
+        def connect(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    manager = _connection_retry_manager()
+    with manager._lock:
+        manager._connection_retry_sessions["r1"] = {
+            "token": 1,
+            "connectedAt": time.time(),
+            "cancelled": False,
+        }
+
+    manager.get_or_connect(page_session_id=manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, robot_id="r1")
+
+    with manager._lock:
+        assert manager._connection_retry_sessions["r1"]["cancelled"] is False
+
+
+def test_auto_monitor_skips_battery_and_topics_while_connection_retry_is_inflight():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [
+                    {"id": "online", "enabled": True},
+                    {
+                        "id": "topics_check",
+                        "enabled": True,
+                        "requiredTopics": ["/buttons"],
+                    },
+                ],
+                "autoMonitor": {
+                    "batteryCommand": "custom battery probe",
+                },
+            }
+        },
+        auto_monitor=False,
+    )
+    manager.update_monitor_config(mode="online_battery_topics")
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "ok",
+                "value": "reachable",
+                "details": "online",
+                "checkedAt": time.time(),
+                "source": "auto-monitor",
+            }
+        },
+    )
+    manager._online_next_check_at["r1"] = time.time() + 60.0
+    manager._battery_next_check_at["r1"] = 0.0
+    manager._topics_next_check_at["r1"] = 0.0
+
+    calls = {"battery": 0, "topics": 0}
+    manager._refresh_battery_state = lambda _robot_id: calls.__setitem__("battery", calls["battery"] + 1)
+    manager._refresh_topics_state = lambda _robot_id: calls.__setitem__("topics", calls["topics"] + 1)
+    manager._connection_retry_inflight["r1"] = 1
+
+    manager._run_auto_monitor_tick()
+
+    assert calls == {"battery": 0, "topics": 0}
+
+
+def test_connection_retry_inflight_counts_as_busy_for_manual_runs():
+    manager = _connection_retry_manager()
+    manager._connection_retry_inflight["r1"] = 1
+
+    assert manager.is_robot_busy("r1") is True
+    assert manager.start_search_run("r1") is False
+    assert manager.start_test_run("r1", "manual-session") is False
+
+
 def test_start_test_run_rejects_same_robot_across_different_sessions():
     manager = _manager()
 
@@ -1138,6 +1278,36 @@ def test_connection_event_runner_cancels_on_manual_activity():
     attempts_after_cancel = len(attempts)
     time.sleep(0.2)
     assert len(attempts) == attempts_after_cancel
+
+
+def test_connection_event_runner_stops_retrying_when_manual_test_is_active():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.02
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.5
+
+    attempts: list[int] = []
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
+        _ = robot_id, test_ids, source, should_commit
+        attempts.append(len(attempts) + 1)
+        with manager._lock:
+            manager._active_test_runs.add(("r1", "manual-session"))
+        return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with manager._lock:
+            inflight = "r1" in manager._connection_retry_inflight
+        if not inflight:
+            break
+        time.sleep(0.01)
+
+    assert attempts == [1]
+    with manager._lock:
+        assert "r1" not in manager._connection_retry_inflight
 
 
 def test_connection_event_runner_cancels_on_disconnect():

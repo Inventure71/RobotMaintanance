@@ -57,6 +57,7 @@ class TerminalManager(
     )
     AUTO_MONITOR_TOPICS_COMMAND = "timeout 12s rostopic list"
     AUTO_MONITOR_PAGE_SESSION_ID = "__auto-monitor__"
+    AUTO_MONITOR_TEST_PAGE_SESSION_ID = "__auto-monitor-tests__"
     AUTO_MONITOR_BATTERY_COMMAND = (
         "source /opt/ros/noetic/setup.bash >/dev/null 2>&1 || true; "
         "source ~/ws/devel/setup.bash >/dev/null 2>&1 || true; "

@@ -653,34 +653,48 @@
                 </div>
 
                 <div id="recorderSharedTopbar" class="panel flow-builder-topbar hidden">
-                  <div id="recorderSharedTopbarMain" class="flow-builder-topbar-main recorder-topbar-main">
-                    <div id="recorderTopbarNewDraftWrap" class="recorder-topbar-slot">
-                      <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">New test
-                        draft</button>
+                  <div class="recorder-topbar-shell">
+                    <div class="recorder-topbar-header">
+                      <div class="recorder-topbar-heading">
+                        <span class="recorder-topbar-eyebrow">Test Draft</span>
+                        <p class="muted-copy">Set the draft metadata here, then continue building the flow below.</p>
+                      </div>
+                      <div class="recorder-topbar-actions">
+                        <div id="recorderTopbarNewDraftWrap" class="recorder-topbar-slot">
+                          <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Create new test</button>
+                        </div>
+                        <div id="recorderTopbarPublishWrap" class="recorder-topbar-slot">
+                          <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish test</button>
+                        </div>
+                      </div>
                     </div>
-                    <div id="recorderTopbarRobotWrap" class="recorder-topbar-slot">
-                      <label class="form-field">
-                        Robot
-                        <select id="recorderRobotSelect" class="form-input">
-                          <option value="">Select robot</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div id="recorderTopbarDefinitionWrap" class="recorder-topbar-slot recorder-topbar-slot--double">
-                      <label class="form-field">
-                        Definition ID
-                        <input id="recorderDefinitionId" class="form-input" type="text"
-                          placeholder="e.g. topics_snapshot_custom" />
-                      </label>
-                      <label class="form-field">
-                        Label
-                        <input id="recorderDefinitionLabel" class="form-input" type="text"
-                          placeholder="Topics Snapshot Custom" />
-                      </label>
-                    </div>
-                    <div id="recorderTopbarPublishWrap" class="recorder-topbar-slot">
-                      <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish
-                        test</button>
+
+                    <div id="recorderSharedTopbarMain" class="flow-builder-topbar-main recorder-topbar-main">
+                      <div id="recorderTopbarRobotWrap" class="recorder-topbar-slot recorder-topbar-slot--robot">
+                        <label class="form-field">
+                          Robot
+                          <select id="recorderRobotSelect" class="form-input">
+                            <option value="">Select robot</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div id="recorderTopbarDefinitionWrap" class="recorder-topbar-slot recorder-topbar-slot--definition">
+                        <label class="form-field">
+                          Definition ID
+                          <input id="recorderDefinitionId" class="form-input" type="text"
+                            placeholder="e.g. topics_snapshot_custom" />
+                        </label>
+                        <label class="form-field">
+                          Label
+                          <input id="recorderDefinitionLabel" class="form-input" type="text"
+                            placeholder="Topics Snapshot Custom" />
+                        </label>
+                        <label class="form-field recorder-topbar-description-field">
+                          Description
+                          <input id="recorderDefinitionDescription" class="form-input" type="text"
+                            placeholder="Summarize the test intent for operators" />
+                        </label>
+                      </div>
                     </div>
                   </div>
                   <div class="flow-builder-summary">
@@ -1057,15 +1071,10 @@
                         data-button-intent="utility">Add Write Block</button>
                     </div>
                   </div>
-                  <label class="form-field">
-                    Post test IDs (comma separated)
-                    <input id="manageFixPostTests" class="form-input" type="text"
-                      placeholder="general,movement,battery" />
-                  </label>
                   <section class="definition-assignment" aria-label="Assignment">
                     <div class="definition-assignment-header">
                       <h3>Assignment</h3>
-                      <p class="muted-copy">Map this definition to robot types and configure connection behavior.</p>
+                      <p class="muted-copy">Map this definition to robot types and configure connection behavior. When a fix ends, the robot automatically reruns its assigned test suite.</p>
                     </div>
                     <label class="recorder-primitive-toggle">
                       <input id="manageFixRunAtConnectionInput" type="checkbox" />

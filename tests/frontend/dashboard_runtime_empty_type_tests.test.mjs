@@ -32,6 +32,44 @@ function normalizeTypeId(value) {
   return normalizeText(value, '').toLowerCase();
 }
 
+function makeClassList() {
+  const values = new Set();
+  return {
+    add: (...tokens) => tokens.forEach((token) => values.add(String(token))),
+    remove: (...tokens) => tokens.forEach((token) => values.delete(String(token))),
+    contains: (token) => values.has(String(token)),
+    toggle: (token, force) => {
+      const normalized = String(token);
+      if (force === undefined) {
+        if (values.has(normalized)) {
+          values.delete(normalized);
+          return false;
+        }
+        values.add(normalized);
+        return true;
+      }
+      if (force) values.add(normalized);
+      else values.delete(normalized);
+      return force;
+    },
+  };
+}
+
+function makeButton(label = '') {
+  const attributes = new Map();
+  return {
+    textContent: label,
+    title: '',
+    disabled: false,
+    dataset: {},
+    classList: makeClassList(),
+    setAttribute: (name, value) => {
+      attributes.set(String(name), String(value));
+    },
+    getAttribute: (name) => attributes.get(String(name)) ?? null,
+  };
+}
+
 async function loadNamedExport(modulePath, exportName) {
   const source = await fs.readFile(modulePath, 'utf8');
   const transformed = `${source.replace(
@@ -191,6 +229,92 @@ test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include 
     )),
     ['online', 'general', 'movement'],
   );
+});
+
+test('setRunningButtonState disables the detail Run tests button while the active robot is auto testing', async () => {
+  const runButton = makeButton('Run tests');
+  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'registerRuntimeFixTestsRuntime',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runRobotTests' ? runButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1']),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => [],
+    getReachableRobotIds: () => [],
+    getRunSelectedButtonIdleLabel: () => 'Run selected (default online)',
+    isRobotTesting: (robotId) =>
+      env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = registerRuntimeFixTestsRuntime(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runButton.disabled, true);
+  assert.equal(runButton.textContent, 'Run tests');
+  assert.equal(runButton.title, 'Tests are already running for this robot.');
+});
+
+test('setRunningButtonState disables Run selected while one of the target robots is already testing', async () => {
+  const runSelectedButton = makeButton('Run selected');
+  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'registerRuntimeFixTestsRuntime',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runSelectedRobotTests' ? runSelectedButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: '',
+      selectedRobotIds: new Set(['robot-1', 'robot-2']),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-2']),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => Array.from(env.state.selectedRobotIds),
+    getReachableRobotIds: () => ['robot-1', 'robot-2'],
+    getRunSelectedButtonIdleLabel: () => 'Run selected',
+    isRobotTesting: (robotId) =>
+      env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = registerRuntimeFixTestsRuntime(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runSelectedButton.disabled, true);
+  assert.equal(runSelectedButton.textContent, 'Run selected');
+  assert.equal(runSelectedButton.title, 'Tests are already running for one or more target robots.');
 });
 
 test('setRobotTypeDefinitions preserves robot type test refs and battery command metadata', async () => {

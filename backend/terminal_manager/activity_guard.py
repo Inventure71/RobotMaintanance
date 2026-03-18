@@ -6,6 +6,25 @@ from ..normalization import normalize_text
 
 
 class ActivityGuardMixin:
+    def _has_foreground_robot_activity_locked(self, robot_id: str) -> bool:
+        if robot_id in self._active_search_runs:
+            return True
+        if robot_id in self._active_fix_runs:
+            return True
+        return any(active_robot_id == robot_id for active_robot_id, _session in self._active_test_runs)
+
+    def _has_foreground_robot_activity(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+        with self._lock:
+            return self._has_foreground_robot_activity_locked(normalized_robot_id)
+
+    def _has_background_test_activity_locked(self, robot_id: str) -> bool:
+        if robot_id in getattr(self, "_auto_recovery_test_inflight", set()):
+            return True
+        return robot_id in getattr(self, "_connection_retry_inflight", {})
+
     def _mark_manual_activity(
         self,
         robot_id: str,
@@ -17,7 +36,7 @@ class ActivityGuardMixin:
         normalized_source = normalize_text(source, "").lower()
         if not normalized_robot_id:
             return
-        if normalized_session == self.AUTO_MONITOR_PAGE_SESSION_ID:
+        if normalized_session in {self.AUTO_MONITOR_PAGE_SESSION_ID, self.AUTO_MONITOR_TEST_PAGE_SESSION_ID}:
             return
         now = time.time()
         with self._lock:
@@ -37,11 +56,11 @@ class ActivityGuardMixin:
 
     def _is_robot_busy(self, robot_id: str) -> bool:
         with self._lock:
-            if robot_id in self._active_search_runs:
+            if self._has_foreground_robot_activity_locked(robot_id):
                 return True
-            if robot_id in self._active_fix_runs:
+            if self._has_background_test_activity_locked(robot_id):
                 return True
-            return any(active_robot_id == robot_id for active_robot_id, _session in self._active_test_runs)
+            return False
 
     def is_robot_busy(self, robot_id: str) -> bool:
         normalized_robot_id = normalize_text(robot_id, "")
@@ -54,11 +73,9 @@ class ActivityGuardMixin:
         if not normalized_robot_id:
             return False
         with self._lock:
-            if normalized_robot_id in self._active_search_runs:
+            if self._has_foreground_robot_activity_locked(normalized_robot_id):
                 return False
-            if normalized_robot_id in self._active_fix_runs:
-                return False
-            if any(active_robot_id == normalized_robot_id for active_robot_id, _session in self._active_test_runs):
+            if self._has_background_test_activity_locked(normalized_robot_id):
                 return False
             self._active_search_runs.add(normalized_robot_id)
         self._mark_manual_activity(robot_id=normalized_robot_id, source="manual-search")
@@ -92,7 +109,9 @@ class ActivityGuardMixin:
         if not normalized_robot_id or not normalized_page_session_id:
             return False
         with self._lock:
-            if any(active_robot_id == normalized_robot_id for active_robot_id, _session in self._active_test_runs):
+            if self._has_background_test_activity_locked(normalized_robot_id):
+                return False
+            if self._has_foreground_robot_activity_locked(normalized_robot_id):
                 return False
             self._active_test_runs.add((normalized_robot_id, normalized_page_session_id))
             self._manual_activity_by_robot[normalized_robot_id] = time.time()

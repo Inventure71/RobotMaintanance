@@ -106,7 +106,6 @@ export function registerFleetViewRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,
@@ -772,9 +771,11 @@ export function registerFleetViewRuntime(runtime, env) {
         if (isOffline) {
           return '<img class="offline-corner-icon" data-role="connection-corner-icon" src="assets/Icons/no-connection.png" alt="No connection" />';
         }
-        const blinkingClass = isCheckingOnline ? ' blinking' : '';
+        const cornerClasses = ['connected-corner-icon', isCheckingOnline ? 'blinking' : '']
+          .filter(Boolean)
+          .join(' ');
         const alt = isCheckingOnline ? 'Checking online' : 'Connected';
-        return `<img class="connected-corner-icon${blinkingClass}" data-role="connection-corner-icon" src="assets/Icons/connected.png" alt="${alt}" />`;
+        return `<img class="${cornerClasses}" data-role="connection-corner-icon" src="assets/Icons/connected.png" alt="${alt}" />`;
       }
 
   function syncModelViewerRotationForContainer(container, isOffline) {
@@ -1224,11 +1225,7 @@ export function registerFleetViewRuntime(runtime, env) {
   function syncRunSelectedButtonLabel() {
         const runSelectedButton = $('#runSelectedRobotTests');
         if (!runSelectedButton) return;
-        if (state.isTestRunInProgress) return;
-        applyActionButton(runSelectedButton, {
-          intent: 'run',
-          label: getRunSelectedButtonIdleLabel(),
-        });
+        setRunningButtonState(Boolean(state.isTestRunInProgress));
       }
 
   function syncSelectionUi() {
@@ -1414,9 +1411,9 @@ export function registerFleetViewRuntime(runtime, env) {
           compactAutoSearch,
         });
         const card = document.createElement('article');
-        card.className = `robot-card ${isCritical ? 'error' : ''} ${stateClass} ${selected ? 'selected' : ''} ${
-          isTesting || isSearching || isFixing ? 'testing' : ''
-        } ${isOffline ? 'offline' : ''}`.trim();
+        card.className = ['robot-card', isCritical ? 'error' : '', stateClass, selected ? 'selected' : '', isTesting || isSearching || isFixing ? 'testing' : '', isOffline ? 'offline' : '']
+          .filter(Boolean)
+          .join(' ');
         card.setAttribute('data-robot-id', normalizedRobotId);
         const issues = issueSummary(robot);
         const list = issues.map((i) => `<span class="error-badge">${i}</span>`).join('');
@@ -1469,7 +1466,7 @@ export function registerFleetViewRuntime(runtime, env) {
               reason: batteryState.reason,
               size: 'default',
             })}</span>
-          </div>`;
+          </div>`.trim().replace(/>\s+</g, '><');
   
         card.addEventListener('click', (event) => {
           const selectButton = event.target.closest('[data-action="select-robot"]');

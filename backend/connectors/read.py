@@ -112,9 +112,33 @@ class ReadConnector:
         expected_lines = [str(item).strip() for item in lines_raw if str(item).strip()]
 
         require_all = self._normalize_bool(read_spec.get("requireAll"), default=True)
+        allow_namespaced_suffix = self._normalize_bool(read_spec.get("allowNamespacedSuffix"), default=False)
 
-        matched = [line for line in expected_lines if line in haystack_set]
-        missing = [line for line in expected_lines if line not in haystack_set]
+        matched: list[str] = []
+        missing: list[str] = []
+        matched_by_suffix: dict[str, str] = {}
+
+        for expected_line in expected_lines:
+            if expected_line in haystack_set:
+                matched.append(expected_line)
+                continue
+            if allow_namespaced_suffix and expected_line.startswith("/"):
+                matching_line = next(
+                    (
+                        candidate
+                        for candidate in haystack_lines
+                        if candidate.startswith("/")
+                        and candidate.endswith(expected_line)
+                        and candidate != expected_line
+                        and candidate[: -len(expected_line)].rstrip("/")
+                    ),
+                    None,
+                )
+                if matching_line:
+                    matched.append(expected_line)
+                    matched_by_suffix[expected_line] = matching_line
+                    continue
+            missing.append(expected_line)
 
         if not expected_lines:
             passed = False
@@ -131,9 +155,11 @@ class ReadConnector:
             "kind": "contains_lines_unordered",
             "details": details,
             "matched": matched,
+            "matchedBySuffix": matched_by_suffix,
             "missing": missing,
             "lineCount": len(haystack_lines),
             "requireAll": require_all,
+            "allowNamespacedSuffix": allow_namespaced_suffix,
         }
 
     def _evaluate_all_of(self, read_spec: dict[str, Any], vars_payload: dict[str, Any]) -> dict[str, Any]:

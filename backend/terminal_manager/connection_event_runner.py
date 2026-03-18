@@ -148,6 +148,9 @@ class ConnectionEventRunnerMixin:
                 now = time.time()
                 if now >= deadline:
                     return
+                if hasattr(self, "_has_foreground_robot_activity") and self._has_foreground_robot_activity(robot_id):
+                    self._cancel_connection_retry_session(robot_id)
+                    return
 
                 if not self._acquire_connection_retry_attempt_slot(robot_id, token):
                     if not self._is_connection_retry_session_active(robot_id, token):

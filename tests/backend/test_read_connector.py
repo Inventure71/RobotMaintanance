@@ -88,6 +88,29 @@ def test_contains_lines_unordered_ignores_prompt_and_ansi_noise() -> None:
     assert result["missing"] == []
 
 
+def test_contains_lines_unordered_can_match_namespaced_topic_suffixes() -> None:
+    connector = ReadConnector()
+    result = connector.evaluate(
+        {
+            "kind": "contains_lines_unordered",
+            "inputRef": "out",
+            "lines": ["/battery", "/scan"],
+            "allowNamespacedSuffix": True,
+            "requireAll": True,
+        },
+        {
+            "out": "/robot1/battery\n/robot1/sensors/scan\n",
+        },
+    )
+
+    assert result["passed"] is True
+    assert result["missing"] == []
+    assert result["matchedBySuffix"] == {
+        "/battery": "/robot1/battery",
+        "/scan": "/robot1/sensors/scan",
+    }
+
+
 def test_normalize_lines_strips_only_known_prompt_lines() -> None:
     lines = ReadConnector._normalize_lines(
         "\n".join(

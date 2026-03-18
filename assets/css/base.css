@@ -807,6 +807,30 @@
   color: color-mix(in srgb, var(--state-warn, var(--warn)) 70%, #ffffff);
 }
 
+.flow-block.flow-block-risk--sudo {
+  border-left-color: var(--err);
+}
+
+.flow-block.flow-block-risk--sudo .flow-block-icon {
+  border-color: color-mix(in srgb, var(--err) 62%, transparent);
+  color: color-mix(in srgb, var(--err) 78%, #ffffff);
+}
+
+.flow-block-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--err) 65%, transparent);
+  background: color-mix(in srgb, var(--err) 16%, transparent);
+  color: color-mix(in srgb, var(--err) 90%, #fff4f6);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .flow-block-icon {
   font-size: 1.4rem;
   background: rgba(0,0,0,0.3);
@@ -841,6 +865,13 @@
 .flow-block-actions {
   display: flex;
   gap: 8px;
+}
+
+.flow-block-actions.flow-block-actions--two-column {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 8px;
+  align-items: stretch;
 }
 
 .flow-block:not(:last-child)::after {
@@ -1044,8 +1075,24 @@ body::after {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.flow-block.flow-block-risk--sudo {
+  border-color: color-mix(in srgb, var(--err) 52%, var(--surface-border));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--err) 72%, transparent),
+    inset 0 0 0 6px color-mix(in srgb, var(--err) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
 .flow-block:hover {
   border-color: color-mix(in srgb, var(--ring-hover) 75%, var(--surface-border));
+}
+
+.flow-block.flow-block-risk--sudo:hover {
+  border-color: color-mix(in srgb, var(--err) 68%, var(--ring-hover));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--err) 78%, transparent),
+    inset 0 0 0 6px color-mix(in srgb, var(--err) 14%, transparent),
+    0 8px 16px rgba(0, 0, 0, 0.3);
 }
 
 .flow-block-icon {

@@ -34,7 +34,6 @@ def _manager() -> TerminalManager:
                     {
                         "id": "demo_fix",
                         "enabled": True,
-                        "params": {"postTestIds": ["general"]},
                         "execute": [{"id": "cmd", "command": "echo ok"}],
                     }
                 ],
@@ -75,7 +74,7 @@ def _wait_for_terminal_status(manager: TerminalManager, run_id: str, timeout_sec
 
 def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     manager = _manager()
-    observed = {"commands": [], "test_runs": 0}
+    observed = {"commands": [], "test_runs": 0, "test_ids": []}
 
     def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
         _ = (page_session_id, robot_id, timeout_sec, sudo_password, source)
@@ -91,9 +90,11 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
         _ = (robot_id, page_session_id, dry_run)
         observed["test_runs"] += 1
+        observed["test_ids"].append(test_ids)
+        selected_ids = test_ids or ["general"]
         return [
             {
-                "id": test_ids[0],
+                "id": selected_ids[0],
                 "status": "ok",
                 "value": "all_present",
                 "details": "ok",
@@ -112,6 +113,7 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     assert payload["status"] == "succeeded"
     assert observed["commands"] == ["echo ok"]
     assert observed["test_runs"] == 1
+    assert observed["test_ids"] == [["general"]]
     assert payload["testRun"]["count"] == 1
 
 
@@ -195,9 +197,10 @@ def test_fix_job_emits_post_test_events(monkeypatch):
 
     def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
         _ = (robot_id, page_session_id, dry_run)
+        selected_ids = test_ids or ["general"]
         return [
             {
-                "id": test_ids[0],
+                "id": selected_ids[0],
                 "status": "ok",
                 "value": "all_present",
                 "details": "ok",

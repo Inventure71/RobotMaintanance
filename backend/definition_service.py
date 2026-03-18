@@ -113,6 +113,40 @@ class DefinitionService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
+    @staticmethod
+    def _serialize_json(payload: Any) -> str:
+        return json.dumps(payload, indent=2) + "\n"
+
+    def _safe_apply_file_changes(
+        self,
+        changes: dict[Path, str | None],
+        *,
+        failure_prefix: str = "Failed to apply definition",
+    ) -> RobotCatalog:
+        snapshots = {
+            Path(path): Path(path).read_text(encoding="utf-8") if Path(path).exists() else None
+            for path in changes.keys()
+        }
+        try:
+            for raw_path, content in changes.items():
+                path = Path(raw_path)
+                if content is None:
+                    if path.exists():
+                        path.unlink()
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            return self._reload_catalog_and_runtime()
+        except Exception as exc:
+            for path, previous in snapshots.items():
+                if previous is None:
+                    if path.exists():
+                        path.unlink()
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(previous, encoding="utf-8")
+            raise HTTPException(status_code=400, detail=f"{failure_prefix}: {exc}") from exc
+
     def _reload_catalog_and_runtime(self) -> RobotCatalog:
         catalog = RobotCatalog.load_from_paths(
             robots_path=self._robots_config_path,
@@ -133,17 +167,53 @@ class DefinitionService:
         return catalog
 
     def _safe_write_with_reload(self, path: Path, payload: Any) -> RobotCatalog:
-        existed = path.exists()
-        previous = path.read_text(encoding="utf-8") if existed else None
-        self._write_json(path, payload)
-        try:
-            return self._reload_catalog_and_runtime()
-        except Exception as exc:
-            if existed and previous is not None:
-                path.write_text(previous, encoding="utf-8")
-            elif path.exists():
-                path.unlink()
-            raise HTTPException(status_code=400, detail=f"Failed to apply definition: {exc}") from exc
+        return self._safe_apply_file_changes(
+            {path: self._serialize_json(payload)},
+            failure_prefix="Failed to apply definition",
+        )
+
+    @staticmethod
+    def _load_json_document(path: Path) -> dict[str, Any] | None:
+        if not path.exists():
+            return None
+        payload = load_json_file(path)
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _extract_check_ids(definition: dict[str, Any] | None) -> list[str]:
+        if not isinstance(definition, dict):
+            return []
+        checks = definition.get("checks") if isinstance(definition.get("checks"), list) else []
+        return [
+            normalize_text(item.get("id"), "")
+            for item in checks
+            if isinstance(item, dict) and normalize_text(item.get("id"), "")
+        ]
+
+    def _definition_refs_present(
+        self,
+        refs: list[str],
+        *,
+        definition_id: str,
+        check_ids: set[str],
+    ) -> bool:
+        target_definition_id = normalize_text(definition_id, "")
+        if not target_definition_id:
+            return False
+        normalized_refs = self._normalize_string_list(refs)
+        if target_definition_id in normalized_refs:
+            return True
+        if check_ids and any(ref in check_ids for ref in normalized_refs):
+            return True
+        legacy_prefix = f"{target_definition_id}__"
+        if any(ref.startswith(legacy_prefix) for ref in normalized_refs):
+            return True
+        check_definitions_by_id = getattr(self._terminal_manager, "_check_definitions_by_id", {}) or {}
+        for ref in normalized_refs:
+            check_payload = check_definitions_by_id.get(ref)
+            if isinstance(check_payload, dict) and normalize_text(check_payload.get("definitionId"), "") == target_definition_id:
+                return True
+        return False
 
     def reload(self) -> dict[str, Any]:
         self._reload_catalog_and_runtime()
@@ -177,6 +247,7 @@ class DefinitionService:
                 {
                     "id": definition_id,
                     "label": normalize_text(test_definition.get("label"), definition_id),
+                    "description": normalize_text(test_definition.get("description"), ""),
                     "enabled": bool(test_definition.get("enabled", True)),
                     "mode": normalize_text(test_definition.get("mode"), "orchestrate"),
                     "params": test_definition.get("params") if isinstance(test_definition.get("params"), dict) else {},
@@ -202,7 +273,6 @@ class DefinitionService:
                     "runAtConnection": bool(fix_definition.get("runAtConnection", False)),
                     "params": fix_definition.get("params") if isinstance(fix_definition.get("params"), dict) else {},
                     "execute": fix_definition.get("execute") if isinstance(fix_definition.get("execute"), list) else [],
-                    "postTestIds": self._normalize_string_list(fix_definition.get("postTestIds")),
                 }
             )
         fixes.sort(key=lambda item: item["id"])
@@ -289,14 +359,22 @@ class DefinitionService:
             "summary": self.get_summary(),
         }
 
-    def _check_id_conflicts(self, definition_id: str, check_ids: list[str]) -> None:
+    def _check_id_conflicts(
+        self,
+        definition_id: str,
+        check_ids: list[str],
+        *,
+        allowed_definition_ids: set[str] | None = None,
+    ) -> None:
         existing_checks = getattr(self._terminal_manager, "_check_definitions_by_id", {}) or {}
+        allowed = {normalize_text(item, "") for item in (allowed_definition_ids or set()) if normalize_text(item, "")}
+        allowed.add(normalize_text(definition_id, ""))
         for check_id in check_ids:
             existing = existing_checks.get(check_id)
             if not isinstance(existing, dict):
                 continue
             existing_definition_id = normalize_text(existing.get("definitionId"), "")
-            if existing_definition_id and existing_definition_id != definition_id:
+            if existing_definition_id and existing_definition_id not in allowed:
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -307,6 +385,23 @@ class DefinitionService:
 
     def upsert_test(self, payload: dict[str, Any]) -> dict[str, Any]:
         definition_id = self._ensure_valid_id(payload.get("id"), "Test")
+        previous_definition_id = normalize_text(payload.get("previousId"), "")
+        target_path = self._tests_dir / f"{definition_id}.test.json"
+        if not previous_definition_id and target_path.exists():
+            previous_definition_id = definition_id
+        previous_path = self._tests_dir / f"{previous_definition_id}.test.json" if previous_definition_id else None
+        if previous_definition_id and previous_path is not None and not previous_path.exists():
+            raise HTTPException(status_code=404, detail=f"Test '{previous_definition_id}' not found.")
+        previous_definition = self._load_json_document(previous_path) if previous_path else None
+        previous_check_ids = self._extract_check_ids(previous_definition)
+
+        if (
+            previous_definition_id
+            and previous_definition_id != definition_id
+            and target_path.exists()
+        ):
+            raise HTTPException(status_code=400, detail=f"Test id '{definition_id}' already exists.")
+
         mode = normalize_text(payload.get("mode"), "orchestrate").lower()
         if mode not in {"orchestrate", "online_probe"}:
             raise HTTPException(status_code=400, detail=f"Unsupported test mode '{mode}'.")
@@ -323,7 +418,11 @@ class DefinitionService:
         check_ids = [item for item in check_ids if item]
         if len(check_ids) != len(set(check_ids)):
             raise HTTPException(status_code=400, detail="Test definition contains duplicate check ids.")
-        self._check_id_conflicts(definition_id, check_ids)
+        self._check_id_conflicts(
+            definition_id,
+            check_ids,
+            allowed_definition_ids={previous_definition_id, definition_id},
+        )
         run_at_connection_values = {
             bool(item.get("runAtConnection"))
             for item in checks
@@ -369,6 +468,7 @@ class DefinitionService:
         document: dict[str, Any] = {
             "id": definition_id,
             "label": normalize_text(payload.get("label"), definition_id),
+            "description": normalize_text(payload.get("description"), ""),
             "enabled": bool(payload.get("enabled", True)),
             "mode": mode,
             "execute": execute,
@@ -380,17 +480,55 @@ class DefinitionService:
         elif not document["execute"]:
             raise HTTPException(status_code=400, detail="execute[] is required for orchestrate tests.")
 
-        path = self._tests_dir / f"{definition_id}.test.json"
-        self._safe_write_with_reload(path, document)
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        if previous_definition_id:
+            old_check_id_set = set(previous_check_ids)
+            new_check_ids = self._normalize_string_list(check_ids)
+            for entry in robot_type_entries:
+                test_refs = self._normalize_string_list(entry.get("testRefs"))
+                was_mapped = self._definition_refs_present(
+                    test_refs,
+                    definition_id=previous_definition_id,
+                    check_ids=old_check_id_set,
+                )
+                next_refs = self._remove_test_refs_for_definition(
+                    test_refs,
+                    definition_id=previous_definition_id,
+                    check_ids=old_check_id_set,
+                )
+                if was_mapped:
+                    next_refs = self._normalize_string_list([*next_refs, *new_check_ids])
+                entry["testRefs"] = next_refs
+
+        changes: dict[Path, str | None] = {
+            target_path: self._serialize_json(document),
+        }
+        if previous_definition_id and previous_definition_id != definition_id and previous_path is not None:
+            changes[previous_path] = None
+        if isinstance(root_payload, dict):
+            root_payload["robotTypes"] = robot_type_entries
+        changes[self._robot_types_config_path] = self._serialize_json(root_payload)
+
+        self._safe_apply_file_changes(changes, failure_prefix="Failed to apply definition")
         return {
             "ok": True,
             "id": definition_id,
-            "path": str(path),
+            "path": str(target_path),
             "summary": self.get_summary(),
         }
 
     def upsert_fix(self, payload: dict[str, Any]) -> dict[str, Any]:
         fix_id = self._ensure_valid_id(payload.get("id"), "Fix")
+        previous_fix_id = normalize_text(payload.get("previousId"), "")
+        target_path = self._fixes_dir / f"{fix_id}.fix.json"
+        if not previous_fix_id and target_path.exists():
+            previous_fix_id = fix_id
+        previous_path = self._fixes_dir / f"{previous_fix_id}.fix.json" if previous_fix_id else None
+        if previous_fix_id and previous_path is not None and not previous_path.exists():
+            raise HTTPException(status_code=404, detail=f"Fix '{previous_fix_id}' not found.")
+        if previous_fix_id and previous_fix_id != fix_id and target_path.exists():
+            raise HTTPException(status_code=400, detail=f"Fix id '{fix_id}' already exists.")
+
         execute = payload.get("execute") if isinstance(payload.get("execute"), list) else []
         if not execute:
             raise HTTPException(status_code=400, detail="Fix definition requires non-empty execute steps.")
@@ -402,15 +540,29 @@ class DefinitionService:
             "description": normalize_text(payload.get("description"), ""),
             "runAtConnection": bool(payload.get("runAtConnection", False)),
             "execute": execute,
-            "postTestIds": self._normalize_string_list(payload.get("postTestIds")),
             "params": payload.get("params") if isinstance(payload.get("params"), dict) else {},
         }
-        path = self._fixes_dir / f"{fix_id}.fix.json"
-        self._safe_write_with_reload(path, document)
+        root_payload, robot_type_entries = self._load_robot_types_document()
+        if previous_fix_id:
+            for entry in robot_type_entries:
+                fix_refs = self._normalize_string_list(entry.get("fixRefs"))
+                next_fix_refs = [fix_id if ref == previous_fix_id else ref for ref in fix_refs]
+                entry["fixRefs"] = self._normalize_string_list(next_fix_refs)
+
+        changes: dict[Path, str | None] = {
+            target_path: self._serialize_json(document),
+        }
+        if previous_fix_id and previous_fix_id != fix_id and previous_path is not None:
+            changes[previous_path] = None
+        if isinstance(root_payload, dict):
+            root_payload["robotTypes"] = robot_type_entries
+        changes[self._robot_types_config_path] = self._serialize_json(root_payload)
+
+        self._safe_apply_file_changes(changes, failure_prefix="Failed to apply definition")
         return {
             "ok": True,
             "id": fix_id,
-            "path": str(path),
+            "path": str(target_path),
             "summary": self.get_summary(),
         }
 

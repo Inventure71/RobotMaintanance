@@ -71,7 +71,6 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
             {
                 "id": "flash_fix",
                 "execute": [{"id": "down", "command": "echo down"}],
-                "postTestIds": ["battery"],
             }
         ),
         encoding="utf-8",
@@ -87,6 +86,7 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
     assert "battery" in catalog.check_definitions_by_id
     assert "flash_fix" in catalog.fix_definitions_by_id
     assert catalog.fix_definitions_by_id["flash_fix"]["runAtConnection"] is False
+    assert "postTestIds" not in catalog.fix_definitions_by_id["flash_fix"]
 
 
 def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
@@ -123,7 +123,6 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
             "enabled": True,
             "runAtConnection": True,
             "execute": [{"id": "down", "command": "echo down"}],
-            "postTestIds": ["online"],
             "params": {},
         }
     }
@@ -134,6 +133,7 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
     assert [item["id"] for item in normalized["rosbot-2-pro"]["tests"]] == ["online"]
     assert [item["id"] for item in normalized["rosbot-2-pro"]["autoFixes"]] == ["flash_fix"]
     assert normalized["rosbot-2-pro"]["autoFixes"][0]["runAtConnection"] is True
+    assert "postTestIds" not in normalized["rosbot-2-pro"]["autoFixes"][0]
 
 
 def test_normalize_robot_types_keeps_auto_monitor_battery_command():

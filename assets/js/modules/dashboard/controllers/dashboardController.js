@@ -138,6 +138,8 @@ let ROBOT_TYPE_BY_ID = new Map();
       onlineSortMode: ONLINE_SORT_BATTERY,
       testingRobotIds: new Set(),
       searchingRobotIds: new Set(),
+      editingTestSourceId: '',
+      editingFixSourceId: '',
       fixingRobotIds: new Set(),
       autoTestingRobotIds: new Set(),
       autoSearchingRobotIds: new Set(),
@@ -337,7 +339,6 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageFixLabelInput = $('#manageFixLabel');
     const manageFixDescriptionInput = $('#manageFixDescription');
     const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
-    const manageFixPostTestsInput = $('#manageFixPostTests');
     const manageFixRunAtConnectionInput = $('#manageFixRunAtConnectionInput');
     const manageFixEditorStatus = $('#manageFixEditorStatus');
     const manageDeleteTestButton = $('#manageDeleteTestButton');
@@ -365,6 +366,7 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderRobotSelect = $('#recorderRobotSelect');
     const recorderDefinitionIdInput = $('#recorderDefinitionId');
     const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
+    const recorderDefinitionDescriptionInput = $('#recorderDefinitionDescription');
     const recorderRunAtConnectionInput = $('#recorderRunAtConnectionInput');
     const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
     const recorderPublishTestButton = $('#recorderPublishTest');
@@ -664,7 +666,6 @@ const runtimeEnv = {
   manageFixExecuteJsonInput,
   manageFixIdInput,
   manageFixLabelInput,
-  manageFixPostTestsInput,
   manageFixRunAtConnectionInput,
   manageFixRobotTypeTargets,
   manageFixesList,
@@ -718,6 +719,7 @@ const runtimeEnv = {
   recorderCreateNewTestButton,
   recorderDefinitionIdInput,
   recorderDefinitionLabelInput,
+  recorderDefinitionDescriptionInput,
   recorderRunAtConnectionInput,
   recorderRobotTypeTargets,
   recorderFlowBlocks,

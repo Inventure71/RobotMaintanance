@@ -66,7 +66,7 @@ Contract:
 - `id`, `label`, `description`, `enabled`
 - `execute[]` (same step shape as tests)
 - optional `params`
-- optional `postTestIds[]` (check ids)
+- fixes do not declare post-test ids; after a fix finishes the robot reruns its assigned test suite
 
 Behavior:
 - fixes run via async fix-job endpoints.
@@ -92,7 +92,7 @@ Each robot type entry:
 - `autoMonitor` (optional)
 
 Validation:
-- unknown `testRefs`, `fixRefs`, or fix `postTestIds` fail startup.
+- unknown `testRefs` or `fixRefs` fail startup.
 - overrides are merged on top of definition metadata/params.
 - when robot types are created from the UI, the backend stores low/high uploads under `assets/models/LowRes` and `assets/models/HighRes`, then writes the shared renamed file as `model.file_name`.
 

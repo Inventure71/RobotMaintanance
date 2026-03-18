@@ -126,7 +126,6 @@ def _build_client(tmp_path: Path) -> tuple[TestClient, Path]:
             "id": "flash_fix",
             "label": "Flash fix",
             "execute": [{"id": "noop", "command": "echo flash"}],
-            "postTestIds": ["battery"],
         },
     )
 
@@ -168,6 +167,7 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
         json={
             "id": "camera_snapshot",
             "label": "Camera Snapshot",
+            "description": "Capture camera topics for operator review.",
             "enabled": True,
             "mode": "orchestrate",
             "execute": [
@@ -201,11 +201,16 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
     assert payload["ok"] is True
     assert payload["id"] == "camera_snapshot"
     assert (tmp_path / "tests" / "camera_snapshot.test.json").exists()
+    saved = json.loads((tmp_path / "tests" / "camera_snapshot.test.json").read_text(encoding="utf-8"))
+    assert saved["description"] == "Capture camera topics for operator review."
 
     summary = client.get("/api/definitions/summary")
     assert summary.status_code == 200
     checks = summary.json().get("checks", [])
     assert any(item.get("id") == "camera" for item in checks)
+    tests = summary.json().get("tests", [])
+    saved_test = next(item for item in tests if item.get("id") == "camera_snapshot")
+    assert saved_test["description"] == "Capture camera topics for operator review."
 
 
 def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
@@ -219,7 +224,6 @@ def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
             "enabled": True,
             "runAtConnection": True,
             "execute": [{"id": "repair", "command": "echo repair"}],
-            "postTestIds": ["battery"],
         },
     )
     assert response.status_code == 200
@@ -558,3 +562,73 @@ def test_delete_test_removes_mapped_check_refs(tmp_path: Path):
     rosbot_type = next(item for item in robot_types if item.get("id") == "rosbot-2-pro")
     assert "delete_probe__camera" not in rosbot_type.get("testRefs", [])
     assert all(not ref.startswith("delete_probe__") for ref in rosbot_type.get("testRefs", []))
+
+
+def test_upsert_test_supports_renaming_definition_and_checks_with_reference_rewrites(tmp_path: Path):
+    client, robot_types_path = _build_client(tmp_path)
+
+    response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "topics_snapshot_v2",
+            "previousId": "topics_snapshot",
+            "label": "Topics Snapshot V2",
+            "enabled": True,
+            "mode": "orchestrate",
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "battery_health",
+                    "label": "Battery Health",
+                    "runAtConnection": True,
+                    "read": {
+                        "kind": "contains_lines_unordered",
+                        "inputRef": "topics_raw",
+                        "lines": ["/battery"],
+                        "requireAll": True,
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "Battery found"},
+                    "fail": {"status": "error", "value": "missing", "details": "Battery missing"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert not (tmp_path / "tests" / "topics_snapshot.test.json").exists()
+    assert (tmp_path / "tests" / "topics_snapshot_v2.test.json").exists()
+
+    robot_types_payload = json.loads(robot_types_path.read_text(encoding="utf-8"))
+    rosbot_type = next(item for item in robot_types_payload["robotTypes"] if item.get("id") == "rosbot-2-pro")
+    assert "battery_health" in rosbot_type["testRefs"]
+    assert "battery" not in rosbot_type["testRefs"]
+
+    summary = response.json().get("summary", {})
+    assert any(item.get("id") == "topics_snapshot_v2" for item in summary.get("tests", []))
+    assert not any(item.get("id") == "topics_snapshot" for item in summary.get("tests", []))
+
+
+def test_upsert_fix_supports_renaming_and_preserves_robot_type_mappings(tmp_path: Path):
+    client, robot_types_path = _build_client(tmp_path)
+
+    response = client.post(
+        "/api/definitions/fixes",
+        json={
+            "id": "flash_fix_v2",
+            "previousId": "flash_fix",
+            "label": "Flash fix v2",
+            "description": "Renamed flash fix",
+            "enabled": True,
+            "runAtConnection": False,
+            "execute": [{"id": "noop", "command": "echo flash"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert not (tmp_path / "fixes" / "flash_fix.fix.json").exists()
+    assert (tmp_path / "fixes" / "flash_fix_v2.fix.json").exists()
+
+    robot_types_payload = json.loads(robot_types_path.read_text(encoding="utf-8"))
+    rosbot_type = next(item for item in robot_types_payload["robotTypes"] if item.get("id") == "rosbot-2-pro")
+    assert "flash_fix_v2" in rosbot_type["fixRefs"]
+    assert "flash_fix" not in rosbot_type["fixRefs"]

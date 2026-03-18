@@ -455,27 +455,67 @@ test('workflow recorder renders move controls only for writes and preserves writ
     assert.equal(readRows.length, 1);
 
     const firstWriteButtons = writeRows[0].children[0].querySelectorAll('button');
-    assert.deepEqual(firstWriteButtons.map((button) => button.textContent), ['Edit', 'Move up', 'Move down', 'Remove']);
-    assert.equal(firstWriteButtons[1].disabled, true);
-    assert.equal(firstWriteButtons[2].disabled, false);
+    assert.deepEqual(firstWriteButtons.map((button) => button.textContent), ['Move up', 'Move down', 'Edit', 'Remove']);
+    assert.equal(firstWriteButtons[0].disabled, true);
+    assert.equal(firstWriteButtons[1].disabled, false);
 
     const secondWriteButtons = writeRows[1].children[0].querySelectorAll('button');
-    assert.equal(secondWriteButtons[1].disabled, false);
-    assert.equal(secondWriteButtons[2].disabled, true);
+    assert.equal(secondWriteButtons[0].disabled, false);
+    assert.equal(secondWriteButtons[1].disabled, true);
 
     const readButtons = readRows[0].children[0].querySelectorAll('button').map((button) => button.textContent);
     assert.deepEqual(readButtons, ['Edit', 'Remove']);
 
-    firstWriteButtons[0].click();
+    firstWriteButtons[2].click();
     assert.equal(recorder.getState().editingWriteBlockId, 'write_1');
 
-    firstWriteButtons[2].click();
+    firstWriteButtons[1].click();
 
     const reorderedWriteRows = blocksEl.querySelectorAll('.write-block');
     const movedRowTitle = findByText(reorderedWriteRows[1], 'div', 'STEP 2 · WRITE echo one');
     assert.ok(movedRowTitle);
     const movedRowButtons = reorderedWriteRows[1].children[0].querySelectorAll('button');
-    assert.equal(movedRowButtons[0].textContent, 'Close');
+    assert.equal(movedRowButtons[2].textContent, 'Close');
     assert.equal(recorder.getState().editingWriteBlockId, 'write_1');
+  });
+});
+
+test('workflow recorder marks sudo write blocks as risky in the rendered UI', () => {
+  withFakeDocument(() => {
+    const blocksEl = createElement('div');
+    const recorder = new WorkflowRecorderComponent({ blocksEl });
+    recorder.createNewTest();
+    recorder.addOrUpdateOutput({
+      key: 'filesystem',
+      label: 'Filesystem',
+      icon: 'F',
+      passDetails: 'ok',
+      failDetails: 'fail',
+    });
+    recorder.addWriteBlock({
+      command: 'sudo ls /root',
+      outputPayload: { stdout: 'secret.txt' },
+    });
+    recorder.addWriteBlock({
+      command: 'ls /tmp',
+      outputPayload: { stdout: 'cache' },
+    });
+
+    const writeRows = blocksEl.querySelectorAll('.write-block');
+    assert.equal(writeRows.length, 2);
+
+    const riskyRow = writeRows[0];
+    assert.equal(riskyRow.classList.contains('flow-block-risk--sudo'), true);
+    assert.equal(riskyRow.dataset.riskLevel, 'sudo');
+    assert.equal(riskyRow.dataset.riskyCommand, 'true');
+    assert.match(normalize(riskyRow.querySelector('.flow-block-desc')?.textContent), /sudo privileges/i);
+
+    const riskBadge = riskyRow.querySelector('.flow-block-risk-badge');
+    assert.ok(riskBadge);
+    assert.equal(normalize(riskBadge.textContent), 'sudo risk');
+
+    const safeRow = writeRows[1];
+    assert.equal(safeRow.classList.contains('flow-block-risk--sudo'), false);
+    assert.equal(safeRow.querySelector('.flow-block-risk-badge'), null);
   });
 });

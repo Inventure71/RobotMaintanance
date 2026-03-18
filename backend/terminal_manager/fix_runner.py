@@ -32,6 +32,21 @@ class FixRunnerMixin:
 
         raise HTTPException(status_code=404, detail=f"Fix '{fix_id}' is not configured for this robot type.")
 
+    def _default_fix_test_ids(self, robot_id: str) -> list[str]:
+        robot_type = self._resolve_robot_type(robot_id)
+        tests = robot_type.get("tests") if isinstance(robot_type, dict) else []
+        if not isinstance(tests, list):
+            return []
+        return [
+            normalize_text(test.get("id"), "")
+            for test in tests
+            if (
+                isinstance(test, dict)
+                and test.get("enabled", True) is not False
+                and normalize_text(test.get("id"), "")
+            )
+        ]
+
     def _record_fix_event(
         self,
         robot_id: str,
@@ -182,15 +197,11 @@ class FixRunnerMixin:
                     source="auto-fix",
                 )
 
-            def run_tests(test_ids: list[str]) -> list[dict[str, Any]]:
-                normalized = [normalize_text(test_id, "") for test_id in (test_ids or [])]
-                normalized = [test_id for test_id in normalized if test_id]
-                if not normalized:
-                    return []
+            def run_tests(test_ids: list[str] | None) -> list[dict[str, Any]]:
                 return self.run_tests(
                     robot_id=robot_id,
                     page_session_id=page_session_id,
-                    test_ids=normalized,
+                    test_ids=test_ids,
                     dry_run=False,
                 )
 
@@ -210,16 +221,13 @@ class FixRunnerMixin:
                 command_cache={},
             )
 
-            post_test_ids = params.get("postTestIds") if isinstance(params.get("postTestIds"), list) else None
-            if post_test_ids is None:
-                post_test_ids = fix_spec.get("postTestIds") if isinstance(fix_spec.get("postTestIds"), list) else []
-            post_test_ids = [normalize_text(test_id, "") for test_id in post_test_ids if normalize_text(test_id, "")]
+            post_test_ids = self._default_fix_test_ids(robot_id)
 
             if post_test_ids:
-                emit_event("post_tests_started", "Running post-fix tests.", {"testIds": post_test_ids})
+                emit_event("post_tests_started", "Running robot test suite after fix.", {"testIds": post_test_ids})
             test_results = run_tests(post_test_ids)
             if post_test_ids:
-                emit_event("post_tests_finished", "Post-fix tests completed.", {"testCount": len(test_results)})
+                emit_event("post_tests_finished", "Robot test suite completed after fix.", {"testCount": len(test_results)})
 
             commands = execution.get("commandsExecuted") if isinstance(execution.get("commandsExecuted"), list) else []
             logs = [str(item.get("output") or "") for item in commands if isinstance(item, dict)]
@@ -228,7 +236,6 @@ class FixRunnerMixin:
                 "details": "Fix run completed.",
                 "commandsExecuted": commands,
                 "logs": logs,
-                "postTestIds": post_test_ids,
             }
 
             finished_at = time.time()

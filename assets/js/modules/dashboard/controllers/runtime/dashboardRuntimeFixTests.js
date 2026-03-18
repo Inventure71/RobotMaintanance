@@ -104,7 +104,6 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,
@@ -544,7 +543,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
               size: 'small',
             })}
             <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-            <span class="detail-issue-count">${errorCount} issue(s)</span>`;
+            <span class="detail-issue-count">${errorCount} issue(s)</span>`.trim().replace(/>\s+</g, '><');
         }
   
         const modelContainer = modelHost?.querySelector('.robot-model-slot, .robot-3d') || null;
@@ -722,7 +721,7 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
           <div><strong>Reachable:</strong> ${onlineNames.length ? onlineNames.join(', ') : 'none'}</div>
           <div><strong>Unreachable:</strong> ${offlineNames.length ? offlineNames.join(', ') : 'none'}</div>
           <div><strong>Skipped (busy):</strong> ${skippedCount ? skippedNames.join(', ') : 'none'}</div>
-        `;
+        `.trim().replace(/>\s+</g, '><');
         state.onlineRefreshSummary = {
           onlineCount: onlineNames.length,
           offlineCount: offlineNames.length,
@@ -862,7 +861,6 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
                   id: fix.id,
                   label: fix.label,
                   description: fix.description,
-                postTestIds: fix.postTestIds || [],
                 typeLabel,
                 robotIds: [],
               });
@@ -890,7 +888,6 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
           id: fix.id,
           label: fix.label,
           description: fix.description,
-          postTestIds: fix.postTestIds || [],
           typeLabel: robot.type,
           robotIds: [robotId(robot)],
         }));
@@ -922,7 +919,10 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
   async function runAutoFixForRobot(robot, candidate) {
         if (!robot || !candidate) return;
         const normalizedRobotId = robotId(robot);
-        const configuredPostTestIds = Array.isArray(candidate.postTestIds) ? candidate.postTestIds : [];
+        const configuredPostTestIds = getRobotDefinitionsForType(robot.typeId)
+          .filter((definition) => definition?.enabled !== false)
+          .map((definition) => normalizeText(definition?.id, ''))
+          .filter(Boolean);
         let sawPostTests = false;
   
         const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
@@ -1465,7 +1465,8 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         };
       }
 
-  function getRobotIdsForRun(options = {}) {
+  function getRobotIdsForRun(options = {}, runtimeOptions = {}) {
+        const persistSelection = runtimeOptions.persistSelection !== false;
         const selectedIds = getSelectedRobotIds().filter((id) => robotId(id));
   
         if (selectedIds.length) return selectedIds;
@@ -1473,7 +1474,9 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         if (options.autoSelectOnlineWhenEmpty) {
           const reachableIds = getReachableRobotIds().filter((id) => robotId(id));
           if (reachableIds.length) {
-            selectRobotIds(reachableIds);
+            if (persistSelection) {
+              selectRobotIds(reachableIds);
+            }
             return reachableIds;
           }
           return [];
@@ -1484,6 +1487,29 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
         }
   
         return [];
+      }
+
+  function getManualRunButtonState() {
+        const detailTargetIds = getRobotIdsForRun(
+          { fallbackToActive: true },
+          { persistSelection: false },
+        );
+        const selectedTargetIds = getRobotIdsForRun(
+          { fallbackToActive: false, autoSelectOnlineWhenEmpty: true },
+          { persistSelection: false },
+        );
+        const detailTesting = detailTargetIds.some((id) => isRobotTesting(id));
+        const selectedTesting = selectedTargetIds.some((id) => isRobotTesting(id));
+
+        return {
+          detailDisabled: detailTesting,
+          detailTitle: detailTesting ? 'Tests are already running for this robot.' : 'Run tests',
+          selectedDisabled: selectedTesting,
+          selectedTitle:
+            selectedTesting
+              ? 'Tests are already running for one or more target robots.'
+              : getRunSelectedButtonIdleLabel(),
+        };
       }
 
   function getConfiguredDefaultTestIds(robot, includeOnline = false) {
@@ -1644,18 +1670,39 @@ export function registerRuntimeFixTestsRuntime(runtime, env) {
   function setRunningButtonState(isRunning) {
         const runButton = $('#runRobotTests');
         const runSelectedButton = $('#runSelectedRobotTests');
+        const buttonState = getManualRunButtonState();
   
         if (runButton) {
-          setActionButtonLoading(runButton, isRunning, {
-            loadingLabel: 'Running tests...',
-            idleLabel: 'Run tests',
-          });
+          if (isRunning) {
+            setActionButtonLoading(runButton, true, {
+              loadingLabel: 'Running tests...',
+              idleLabel: 'Run tests',
+            });
+          } else {
+            applyActionButton(runButton, {
+              intent: 'run',
+              label: 'Run tests',
+              title: buttonState.detailTitle,
+              ariaLabel: 'Run tests',
+              disabled: buttonState.detailDisabled,
+            });
+          }
         }
         if (runSelectedButton) {
-          setActionButtonLoading(runSelectedButton, isRunning, {
-            loadingLabel: 'Running selected tests...',
-            idleLabel: getRunSelectedButtonIdleLabel(),
-          });
+          if (isRunning) {
+            setActionButtonLoading(runSelectedButton, true, {
+              loadingLabel: 'Running selected tests...',
+              idleLabel: getRunSelectedButtonIdleLabel(),
+            });
+          } else {
+            applyActionButton(runSelectedButton, {
+              intent: 'run',
+              label: getRunSelectedButtonIdleLabel(),
+              title: buttonState.selectedTitle,
+              ariaLabel: getRunSelectedButtonIdleLabel(),
+              disabled: buttonState.selectedDisabled,
+            });
+          }
         }
       }
 

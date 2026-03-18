@@ -108,7 +108,6 @@ export function registerMonitorConfigRuntime(runtime, env) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
-    manageFixPostTestsInput,
     manageFixRobotTypeTargets,
     manageFixesList,
     manageTabButtons,
@@ -719,16 +718,10 @@ export function registerMonitorConfigRuntime(runtime, env) {
         if (!raw || typeof raw !== 'object') return null;
         const id = normalizeText(raw.id, '');
         if (!id) return null;
-  
-        const postTestIds = Array.isArray(raw.postTestIds)
-          ? raw.postTestIds.map((item) => normalizeText(item, '')).filter(Boolean)
-          : [];
-  
         return {
           id,
           label: normalizeText(raw.label, id),
           description: normalizeText(raw.description, ''),
-          postTestIds,
         };
       }
 

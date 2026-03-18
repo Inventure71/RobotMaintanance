@@ -1,6 +1,7 @@
 {
   "id": "topics_snapshot",
   "label": "Topics Snapshot",
+  "description": "Capture the ROS topic list once and validate the required robot interfaces are present.",
   "enabled": true,
   "execute": [
     {
@@ -34,6 +35,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/buttons", "/diagnostics", "/imu", "/joint_states", "/pose", "/rosout", "/rosout_agg", "/tf", "/tf_static"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "All required topics present" },
@@ -58,6 +60,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/cmd_ser", "/cmd_vel", "/odom", "/odom/wheel", "/set_pose", "/velocity"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "All movement topics present" },
@@ -82,6 +85,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/battery"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "Battery topic present" },
@@ -106,6 +110,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/scan"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "Lidar topic present" },
@@ -130,6 +135,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/range/fl", "/range/fr", "/range/rl", "/range/rr"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "All proximity topics present" },
@@ -154,6 +160,7 @@
         "kind": "contains_lines_unordered",
         "inputRef": "topics_raw",
         "lines": ["/camera/color/camera_info", "/camera/color/image_raw", "/camera/depth/camera_info", "/camera/depth/image_raw", "/camera/depth/points", "/camera/depth_registered/points", "/camera/extrinsic/depth_to_color", "/camera/ir/camera_info", "/camera/ir/image_raw", "/camera/reset_device"],
+        "allowNamespacedSuffix": true,
         "requireAll": true
       },
       "pass": { "status": "ok", "value": "all_present", "details": "All camera topics present" },

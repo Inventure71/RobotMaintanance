@@ -130,8 +130,14 @@ class AutoMonitorWorkerMixin:
         if not is_online:
             self._emit_connection_event_disconnected(robot_id)
             self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
+            self.close_session(page_session_id=self.AUTO_MONITOR_TEST_PAGE_SESSION_ID, robot_id=robot_id)
             with self._lock:
                 self._last_auto_monitor_online_state[robot_id] = False
+            return
+
+        if self._has_background_test_activity(robot_id):
+            with self._lock:
+                self._last_auto_monitor_online_state[robot_id] = True
             return
 
         if now >= next_battery:

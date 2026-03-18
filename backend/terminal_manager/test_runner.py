@@ -8,6 +8,16 @@ from ..normalization import normalize_status, normalize_text
 
 
 class TestRunnerMixin:
+    def _has_background_test_activity(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+
+        with self._lock:
+            if normalized_robot_id in self._auto_recovery_test_inflight:
+                return True
+            return normalized_robot_id in self._connection_retry_inflight
+
     def _configured_test_ids(self, robot_id: str) -> list[str]:
         robot_type = self._resolve_robot_type(robot_id)
         test_entries = robot_type.get("tests") if isinstance(robot_type, dict) else []
@@ -70,7 +80,7 @@ class TestRunnerMixin:
                 return []
             results = self._executor.run_tests(
                 robot_id=robot_id,
-                page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
+                page_session_id=self.AUTO_MONITOR_TEST_PAGE_SESSION_ID,
                 test_ids=test_ids,
                 dry_run=False,
             )

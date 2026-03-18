@@ -39,7 +39,9 @@ export function renderManageEntityList({
     const label = normalizeEntityLabel(typeof getLabel === 'function' ? getLabel(item) : id, id);
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = `manage-list-item${id === activeId ? ' active' : ''}`;
+    row.className = ['manage-list-item', id === activeId ? 'active' : '']
+      .filter(Boolean)
+      .join(' ');
     row.setAttribute('aria-label', label.accessibleText);
     row.title = label.accessibleText;
 
