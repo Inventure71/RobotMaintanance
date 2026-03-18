@@ -194,7 +194,6 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderSimplePromptBackButton,
     recorderSimplePromptNextButton,
     recorderSimpleImportBackButton,
-    recorderValidateImportButton,
     recorderSimpleImportNextButton,
     recorderSimplePreviewBackButton,
     recorderSimpleEditInAdvancedButton,
@@ -280,6 +279,8 @@ export function createRecorderFeature(context, maybeEnv) {
 
   const RECORDER_LLM_BASE_READ_KINDS = new Set(['contains_string', 'contains_any_string', 'contains_lines_unordered']);
   const RECORDER_LLM_ALLOWED_READ_KINDS = new Set([...RECORDER_LLM_BASE_READ_KINDS, 'all_of']);
+  const RECORDER_START_DISABLED_TOOLTIP = 'Enter Definition ID and Label to enable "Start creation of new test".';
+  const RECORDER_NOT_STARTED_TOOLTIP = 'Complete Definition ID and Label, then click "Start creation of new test".';
 
   const addRobotIdsToSelection = (...args) => runtime.addRobotIdsToSelection(...args);
   const appendTerminalLine = (...args) => runtime.appendTerminalLine(...args);
@@ -577,6 +578,40 @@ export function createRecorderFeature(context, maybeEnv) {
         return slug || fallback;
       }
 
+  function isRecorderMetadataReady() {
+        return normalizeText(recorderDefinitionIdInput?.value, '') !== ''
+          && normalizeText(recorderDefinitionLabelInput?.value, '') !== '';
+      }
+
+  function isRecorderTooltipAnchor(node) {
+        if (!node) return false;
+        if (typeof node.classList?.contains === 'function' && node.classList.contains('recorder-button-tooltip-anchor')) {
+          return true;
+        }
+        return normalizeText(node.className, '')
+          .split(/\s+/)
+          .includes('recorder-button-tooltip-anchor');
+      }
+
+  function setRecorderButtonTooltip(button, message = '') {
+        if (!button) return;
+        const tooltip = normalizeText(message, '');
+        button.title = tooltip;
+        if (button.style) {
+          button.style.pointerEvents = tooltip && button.disabled ? 'none' : '';
+        }
+        const anchor = isRecorderTooltipAnchor(button.parentNode) ? button.parentNode : null;
+        if (anchor) {
+          anchor.title = tooltip;
+        }
+      }
+
+  function setRecorderButtonDisabledState(button, disabled, tooltip = '') {
+        if (!button) return;
+        button.disabled = Boolean(disabled);
+        setRecorderButtonTooltip(button, button.disabled ? tooltip : '');
+      }
+
   function setRecorderLlmStatus(element, message = '', tone = '') {
         if (!element) return;
         element.textContent = message;
@@ -865,7 +900,7 @@ export function createRecorderFeature(context, maybeEnv) {
         }
         if (normalizedMode === 'advanced') {
           if (!preserveDraft) {
-            startNewTestDraft();
+            openNewTestDraftEntry();
             return;
           }
         }
@@ -2075,8 +2110,22 @@ export function createRecorderFeature(context, maybeEnv) {
         loadExistingFixIntoFlow(fixDefinition, { duplicate: true });
       }
 
+  function openNewTestDraftEntry() {
+        resetRecorderTestEntry({ target: 'mode-selector' });
+        state.recorderMode = 'advanced';
+        state.recorderSimpleStep = 'select-robot';
+        state.workflowRecorder?.setStatus?.(RECORDER_START_DISABLED_TOOLTIP, 'warn');
+        setManageTabStatus('Enter Definition ID and Label to enable draft creation.', 'ok');
+        syncRecorderUiState();
+      }
+
   function startNewTestDraft() {
         if (!state.workflowRecorder) return;
+        if (!isRecorderMetadataReady()) {
+          state.workflowRecorder.setStatus(RECORDER_START_DISABLED_TOOLTIP, 'warn');
+          syncRecorderUiState();
+          return;
+        }
         state.editingTestSourceId = '';
         setFlowEditorMode('test', { announce: false });
         setActiveManageTab('recorder', { syncHash: true, persist: true });
@@ -2174,6 +2223,7 @@ export function createRecorderFeature(context, maybeEnv) {
         const simpleStep = normalizeRecorderSimpleStep(state.recorderSimpleStep);
         const robotSelected = normalizeText(recorderRobotSelect?.value, '') !== '';
         const commandReady = normalizeText(recorderCommandInput?.value, '') !== '';
+        const metadataReady = isRecorderMetadataReady();
         const transcriptReady = normalizeText(getRecorderTerminalTranscript(), '') !== '';
         const transcriptBypass = Boolean(recorderSimpleTranscriptAcknowledge?.checked);
         const promptReady = getRecorderLlmPromptReadiness().ok;
@@ -2197,22 +2247,45 @@ export function createRecorderFeature(context, maybeEnv) {
           applyActionButton(recorderCreateNewTestButton, {
             intent: 'create',
             label: 'Start creation of new test',
+            disabled: !recorderState.started && !metadataReady,
+            title: !recorderState.started && !metadataReady ? RECORDER_START_DISABLED_TOOLTIP : '',
           });
+          setRecorderButtonTooltip(
+            recorderCreateNewTestButton,
+            !recorderState.started && !metadataReady ? RECORDER_START_DISABLED_TOOLTIP : '',
+          );
         }
         if (recorderRunCaptureButton) {
-          recorderRunCaptureButton.disabled = !(recorderState.started && robotSelected && commandReady);
+          setRecorderButtonDisabledState(
+            recorderRunCaptureButton,
+            !(recorderState.started && robotSelected && commandReady),
+            !recorderState.started ? RECORDER_NOT_STARTED_TOOLTIP : '',
+          );
         }
         if (recorderAddOutputBtn) {
-          recorderAddOutputBtn.disabled = !recorderState.started;
+          setRecorderButtonDisabledState(
+            recorderAddOutputBtn,
+            !recorderState.started,
+            !recorderState.started ? RECORDER_NOT_STARTED_TOOLTIP : '',
+          );
         }
         if (recorderAddWriteBtn) {
-          recorderAddWriteBtn.disabled = !recorderState.started;
+          setRecorderButtonDisabledState(
+            recorderAddWriteBtn,
+            !recorderState.started,
+            !recorderState.started ? RECORDER_NOT_STARTED_TOOLTIP : '',
+          );
         }
         if (recorderAddReadBtn) {
-          recorderAddReadBtn.disabled = !(
+          const readDisabled = !(
             recorderState.started
             && Number(recorderState.outputCount || 0) > 0
             && Number(recorderState.writeCount || 0) > 0
+          );
+          setRecorderButtonDisabledState(
+            recorderAddReadBtn,
+            readDisabled,
+            !recorderState.started ? RECORDER_NOT_STARTED_TOOLTIP : '',
           );
         }
         if (recorderPublishTestButton) {
@@ -2304,9 +2377,6 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderSimplePromptNextButton) {
           recorderSimplePromptNextButton.disabled = !promptReady;
         }
-        if (recorderValidateImportButton) {
-          recorderValidateImportButton.disabled = normalizeText(recorderLlmImportInput?.value, '') === '';
-        }
         if (recorderSimpleImportNextButton) {
           recorderSimpleImportNextButton.disabled = !importReady;
         }
@@ -2369,7 +2439,7 @@ export function createRecorderFeature(context, maybeEnv) {
           return;
         }
         if (!state.workflowRecorder.started) {
-          state.workflowRecorder.setStatus('Click "Start creation of new test" first.', 'warn');
+          state.workflowRecorder.setStatus(RECORDER_NOT_STARTED_TOOLTIP, 'warn');
           return;
         }
         if (!command) {
@@ -2563,7 +2633,7 @@ export function createRecorderFeature(context, maybeEnv) {
           });
         });
         manageNewTestDefinitionButton?.addEventListener('click', () => {
-          startNewTestDraft();
+          openNewTestDraftEntry();
         });
         manageNewFixDefinitionButton?.addEventListener('click', () => {
           startNewFixDraft();
@@ -2743,9 +2813,6 @@ export function createRecorderFeature(context, maybeEnv) {
         recorderSimpleImportBackButton?.addEventListener('click', () => {
           setRecorderSimpleStep('prompt');
         });
-        recorderValidateImportButton?.addEventListener('click', () => {
-          validateRecorderLlmImportInput();
-        });
         recorderSimpleImportNextButton?.addEventListener('click', () => {
           if (state.recorderSimpleImportValidated) {
             loadRecorderLlmImportResult();
@@ -2835,6 +2902,9 @@ export function createRecorderFeature(context, maybeEnv) {
         });
         recorderDefinitionIdInput?.addEventListener('input', () => {
           renderRecorderRobotTypeTargets();
+          syncRecorderUiState();
+        });
+        recorderDefinitionLabelInput?.addEventListener('input', () => {
           syncRecorderUiState();
         });
         clearRecorderOutputForm();

@@ -223,7 +223,7 @@ test('workflow recorder blocking issues use the start CTA copy', () => {
   const recorder = new WorkflowRecorderComponent({});
   const state = recorder.getState('battery_health');
 
-  assert.equal(state.blockingIssues[0], 'Click "Start creation of new test" to start a draft.');
+  assert.equal(state.blockingIssues[0], 'Complete Definition ID and Label, then click "Start creation of new test".');
 });
 
 function buildRecorderWithThreeWrites() {

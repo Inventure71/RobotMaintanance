@@ -661,7 +661,9 @@
                       </div>
                       <div class="recorder-topbar-actions">
                         <div id="recorderTopbarNewDraftWrap" class="recorder-topbar-slot">
-                          <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Start creation of new test</button>
+                          <span class="recorder-button-tooltip-anchor">
+                            <button id="recorderCreateNewTest" class="button" type="button" data-button-intent="create">Start creation of new test</button>
+                          </span>
                         </div>
                         <div id="recorderTopbarPublishWrap" class="recorder-topbar-slot">
                           <button id="recorderPublishTest" class="button" type="button" data-button-intent="create">Publish test</button>
@@ -845,8 +847,6 @@
                   <div class="recorder-step-actions">
                     <button id="recorderSimpleImportBack" class="button" type="button"
                       data-button-intent="navigation">Back</button>
-                    <button id="recorderValidateImportButton" class="button" type="button"
-                      data-button-intent="utility">Validate</button>
                     <button id="recorderSimpleImportNext" class="button" type="button"
                       data-button-intent="create">Next: Preview Blocks</button>
                   </div>
@@ -894,12 +894,16 @@
                       <div class="recorder-command-row">
                         <input id="recorderCommandInput" class="form-input" type="text"
                           placeholder="Type command to run..." />
-                        <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
-                          block</button>
+                        <span class="recorder-button-tooltip-anchor">
+                          <button id="recorderRunCapture" class="button" type="button" data-button-intent="run">Run + add write
+                            block</button>
+                        </span>
                       </div>
                       <div class="recorder-check-actions" style="margin-top: 12px;">
-                        <button id="recorderAddWriteBtn" class="button button-compact" type="button"
-                          data-button-intent="utility">Add Write Block</button>
+                        <span class="recorder-button-tooltip-anchor">
+                          <button id="recorderAddWriteBtn" class="button button-compact" type="button"
+                            data-button-intent="utility">Add Write Block</button>
+                        </span>
                       </div>
                       <div id="recorderWriteBlocks" class="manage-entity-list"></div>
                     </div>
@@ -936,8 +940,10 @@
                         </label>
                       </div>
                       <div class="recorder-check-actions" style="margin-bottom: 12px;">
-                        <button id="recorderAddOutputBtn" class="button button-compact" type="button"
-                          data-button-intent="create">Add Output Block</button>
+                        <span class="recorder-button-tooltip-anchor">
+                          <button id="recorderAddOutputBtn" class="button button-compact" type="button"
+                            data-button-intent="create">Add Output Block</button>
+                        </span>
                       </div>
                       <div id="recorderOutputs" class="manage-entity-list"></div>
                     </div>
@@ -987,8 +993,10 @@
                         </label>
                       </div>
                       <div class="recorder-check-actions" style="margin-bottom: 12px; margin-top: 12px;">
-                        <button id="recorderAddReadBtn" class="button button-compact" type="button"
-                          data-button-intent="create">Add Read Block</button>
+                        <span class="recorder-button-tooltip-anchor">
+                          <button id="recorderAddReadBtn" class="button button-compact" type="button"
+                            data-button-intent="create">Add Read Block</button>
+                        </span>
                       </div>
                       <div id="recorderReadBlocks" class="manage-entity-list"></div>
                     </div>

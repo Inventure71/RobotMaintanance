@@ -391,22 +391,26 @@ function makeEnv() {
       lastWriteBlock: null,
       loadTestDefinition(definition) {
         this.loaded = definition;
+        this.started = true;
         return { outputCount: 1, blockCount: 2 };
       },
       createNewTest() {
         this.created = true;
+        this.started = true;
       },
       reset() {
         this.resetCalled = true;
+        this.started = false;
       },
       getState() {
+        const started = Boolean(this.started);
         return {
-          started: true,
-          writeCount: 1,
-          readCount: 1,
-          outputCount: 1,
-          publishReady: true,
-          blockingIssues: [],
+          started,
+          writeCount: started ? 1 : 0,
+          readCount: started ? 1 : 0,
+          outputCount: started ? 1 : 0,
+          publishReady: started,
+          blockingIssues: started ? [] : ['Complete Definition ID and Label, then click "Start creation of new test".'],
           editingOutputKey: '',
           editingReadBlockId: '',
         };
@@ -483,6 +487,9 @@ function makeEnv() {
       if (options.disabled !== undefined) {
         button.disabled = Boolean(options.disabled);
       }
+      if (typeof options.title === 'string') {
+        button.title = options.title;
+      }
       button.dataset = button.dataset || {};
       if (typeof options.intent === 'string') {
         button.dataset.buttonIntent = options.intent;
@@ -492,6 +499,8 @@ function makeEnv() {
     manageDefinitionsList: makeNode(),
     manageFlowModeButtons,
     manageFlowModeHint: makeNode(),
+    manageNewTestDefinitionButton: makeNode(),
+    manageNewFixDefinitionButton: makeNode(),
     manageRecorderTestEditorPanel: { classList: makeClassList(['active']) },
     manageRecorderFixEditorPanel: { classList: makeClassList(['hidden']) },
     recorderExperienceShell: { classList: makeClassList(), dataset: {} },
@@ -548,7 +557,6 @@ function makeEnv() {
     recorderSimplePromptBackButton: makeNode(),
     recorderSimplePromptNextButton: makeNode(),
     recorderSimpleImportBackButton: makeNode(),
-    recorderValidateImportButton: makeNode(),
     recorderSimpleImportNextButton: makeNode(),
     recorderSimplePreviewBackButton: makeNode(),
     recorderSimpleEditInAdvancedButton: makeNode(),
@@ -894,6 +902,49 @@ test('Simple prompt step auto-generates the prompt and advances to import on Nex
   assert.match(env.recorderLlmPromptStatus.textContent, /copy it from the box in the next step/i);
 });
 
+test('import step next button tracks live auto-validation without a separate validate action', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.RobotTerminalComponent = function MockRobotTerminalComponent() {
+    this.exportTranscript = () => '';
+    this.dispose = () => {};
+  };
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.initWorkflowRecorder();
+  api.setRecorderMode('simple', { targetStep: 'import' });
+
+  assert.equal(env.recorderSimpleImportNextButton.disabled, true);
+
+  env.recorderLlmImportInput.value = JSON.stringify({
+    id: 'battery_health',
+    label: 'Battery health',
+    mode: 'orchestrate',
+    execute: [{ id: 'step_1', command: 'echo battery', saveAs: 'out_1' }],
+    checks: [
+      {
+        id: 'battery_health__battery',
+        label: 'Battery',
+        runAtConnection: true,
+        read: { kind: 'contains_string', inputRef: 'out_1', needle: 'battery' },
+        pass: { details: 'ok' },
+        fail: { details: 'fail' },
+      },
+    ],
+  });
+  env.recorderLlmImportInput.dispatchEvent({ type: 'input' });
+
+  assert.equal(env.recorderSimpleImportNextButton.disabled, false);
+  assert.match(env.recorderLlmImportStatus.textContent, /ready to load/i);
+});
+
 test('initWorkflowRecorder resolves the generic-info preset from config and exposes it on recorder terminal connect', async () => {
   const createRecorderFeature = await loadApi();
   const env = makeEnv();
@@ -1130,7 +1181,7 @@ test('setRecorderMode advanced shows the start CTA before a draft exists', async
     readCount: 0,
     outputCount: 0,
     publishReady: false,
-    blockingIssues: ['Click "Start creation of new test" to start a draft.'],
+    blockingIssues: ['Complete Definition ID and Label, then click "Start creation of new test".'],
     editingOutputKey: '',
     editingReadBlockId: '',
   });
@@ -1147,7 +1198,28 @@ test('setRecorderMode advanced shows the start CTA before a draft exists', async
   assert.equal(env.recorderTopbarNewDraftWrap.classList.contains('hidden'), false);
   assert.equal(env.recorderTopbarPublishWrap.classList.contains('hidden'), true);
   assert.equal(env.recorderCreateNewTestButton.textContent, 'Start creation of new test');
+  assert.equal(env.recorderCreateNewTestButton.disabled, true);
+  assert.equal(
+    env.recorderCreateNewTestButton.title,
+    'Enter Definition ID and Label to enable "Start creation of new test".',
+  );
   assert.equal(env.recorderPublishTestButton.textContent, 'Publish test');
+  assert.equal(
+    env.recorderRunCaptureButton.title,
+    'Complete Definition ID and Label, then click "Start creation of new test".',
+  );
+  assert.equal(
+    env.recorderAddOutputBtn.title,
+    'Complete Definition ID and Label, then click "Start creation of new test".',
+  );
+  assert.equal(
+    env.recorderAddWriteBtn.title,
+    'Complete Definition ID and Label, then click "Start creation of new test".',
+  );
+  assert.equal(
+    env.recorderAddReadBtn.title,
+    'Complete Definition ID and Label, then click "Start creation of new test".',
+  );
 });
 
 test('setRecorderMode advanced shows the full manual workspace', async () => {
@@ -1171,6 +1243,48 @@ test('setRecorderMode advanced shows the full manual workspace', async () => {
   assert.equal(env.recorderCreateNewTestButton.textContent, 'Start creation of new test');
   assert.equal(env.recorderPublishTestButton.textContent, 'Publish test');
   assert.equal(env.recorderTopbarRobotWrap.parentNode, env.recorderSharedTopbarMain);
+});
+
+test('advanced create CTA enables once required metadata is filled', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.state.workflowRecorder.started = false;
+  env.state.workflowRecorder.getState = () => ({
+    started: false,
+    writeCount: 0,
+    readCount: 0,
+    outputCount: 0,
+    publishReady: false,
+    blockingIssues: ['Complete Definition ID and Label, then click "Start creation of new test".'],
+    editingOutputKey: '',
+    editingReadBlockId: '',
+  });
+  env.RobotTerminalComponent = function MockRobotTerminalComponent() {
+    this.dispose = () => {};
+    this.exportTranscript = () => '';
+  };
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.initWorkflowRecorder();
+  api.setRecorderMode('advanced');
+  assert.equal(env.recorderCreateNewTestButton.disabled, true);
+
+  env.recorderDefinitionIdInput.value = 'battery_health';
+  env.recorderDefinitionIdInput.dispatchEvent({ type: 'input' });
+  assert.equal(env.recorderCreateNewTestButton.disabled, true);
+
+  env.recorderDefinitionLabelInput.value = 'Battery health';
+  env.recorderDefinitionLabelInput.dispatchEvent({ type: 'input' });
+
+  assert.equal(env.recorderCreateNewTestButton.disabled, false);
+  assert.equal(env.recorderCreateNewTestButton.title, '');
 });
 
 test('setRecorderMode simple publish step only shows the publish CTA', async () => {
@@ -1236,6 +1350,31 @@ test('clicking Test Editor nav resets into mode selector', async () => {
   assert.equal(env.recorderRobotSelect.value, '');
   assert.equal(env.recorderModeSelector.classList.contains('hidden'), false);
   assert.equal(env.recorderSimpleSelectRobotStep.classList.contains('hidden'), true);
+});
+
+test('clicking New test opens advanced metadata entry without auto-starting a draft', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.state.activeManageTab = 'definitions';
+  env.recorderDefinitionIdInput.value = 'stale_id';
+  env.recorderDefinitionLabelInput.value = 'Stale label';
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+  api.initManageTabs();
+
+  env.manageNewTestDefinitionButton.click();
+
+  assert.equal(env.state.workflowRecorder.resetCalled, true);
+  assert.equal(env.state.workflowRecorder.created, undefined);
+  assert.equal(env.state.activeManageTab, 'recorder');
+  assert.equal(env.state.recorderMode, 'advanced');
+  assert.equal(env.recorderDefinitionIdInput.value, '');
+  assert.equal(env.recorderDefinitionLabelInput.value, '');
+  assert.equal(env.recorderCreateNewTestButton.disabled, true);
+  assert.equal(
+    env.recorderCreateNewTestButton.title,
+    'Enter Definition ID and Label to enable "Start creation of new test".',
+  );
 });
 
 test('clicking Simple mode card always starts at Select Robot step', async () => {

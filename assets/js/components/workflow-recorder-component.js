@@ -56,6 +56,8 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const START_DRAFT_FIRST_MESSAGE = 'Complete Definition ID and Label, then click "Start creation of new test".';
+
 export class WorkflowRecorderComponent {
   constructor(options = {}) {
     this.terminalOutputEl = options.terminalOutputEl;
@@ -102,7 +104,7 @@ export class WorkflowRecorderComponent {
 
   _blockingIssues(definitionId = '') {
     const issues = [];
-    if (!this.started) issues.push('Click "Start creation of new test" to start a draft.');
+    if (!this.started) issues.push(START_DRAFT_FIRST_MESSAGE);
     if (!this._getWriteBlocks().length) issues.push('Add at least one write block.');
     if (!this.outputs.length) issues.push('Add at least one output.');
     this.outputs.forEach((output) => {
@@ -356,7 +358,7 @@ export class WorkflowRecorderComponent {
 
   addOrUpdateOutput({ key, label, icon, passDetails, failDetails, runAtConnection }) {
     if (!this.started) {
-      throw new Error('Start creation of new test first.');
+      throw new Error(START_DRAFT_FIRST_MESSAGE);
     }
     const normalizedKey = normalizeToken(key, '');
     if (!normalizedKey) {
@@ -494,7 +496,7 @@ export class WorkflowRecorderComponent {
 
   addWriteBlock({ command, outputPayload }) {
     if (!this.started) {
-      throw new Error('Start creation of new test first.');
+      throw new Error(START_DRAFT_FIRST_MESSAGE);
     }
     const commandText = normalizeText(command, '');
     if (!commandText) {
@@ -559,7 +561,7 @@ export class WorkflowRecorderComponent {
 
   addOrUpdateReadBlock({ outputKey, inputRef, kind, needle, needles, lines, requireAll }) {
     if (!this.started) {
-      throw new Error('Start creation of new test first.');
+      throw new Error(START_DRAFT_FIRST_MESSAGE);
     }
     const normalizedOutputKey = normalizeToken(outputKey, '');
     if (!normalizedOutputKey) {

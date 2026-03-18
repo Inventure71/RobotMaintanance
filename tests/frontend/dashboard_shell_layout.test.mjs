@@ -107,6 +107,7 @@ test('recorder import step uses a visible manual-copy prompt field and removes t
     /<textarea id="recorderLlmPromptPreview" class="recorder-llm-textarea recorder-llm-preview"[\s\S]*?readonly[\s\S]*?><\/textarea>/,
   );
   assert.doesNotMatch(recorderImportSection, /id="recorderLlmCopyPromptButton"/);
+  assert.doesNotMatch(recorderImportSection, /id="recorderValidateImportButton"/);
 });
 
 test('recorder terminal step tells operators to run the generic info action before the LLM step', async () => {

@@ -415,7 +415,6 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderSimplePromptBackButton = $('#recorderSimplePromptBack');
     const recorderSimplePromptNextButton = $('#recorderSimplePromptNext');
     const recorderSimpleImportBackButton = $('#recorderSimpleImportBack');
-    const recorderValidateImportButton = $('#recorderValidateImportButton');
     const recorderSimpleImportNextButton = $('#recorderSimpleImportNext');
     const recorderSimplePreviewBackButton = $('#recorderSimplePreviewBack');
     const recorderSimpleEditInAdvancedButton = $('#recorderSimpleEditInAdvancedButton');
@@ -744,7 +743,6 @@ const runtimeEnv = {
   recorderSimplePromptBackButton,
   recorderSimplePromptNextButton,
   recorderSimpleImportBackButton,
-  recorderValidateImportButton,
   recorderSimpleImportNextButton,
   recorderSimplePreviewBackButton,
   recorderSimpleEditInAdvancedButton,

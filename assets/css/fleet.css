@@ -1768,6 +1768,11 @@
   gap: 0.65rem;
 }
 
+.recorder-button-tooltip-anchor {
+  display: inline-flex;
+  max-width: 100%;
+}
+
 .flow-builder-topbar-main.recorder-topbar-main {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(520px, 1.4fr);
@@ -2406,6 +2411,7 @@
       }
 
       .recorder-topbar-actions .recorder-topbar-slot,
+      .recorder-topbar-actions .recorder-button-tooltip-anchor,
       .recorder-topbar-actions .button {
         width: 100%;
       }
