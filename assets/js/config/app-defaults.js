@@ -52,6 +52,12 @@ export const DEFAULT_TEST_DEFINITIONS = [
 
 export const PRESET_COMMANDS = [
   {
+    id: 'generic-info',
+    label: 'Run generic info commands',
+    command: '',
+    description: 'Capture OS, ROS, service, process, network, and container context for the recorder transcript',
+  },
+  {
     id: 'status',
     label: 'Run status scan',
     command: 'rostopic list',
@@ -92,6 +98,7 @@ export const PRESET_COMMANDS = [
 
 export const ROBOTS_CONFIG_URL = 'config/robots.config.json';
 export const ROBOT_TYPES_CONFIG_URL = 'config/robot-types.config.json';
+export const RECORDER_GENERIC_INFO_CONFIG_URL = 'config/terminal-context/recorder-generic-info.commands.json';
 export const DEFAULT_ROBOT_MODEL_URL = 'assets/models/rosbot-2-pro.glb';
 
 export const backendData = [

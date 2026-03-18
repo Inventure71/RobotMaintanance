@@ -108,3 +108,18 @@ test('recorder import step uses a visible manual-copy prompt field and removes t
   );
   assert.doesNotMatch(recorderImportSection, /id="recorderLlmCopyPromptButton"/);
 });
+
+test('recorder terminal step tells operators to run the generic info action before the LLM step', async () => {
+  const html = await fs.readFile(INDEX_PATH, 'utf8');
+  const recorderTerminalStart = html.indexOf('<div id="recorderSimpleTerminalStep"');
+  const recorderPromptStart = html.indexOf('<div id="recorderSimplePromptStep"');
+
+  assert.notEqual(recorderTerminalStart, -1, 'expected recorder terminal step in index.html');
+  assert.notEqual(recorderPromptStart, -1, 'expected recorder prompt step in index.html');
+  assert.ok(recorderPromptStart > recorderTerminalStart, 'expected prompt step after terminal step');
+
+  const recorderTerminalSection = collapseWhitespace(html.slice(recorderTerminalStart, recorderPromptStart));
+
+  assert.match(recorderTerminalSection, /Run generic info commands/);
+  assert.match(recorderTerminalSection, /OS, ROS, processes, networking, services, and containers/i);
+});

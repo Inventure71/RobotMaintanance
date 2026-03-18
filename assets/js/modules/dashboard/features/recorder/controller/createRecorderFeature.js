@@ -50,6 +50,7 @@ export function createRecorderFeature(context, maybeEnv) {
     ONLINE_SORT_ORDER,
     ONLINE_SORT_STATUS,
     PRESET_COMMANDS,
+    RECORDER_GENERIC_INFO_CONFIG_URL,
     ROBOTS_CONFIG_URL,
     ROBOT_TYPES,
     ROBOT_TYPES_CONFIG_URL,
@@ -607,6 +608,111 @@ export function createRecorderFeature(context, maybeEnv) {
         return RECORDER_SIMPLE_STEPS.includes(normalized) ? normalized : 'terminal';
       }
 
+  const RECORDER_TERMINAL_PRESET_IDS = new Set(['generic-info']);
+  let recorderGenericInfoConfigPromise = null;
+
+  function quoteRecorderShellValue(value) {
+        return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
+      }
+
+  function normalizeRecorderGenericInfoConfig(rawConfig) {
+        const config = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+        const commands = Array.isArray(config.commands) ? config.commands : [];
+        const normalizedCommands = commands
+          .map((entry, index) => {
+            const label = normalizeText(entry?.label, `Command ${index + 1}`);
+            const command = normalizeText(entry?.command, '');
+            const timeoutSec = Number(entry?.timeoutSec);
+            if (!command) return null;
+            return {
+              label,
+              command,
+              timeoutSec: Number.isFinite(timeoutSec) && timeoutSec > 0 ? Math.floor(timeoutSec) : 10,
+            };
+          })
+          .filter(Boolean);
+        if (!normalizedCommands.length) {
+          throw new Error('Recorder generic info config has no runnable commands.');
+        }
+        return {
+          id: normalizeText(config.id, 'recorder_generic_info'),
+          label: normalizeText(config.label, 'Recorder generic info'),
+          commands: normalizedCommands,
+        };
+      }
+
+  function buildRecorderGenericInfoBundleCommand(rawConfig) {
+        const config = normalizeRecorderGenericInfoConfig(rawConfig);
+        const scriptLines = [
+          'set +e',
+          `printf '%s\\n' ${quoteRecorderShellValue(`=== ${config.label} ===`)}`,
+          `printf '%s\\n' ${quoteRecorderShellValue('Read-only diagnostics for recorder and external LLM context.')}`,
+          'run_block() {',
+          '  local label="$1"',
+          '  local timeout_sec="$2"',
+          '  local command="$3"',
+          `  printf '\\n===== %s =====\\n' "$label"`,
+          '  timeout "${timeout_sec}s" bash -lc "$command"',
+          '  local status=$?',
+          '  if [ "$status" -eq 124 ]; then',
+          `    printf '[timeout after %ss]\\n' "$timeout_sec"`,
+          '  elif [ "$status" -ne 0 ]; then',
+          `    printf '[exit %s]\\n' "$status"`,
+          '  fi',
+          '}',
+          ...config.commands.map((entry) => (
+            `run_block ${quoteRecorderShellValue(entry.label)} ${quoteRecorderShellValue(entry.timeoutSec)} ${quoteRecorderShellValue(entry.command)}`
+          )),
+        ];
+        return `bash -lc ${quoteRecorderShellValue(scriptLines.join('\n'))}`;
+      }
+
+  async function loadRecorderGenericInfoConfig() {
+        if (typeof env.loadRecorderGenericInfoConfig === 'function') {
+          return normalizeRecorderGenericInfoConfig(await env.loadRecorderGenericInfoConfig());
+        }
+        if (!recorderGenericInfoConfigPromise) {
+          const configUrl = normalizeText(RECORDER_GENERIC_INFO_CONFIG_URL, '');
+          if (!configUrl) {
+            throw new Error('Recorder generic info config URL is not configured.');
+          }
+          const fetchImpl =
+            typeof env.fetch === 'function'
+              ? env.fetch.bind(env)
+              : typeof fetch === 'function'
+                ? fetch.bind(globalThis)
+                : null;
+          if (!fetchImpl) {
+            throw new Error('fetch is not available to load the recorder generic info config.');
+          }
+          recorderGenericInfoConfigPromise = fetchImpl(configUrl, { cache: 'no-store' })
+            .then(async (response) => {
+              if (!response?.ok) {
+                throw new Error(`Unable to load recorder generic info config (${response?.status || 'unknown'}).`);
+              }
+              return response.json();
+            })
+            .then((payload) => normalizeRecorderGenericInfoConfig(payload));
+        }
+        return recorderGenericInfoConfigPromise;
+      }
+
+  async function resolveRecorderTerminalPresetCommand(preset) {
+        const presetId = normalizeText(preset?.id, '').toLowerCase();
+        if (presetId !== 'generic-info') {
+          return normalizeText(preset?.command, '');
+        }
+        const config = await loadRecorderGenericInfoConfig();
+        return buildRecorderGenericInfoBundleCommand(config);
+      }
+
+  function getRecorderTerminalPresets() {
+        return PRESET_COMMANDS.filter((preset) => {
+          const presetId = normalizeText(preset?.id, '').toLowerCase();
+          return RECORDER_TERMINAL_PRESET_IDS.has(presetId);
+        });
+      }
+
   function getRecorderDraftContext() {
         const definitionId = normalizeText(recorderDefinitionIdInput?.value, '');
         return state.workflowRecorder?.exportDraftContext?.(definitionId) || {
@@ -908,7 +1014,7 @@ export function createRecorderFeature(context, maybeEnv) {
         if (!transcript && !allowEmptyTranscript) {
           return {
             ok: false,
-            error: 'Recorder terminal transcript is required. Run or rebuild the visible recorder terminal session first.',
+            error: 'Recorder terminal transcript is required. Activate the recorder terminal and run "Run generic info commands" or the commands you need first.',
           };
         }
         const systemDetails = normalizeText(recorderLlmSystemDetailsInput?.value, '');
@@ -2275,11 +2381,11 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderRunCaptureButton) {
           recorderRunCaptureButton.disabled = true;
         }
-        state.workflowRecorder.setStatus('Running command in SSH session...', 'warn');
+          state.workflowRecorder.setStatus('Running command in SSH session...', 'warn');
         try {
           if (!state.recorderTerminalComponent || state.recorderTerminalComponent.mode !== 'live') {
             const robot = env.ROBOT_TYPES.length ? { id: robotIdValue, name: robotIdValue } : { id: robotIdValue };
-            await state.recorderTerminalComponent?.connect(robot);
+            await state.recorderTerminalComponent?.connect(robot, getRecorderTerminalPresets());
           }
           
           await state.recorderTerminalComponent?.runCommand(command);
@@ -2507,6 +2613,15 @@ export function createRecorderFeature(context, maybeEnv) {
             terminalCtor: window.Terminal,
             fitAddonCtor: window.FitAddon ? window.FitAddon.FitAddon : null,
             endpointBuilder: (robotId) => buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/terminal`),
+            resolvePresetCommand: resolveRecorderTerminalPresetCommand,
+            onPresetLaunch: (preset) => {
+              if (normalizeText(preset?.id, '').toLowerCase() === 'generic-info') {
+                state.workflowRecorder?.setStatus?.(
+                  'Running generic info bundle. Let it finish, then add any robot-specific commands you still need.',
+                  'warn',
+                );
+              }
+            },
             onTranscriptChange: () => {
               syncRecorderUiState();
             },
@@ -2572,7 +2687,7 @@ export function createRecorderFeature(context, maybeEnv) {
             return;
           }
           const robot = env.ROBOT_TYPES.length ? { id: rId, name: rId } : { id: rId };
-          state.recorderTerminalComponent?.connect(robot);
+          state.recorderTerminalComponent?.connect(robot, getRecorderTerminalPresets());
           setRecorderTerminalActive();
         });
   

@@ -1,0 +1,92 @@
+{
+  "id": "recorder_generic_info",
+  "label": "Recorder generic info",
+  "description": "Read-only OS, ROS, network, service, process, and container diagnostics for recorder/LLM context.",
+  "commands": [
+    {
+      "label": "OS release",
+      "command": "cat /etc/os-release",
+      "timeoutSec": 5
+    },
+    {
+      "label": "Kernel",
+      "command": "uname -a",
+      "timeoutSec": 5
+    },
+    {
+      "label": "Host",
+      "command": "hostnamectl 2>/dev/null || echo 'hostnamectl unavailable'",
+      "timeoutSec": 5
+    },
+    {
+      "label": "ROS environment",
+      "command": "env | grep -E '^(ROS_|AMENT_|COLCON_|RMW_|CYCLONEDDS_|FASTRTPS_)' | sort || echo '(no ROS env vars exported)'",
+      "timeoutSec": 5
+    },
+    {
+      "label": "ROS install dirs",
+      "command": "ls -1 /opt/ros 2>/dev/null || echo '(no /opt/ros install dirs found)'",
+      "timeoutSec": 5
+    },
+    {
+      "label": "ROS 1 topics",
+      "command": "command -v rostopic >/dev/null 2>&1 && rostopic list || echo 'rostopic not available in PATH'",
+      "timeoutSec": 12
+    },
+    {
+      "label": "ROS 1 nodes",
+      "command": "command -v rosnode >/dev/null 2>&1 && rosnode list || echo 'rosnode not available in PATH'",
+      "timeoutSec": 12
+    },
+    {
+      "label": "ROS 2 topics",
+      "command": "command -v ros2 >/dev/null 2>&1 && ros2 topic list || echo 'ros2 not available in PATH'",
+      "timeoutSec": 12
+    },
+    {
+      "label": "ROS 2 nodes",
+      "command": "command -v ros2 >/dev/null 2>&1 && ros2 node list || echo 'ros2 not available in PATH'",
+      "timeoutSec": 12
+    },
+    {
+      "label": "Uptime and load",
+      "command": "uptime",
+      "timeoutSec": 5
+    },
+    {
+      "label": "Memory",
+      "command": "free -h 2>/dev/null || echo 'free unavailable'",
+      "timeoutSec": 5
+    },
+    {
+      "label": "Root disk",
+      "command": "df -h /",
+      "timeoutSec": 5
+    },
+    {
+      "label": "Network interfaces",
+      "command": "ip -brief addr 2>/dev/null || ip addr",
+      "timeoutSec": 8
+    },
+    {
+      "label": "Routes",
+      "command": "ip route",
+      "timeoutSec": 8
+    },
+    {
+      "label": "Top processes",
+      "command": "ps -eo pid,ppid,comm,%cpu,%mem --sort=-%cpu | head -n 20",
+      "timeoutSec": 8
+    },
+    {
+      "label": "Failed services",
+      "command": "systemctl --failed --no-pager --no-legend 2>/dev/null || echo 'systemctl unavailable or not permitted'",
+      "timeoutSec": 8
+    },
+    {
+      "label": "Docker containers",
+      "command": "command -v docker >/dev/null 2>&1 && docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}' || echo 'docker not available'",
+      "timeoutSec": 10
+    }
+  ]
+}

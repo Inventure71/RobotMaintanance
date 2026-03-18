@@ -106,7 +106,7 @@ export function renderRecorderLlmPromptTemplate({
       responseFormat: 'Return a single JSON object with no prose before or after it.',
       mode: 'orchestrate',
       preparation: [
-        'SSH into the robot and run the commands you normally use to inspect the system before asking the external LLM for help.',
+        'SSH into the robot, run the "Run generic info commands" terminal action first, then run any additional commands you normally use before asking the external LLM for help.',
         'The recorder terminal transcript below must include enough command context for the model to understand what it is checking. This mainly helps the model define the read blocks correctly.',
         'The model should not invent write commands for your system. If the transcript does not show the relevant commands or outputs, the result will be wrong.',
         'It is fine for the terminal transcript to contain more command history than strictly necessary, but it must not contain less than the context needed to understand the workflow.',

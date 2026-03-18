@@ -115,3 +115,30 @@ test('robot terminal component emits transcript updates when output changes', ()
   assert.equal(updates[0], 'line one\n');
   assert.equal(updates.at(-1), '');
 });
+
+test('robot terminal component resolves preset commands before execution', async () => {
+  const component = new RobotTerminalComponent({
+    resolvePresetCommand: async (preset) => {
+      assert.equal(preset.id, 'generic-info');
+      return 'bash -lc "echo generic info"';
+    },
+  });
+  const executed = [];
+  component.runCommand = async (command, commandId) => {
+    executed.push({ command, commandId });
+  };
+  component._writeLine = () => {};
+
+  await component._launchPreset({
+    id: 'generic-info',
+    label: 'Run generic info commands',
+    command: '',
+  });
+
+  assert.deepEqual(executed, [
+    {
+      command: 'bash -lc "echo generic info"',
+      commandId: 'generic-info',
+    },
+  ]);
+});

@@ -142,7 +142,7 @@ async function loadApi() {
           responseFormat: 'Return a single JSON object with no prose before or after it.',
           mode: 'orchestrate',
           preparation: [
-            'SSH into the robot and run the commands you normally use to inspect the system before asking the external LLM for help.',
+            'SSH into the robot, run the "Run generic info commands" terminal action first, then run any additional commands you normally use before asking the external LLM for help.',
             'The recorder terminal transcript below must include enough command context for the model to understand what it is checking. This mainly helps the model define the read blocks correctly.',
             'The model should not invent write commands for your system. If the transcript does not show the relevant commands or outputs, the result will be wrong.',
             'It is fine for the terminal transcript to contain more command history than strictly necessary, but it must not contain less than the context needed to understand the workflow.',
@@ -467,6 +467,14 @@ function makeEnv() {
     normalizeText,
     buildApiUrl: (route) => `http://localhost${route}`,
     state,
+    PRESET_COMMANDS: [
+      {
+        id: 'generic-info',
+        label: 'Run generic info commands',
+        command: '',
+        description: 'Capture OS, ROS, service, process, network, and container context for the recorder transcript',
+      },
+    ],
     applyActionButton: (button, options = {}) => {
       if (!button) return;
       if (typeof options.label === 'string') {
@@ -546,6 +554,14 @@ function makeEnv() {
     recorderSimpleEditInAdvancedButton: makeNode(),
     recorderSimplePreviewNextButton: makeNode(),
     recorderSimplePublishBackButton: makeNode(),
+    activateRecorderTerminalButton: makeNode(),
+    recorderTerminalActivationOverlay: makeNode(),
+    recorderTerminalBadge: makeNode(),
+    recorderTerminalDisplay: makeNode(),
+    recorderTerminalHint: makeNode(),
+    recorderTerminalPopReadBtn: makeNode(),
+    recorderTerminalShell: makeNode(),
+    recorderTerminalToolbar: makeNode(),
     recorderAskLlmButton: makeNode(),
     recorderAskLlmHelpButton: makeNode(),
     recorderLlmHelpPanel: makeNode(),
@@ -585,6 +601,7 @@ function makeEnv() {
     recorderReadNeedlesInput: makeNode(),
     recorderReadLinesInput: makeNode(),
     recorderReadRequireAllInput: { checked: true },
+    RECORDER_GENERIC_INFO_CONFIG_URL: 'config/terminal-context/recorder-generic-info.commands.json',
     manageTabStatus: makeNode(),
   };
 
@@ -804,6 +821,7 @@ test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in reco
   ]);
   assert.equal(payload.instructions.preparation.length, 5);
   assert.match(payload.instructions.preparation[0], /SSH into the robot/i);
+  assert.match(payload.instructions.preparation[0], /Run generic info commands/i);
   assert.match(payload.instructions.preparation[2], /should not invent write commands/i);
   assert.equal(payload.instructions.fullResponseExample.mode, 'orchestrate');
   assert.equal(payload.instructions.fullResponseExample.execute.length, 3);
@@ -874,6 +892,56 @@ test('Simple prompt step auto-generates the prompt and advances to import on Nex
   assert.equal(env.state.recorderSimpleStep, 'import');
   assert.match(env.recorderLlmPromptPreview.value, /"id": "battery_health"/);
   assert.match(env.recorderLlmPromptStatus.textContent, /copy it from the box in the next step/i);
+});
+
+test('initWorkflowRecorder resolves the generic-info preset from config and exposes it on recorder terminal connect', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.recorderRobotSelect.value = 'rosbot';
+  env.loadRecorderGenericInfoConfig = async () => ({
+    id: 'recorder_generic_info',
+    label: 'Recorder generic info',
+    commands: [
+      { label: 'OS release', command: 'cat /etc/os-release', timeoutSec: 5 },
+      { label: 'ROS 2 topics', command: 'ros2 topic list', timeoutSec: 12 },
+    ],
+  });
+
+  const terminalConnections = [];
+  let terminalOptions = null;
+  env.RobotTerminalComponent = function MockRobotTerminalComponent(options) {
+    terminalOptions = options;
+    this.mode = 'fallback';
+    this.connect = (robot, presets) => {
+      terminalConnections.push({ robot, presets });
+    };
+    this.dispose = () => {};
+    this.exportTranscript = () => '';
+  };
+  env.WorkflowRecorderComponent = function MockWorkflowRecorderComponent() {
+    return {
+      ...env.state.workflowRecorder,
+      render() {},
+    };
+  };
+
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  api.initWorkflowRecorder();
+  env.activateRecorderTerminalButton.click();
+
+  assert.equal(terminalConnections.length, 1);
+  assert.equal(terminalConnections[0].robot.id, 'rosbot');
+  assert.equal(terminalConnections[0].presets.length, 1);
+  assert.equal(terminalConnections[0].presets[0].id, 'generic-info');
+
+  const command = await terminalOptions.resolvePresetCommand(terminalConnections[0].presets[0]);
+  assert.match(command, /^bash -lc '/);
+  assert.match(command, /Recorder generic info/);
+  assert.match(command, /cat \/etc\/os-release/);
+  assert.match(command, /ros2 topic list/);
+  assert.match(command, /run_block/);
 });
 
 test('loadRecorderLlmImportResult rejects invalid JSON without mutating the current draft', async () => {

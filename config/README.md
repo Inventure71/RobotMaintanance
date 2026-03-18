@@ -39,6 +39,28 @@ Runtime rule:
 - command string of the form `$name$` in test/fix steps resolves through this directory.
 - unknown `$name$` tokens fail startup.
 
+## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/terminal-context/`
+
+Recorder/operator terminal bundles (`*.commands.json`).
+
+Example:
+```json
+{
+  "id": "recorder_generic_info",
+  "commands": [
+    {
+      "label": "OS release",
+      "command": "cat /etc/os-release",
+      "timeoutSec": 5
+    }
+  ]
+}
+```
+
+Behavior:
+- frontend recorder terminal presets can load these files and expand them into one bounded shell bundle.
+- entries are intended for read-only diagnostics and operator/LLM context capture, not mutating actions.
+
 ## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/tests/`
 
 Self-contained test definitions (`*.test.json`).

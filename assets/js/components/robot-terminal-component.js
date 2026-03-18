@@ -14,6 +14,7 @@ export class RobotTerminalComponent {
       this.onFallbackMode = options.onFallbackMode || (() => {});
       this.onFallbackCommand = options.onFallbackCommand || (() => {});
       this.onPresetLaunch = options.onPresetLaunch || (() => {});
+      this.resolvePresetCommand = options.resolvePresetCommand || null;
       this.onModeChange = options.onModeChange || (() => {});
       this.onTranscriptChange = options.onTranscriptChange || (() => {});
       this.showReconnectButton = options.showReconnectButton !== false;
@@ -267,9 +268,7 @@ export class RobotTerminalComponent {
           title: preset.description,
         });
         button.addEventListener('click', async () => {
-          this._writeLine(`Launching preset: ${preset.label}`, 'ok');
-          this.onPresetLaunch(preset);
-          await this.runCommand(preset.command, preset.id);
+          await this._launchPreset(preset);
         });
         actionRow.appendChild(button);
       });
@@ -355,6 +354,35 @@ export class RobotTerminalComponent {
         return 'danger';
       }
       return 'run';
+    }
+
+    async _resolveCommandForPreset(preset) {
+      if (typeof this.resolvePresetCommand === 'function') {
+        const resolved = await this.resolvePresetCommand(preset);
+        if (typeof resolved === 'string') {
+          return resolved;
+        }
+      }
+      return String(preset?.command || '');
+    }
+
+    async _launchPreset(preset) {
+      const label = String(preset?.label || preset?.id || 'preset');
+      this._writeLine(`Launching preset: ${label}`, 'ok');
+      this.onPresetLaunch(preset);
+      try {
+        const command = String(await this._resolveCommandForPreset(preset) || '').trim();
+        if (!command) {
+          this._writeLine(`Preset "${label}" has no command to run.`, 'warn');
+          return;
+        }
+        await this.runCommand(command, preset?.id);
+      } catch (error) {
+        this._writeLine(
+          `Preset "${label}" failed before execution: ${error instanceof Error ? error.message : String(error)}`,
+          'err',
+        );
+      }
     }
 
     _fallbackState() {
@@ -731,9 +759,7 @@ export class RobotTerminalComponent {
       if (runAutoPreset) {
         const autoCmd = this.presetCommands.find((cmd) => cmd.auto);
         if (autoCmd) {
-          this._writeLine(`Launching preset: ${autoCmd.label}`, 'ok');
-          this.onPresetLaunch(autoCmd);
-          await this.runCommand(autoCmd.command, autoCmd.id);
+          await this._launchPreset(autoCmd);
         }
       }
       return true;

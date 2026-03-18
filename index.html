@@ -728,8 +728,9 @@
                       <p class="muted-copy">Capture the command outputs that make the test objectively evaluable.</p>
                     </div>
                     <div class="recorder-simple-copy">
-                      <p>Run the same commands you normally use to inspect the robot or stack. The goal is to capture outputs that let the generated checks evaluate the system correctly.</p>
+                      <p>Activate the terminal, run <strong>Run generic info commands</strong> first, then add the robot-specific commands you normally use to inspect the robot or stack. The goal is to capture outputs that let the generated checks evaluate the system correctly.</p>
                       <p>The transcript mainly helps the model infer read and validation blocks. It should not be expected to invent the correct commands if the transcript does not show them.</p>
+                      <p>The generic-info action is meant to capture baseline context such as OS, ROS, processes, networking, services, and containers before you add any topic or application-specific checks.</p>
                     </div>
                     <div class="recorder-command-examples">
                       <div class="recorder-command-example-card">
@@ -763,7 +764,7 @@
                 <div id="recorderSimplePromptStep" class="panel recorder-simple-step hidden" data-recorder-simple-step="prompt">
                   <div class="recorder-simple-step-header">
                     <h2 id="recorderSimplePromptTitle">3. Ask Your LLM</h2>
-                    <p class="muted-copy">Describe the stack and the exact test objective. The prompt bundle will be generated automatically when you continue.</p>
+                    <p class="muted-copy">Describe the stack and the exact test objective. Make sure the transcript already includes the generic-info run plus any robot-specific commands you need. The prompt bundle will be generated automatically when you continue.</p>
                   </div>
                   <label class="recorder-llm-label" for="recorderLlmSystemDetailsInput">System / stack details</label>
                   <textarea id="recorderLlmSystemDetailsInput" class="recorder-llm-textarea" rows="5"
