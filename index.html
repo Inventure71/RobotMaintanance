@@ -788,9 +788,21 @@
                     <p class="muted-copy">Copy the generated prompt into your external LLM, then paste the returned JSON here.</p>
                   </div>
                   <div class="recorder-import-instructions">
+                    <p class="recorder-llm-copy">Click inside the prompt box, press <kbd>Ctrl/Cmd+A</kbd>, then <kbd>Ctrl/Cmd+C</kbd>. Paste that exact prompt into your external LLM before returning the JSON below.</p>
+                    <label class="recorder-llm-label" for="recorderLlmPromptPreview">Prompt to copy</label>
+                    <textarea id="recorderLlmPromptPreview" class="recorder-llm-textarea recorder-llm-preview" rows="8"
+                      readonly spellcheck="false"
+                      placeholder="Generate the prompt in the previous step. It will appear here for manual copy."></textarea>
                     <p>Paste the prompt into your external LLM provider, ask it to return only JSON, then paste the result below and validate it. The current draft stays unchanged until validation succeeds.</p>
-                    <p class="muted-copy">Use this shape to identify valid JSON output:</p>
-                    <pre class="recorder-json-example"><code>{
+                    <div class="battery-command-heading">
+                      <span class="battery-command-label">What is a JSON?</span>
+                      <button id="recorderJsonHelpButton" class="button test-info-btn battery-command-info-button" type="button"
+                        data-button-intent="utility" aria-expanded="false" aria-controls="recorderJsonHelpPanel"
+                        aria-label="Show JSON output example" title="Show JSON output example">?</button>
+                    </div>
+                    <div id="recorderJsonHelpPanel" class="battery-command-help hidden">
+                      <p class="muted-copy">Use this shape to identify valid JSON output:</p>
+                      <pre class="recorder-json-example"><code>{
   "id": "battery_health_check",
   "label": "Battery Health Check",
   "mode": "orchestrate",
@@ -825,10 +837,7 @@
     }
   ]
 }</code></pre>
-                  </div>
-                  <div class="recorder-step-actions recorder-step-actions-inline">
-                    <button id="recorderLlmCopyPromptButton" class="button" type="button"
-                      data-button-intent="utility">Copy prompt</button>
+                    </div>
                   </div>
                   <label class="recorder-llm-label" for="recorderLlmImportInput">LLM result JSON</label>
                   <textarea id="recorderLlmImportInput" class="recorder-llm-textarea recorder-llm-import" rows="16"
@@ -1034,7 +1043,6 @@
                   </div>
                 </div>
 
-                <textarea id="recorderLlmPromptPreview" class="recorder-hidden-textarea" aria-hidden="true" tabindex="-1" hidden></textarea>
               </div>
             </div>
 

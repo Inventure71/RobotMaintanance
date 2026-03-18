@@ -807,6 +807,25 @@ test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in reco
   assert.equal(payload.userTestRequest, 'Verify battery and camera topics are present after startup.');
 });
 
+test('refreshRecorderLlmPromptPreview fills the manual-copy prompt box and updates status text', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.recorderRobotSelect.value = 'rosbot';
+  env.recorderDefinitionIdInput.value = 'battery_health';
+  env.recorderDefinitionLabelInput.value = 'Battery health';
+  env.recorderLlmSystemDetailsInput.value = 'ROS 2 Humble, Ubuntu 22.04, rostopic available';
+  env.recorderLlmTestRequestInput.value = 'Verify battery and camera topics are present after startup.';
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+
+  const result = api.refreshRecorderLlmPromptPreview();
+
+  assert.equal(result.ok, true);
+  assert.equal(env.recorderLlmPromptPreview.value, result.promptText);
+  assert.equal(env.state.recorderSimplePromptBundle, result.promptText);
+  assert.match(env.recorderLlmPromptStatus.textContent, /copy it from the box in the next step/i);
+});
+
 test('loadRecorderLlmImportResult rejects invalid JSON without mutating the current draft', async () => {
   const createRecorderFeature = await loadApi();
   const env = makeEnv();

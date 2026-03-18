@@ -82,3 +82,24 @@ test('manage shell keeps the back action inside the tabs panel and removes the t
   assert.doesNotMatch(newRobotTypePanel, /Already have robot types\?/);
   assert.doesNotMatch(newRobotTypePanel, /Go to existing robot types/);
 });
+
+test('recorder import step uses a visible manual-copy prompt field and removes the copy button', async () => {
+  const html = await fs.readFile(INDEX_PATH, 'utf8');
+  const recorderImportStart = html.indexOf('<div id="recorderSimpleImportStep"');
+  const recorderTerminalStart = html.indexOf('<div id="recorderTerminalPanel"');
+
+  assert.notEqual(recorderImportStart, -1, 'expected recorder import step in index.html');
+  assert.notEqual(recorderTerminalStart, -1, 'expected recorder terminal panel after import step');
+  assert.ok(recorderTerminalStart > recorderImportStart, 'expected recorder terminal panel after import step');
+
+  const recorderImportSection = collapseWhitespace(html.slice(recorderImportStart, recorderTerminalStart));
+
+  assert.match(recorderImportSection, /Prompt to copy/);
+  assert.match(recorderImportSection, /Ctrl\/Cmd\+A/);
+  assert.match(recorderImportSection, /Ctrl\/Cmd\+C/);
+  assert.match(
+    recorderImportSection,
+    /<textarea id="recorderLlmPromptPreview" class="recorder-llm-textarea recorder-llm-preview"[\s\S]*?readonly[\s\S]*?><\/textarea>/,
+  );
+  assert.doesNotMatch(recorderImportSection, /id="recorderLlmCopyPromptButton"/);
+});

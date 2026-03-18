@@ -440,6 +440,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderLlmTestRequestInput = $('#recorderLlmTestRequestInput');
     const recorderLlmPromptPreview = $('#recorderLlmPromptPreview');
     const recorderLlmPromptStatus = $('#recorderLlmPromptStatus');
+    const recorderJsonHelpButton = $('#recorderJsonHelpButton');
+    const recorderJsonHelpPanel = $('#recorderJsonHelpPanel');
     const recorderLlmImportModal = $('#recorderLlmImportModal');
     const recorderLlmImportCancelButton = $('#recorderLlmImportCancelButton');
     const recorderLlmImportLoadButton = $('#recorderLlmImportLoadButton');
@@ -787,6 +789,8 @@ const runtimeEnv = {
   recorderLlmTestRequestInput,
   recorderLlmPromptPreview,
   recorderLlmPromptStatus,
+  recorderJsonHelpButton,
+  recorderJsonHelpPanel,
   recorderLlmImportModal,
   recorderLlmImportCancelButton,
   recorderLlmImportLoadButton,

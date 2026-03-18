@@ -624,85 +624,8 @@ export function createFixTestsFeature(context, maybeEnv) {
   function applyRuntimeRobotPatches(changedRobotIds) {
         const changedIds = Array.from(changedRobotIds || []).map((id) => robotId(id)).filter(Boolean);
         if (!changedIds.length) return;
-  
-        const visibleList = applyFilters();
-        const visibleIds = new Set(visibleList.map((robot) => robotId(robot)));
-  
-        changedIds.forEach((id) => {
-          const robot = getRobotById(id);
-          const currentCard = queryCardByRobotId(id);
-          const shouldBeVisible = visibleIds.has(id);
-          if (!shouldBeVisible) {
-            if (currentCard) currentCard.remove();
-            return;
-          }
-  
-          const isOnline = normalizeStatus(robot?.tests?.online?.status) === 'ok';
-          const targetGrid = isOnline ? onlineGrid : offlineGrid;
-          let card = currentCard;
-          if (!card) {
-            card = renderCard(robot);
-          }
-          updateCardRuntimeContent(card, robot);
-          if (targetGrid && card.parentElement !== targetGrid) {
-            targetGrid.appendChild(card);
-          }
-        });
-  
-        if (onlineGrid) {
-          const sortedOnlineIds = sortOnlineRobots(
-            visibleList.filter((robot) => normalizeStatus(robot?.tests?.online?.status) === 'ok'),
-          )
-            .map((robot) => robotId(robot))
-            .filter(Boolean);
-          const currentOnlineIds = Array.from(onlineGrid.children)
-            .map((node) => normalizeText(node?.getAttribute?.('data-robot-id'), ''))
-            .filter(Boolean);
-          const orderChanged =
-            currentOnlineIds.length !== sortedOnlineIds.length ||
-            currentOnlineIds.some((id, index) => id !== sortedOnlineIds[index]);
 
-          if (orderChanged) {
-            const orderedCards = sortedOnlineIds
-              .map((id) => queryCardByRobotId(id))
-              .filter((card) => card && card.parentElement === onlineGrid);
-            const previousTopByCard = new Map();
-            orderedCards.forEach((card) => {
-              previousTopByCard.set(card, card.getBoundingClientRect().top);
-            });
-
-            orderedCards.forEach((card) => {
-              onlineGrid.appendChild(card);
-            });
-
-            window.requestAnimationFrame(() => {
-              orderedCards.forEach((card) => {
-                const previousTop = previousTopByCard.get(card);
-                if (!Number.isFinite(previousTop)) return;
-                const nextTop = card.getBoundingClientRect().top;
-                const deltaY = previousTop - nextTop;
-                if (Math.abs(deltaY) < 1) return;
-
-                card.style.transition = 'none';
-                card.style.transform = `translateY(${deltaY}px)`;
-                card.getBoundingClientRect();
-                card.style.transition = 'transform 180ms cubic-bezier(0.2, 0.7, 0.25, 1)';
-                card.style.transform = 'translateY(0)';
-                card.addEventListener(
-                  'transitionend',
-                  () => {
-                    card.style.transition = '';
-                    card.style.transform = '';
-                  },
-                  { once: true },
-                );
-              });
-            });
-          }
-        }
-  
-        invalidateCountdownNodeCache();
-        applyDashboardMetaFromVisible(visibleList);
+        renderDashboard();
         if (state.detailRobotId) {
           const activeRobot = getRobotById(state.detailRobotId);
           patchDetailRuntimeContent(activeRobot);

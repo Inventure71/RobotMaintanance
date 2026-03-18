@@ -234,6 +234,8 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderLlmTestRequestInput,
     recorderLlmPromptPreview,
     recorderLlmPromptStatus,
+    recorderJsonHelpButton,
+    recorderJsonHelpPanel,
     recorderLlmImportModal,
     recorderLlmImportCancelButton,
     recorderLlmImportLoadButton,
@@ -863,6 +865,22 @@ export function createRecorderFeature(context, maybeEnv) {
         setRecorderLlmHelpExpanded(!expanded);
       }
 
+  function setRecorderJsonHelpExpanded(expanded) {
+        const open = Boolean(expanded);
+        if (recorderJsonHelpButton) {
+          recorderJsonHelpButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        if (recorderJsonHelpPanel) {
+          recorderJsonHelpPanel.classList.toggle('hidden', !open);
+          recorderJsonHelpPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+      }
+
+  function toggleRecorderJsonHelp() {
+        const expanded = recorderJsonHelpButton?.getAttribute('aria-expanded') === 'true';
+        setRecorderJsonHelpExpanded(!expanded);
+      }
+
   function buildRecorderLlmRobotContext() {
         const robotIdValue = normalizeText(recorderRobotSelect?.value, '');
         const robot = state.robots.find((entry) => normalizeText(entry?.id, '') === robotIdValue);
@@ -939,35 +957,11 @@ export function createRecorderFeature(context, maybeEnv) {
         state.recorderSimplePromptBundle = result.ok ? result.promptText : '';
         setRecorderLlmStatus(
           recorderLlmPromptStatus,
-          result.ok ? 'Prompt bundle ready.' : result.error,
+          result.ok ? 'Prompt ready. Copy it from the box in the next step and paste it into your external LLM.' : result.error,
           result.ok ? 'ok' : 'warn',
         );
         syncRecorderUiState();
         return result;
-      }
-
-  async function copyRecorderLlmPrompt() {
-        const result = refreshRecorderLlmPromptPreview();
-        if (!result.ok) {
-          return false;
-        }
-        const clipboard = window?.navigator?.clipboard;
-        if (!clipboard || typeof clipboard.writeText !== 'function') {
-          setRecorderLlmStatus(recorderLlmPromptStatus, 'Clipboard access is unavailable in this browser.', 'error');
-          return false;
-        }
-        try {
-          await clipboard.writeText(result.promptText);
-          setRecorderLlmStatus(recorderLlmPromptStatus, 'Prompt bundle copied to clipboard.', 'ok');
-          return true;
-        } catch (error) {
-          setRecorderLlmStatus(
-            recorderLlmPromptStatus,
-            `Clipboard copy failed: ${error instanceof Error ? error.message : String(error)}`,
-            'error',
-          );
-          return false;
-        }
       }
 
   function openRecorderLlmPromptModal() {
@@ -2188,9 +2182,6 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderSimplePromptNextButton) {
           recorderSimplePromptNextButton.disabled = !promptReady;
         }
-        if (recorderLlmCopyPromptButton) {
-          recorderLlmCopyPromptButton.disabled = !promptReady;
-        }
         if (recorderValidateImportButton) {
           recorderValidateImportButton.disabled = normalizeText(recorderLlmImportInput?.value, '') === '';
         }
@@ -2649,14 +2640,14 @@ export function createRecorderFeature(context, maybeEnv) {
         recorderAskLlmHelpButton?.addEventListener('click', () => {
           toggleRecorderLlmHelp();
         });
+        recorderJsonHelpButton?.addEventListener('click', () => {
+          toggleRecorderJsonHelp();
+        });
         recorderPasteLlmResultButton?.addEventListener('click', () => {
           openRecorderLlmImportModal();
         });
         recorderLlmPromptCancelButton?.addEventListener('click', () => {
           closeRecorderLlmPromptModal();
-        });
-        recorderLlmCopyPromptButton?.addEventListener('click', () => {
-          copyRecorderLlmPrompt();
         });
         recorderLlmSystemDetailsInput?.addEventListener('input', () => {
           state.recorderSimplePromptBundle = '';
@@ -2720,6 +2711,7 @@ export function createRecorderFeature(context, maybeEnv) {
         clearRecorderOutputForm();
         clearRecorderReadForm();
         setRecorderLlmHelpExpanded(false);
+        setRecorderJsonHelpExpanded(false);
         resetRecorderLlmImportState({ clearInput: true });
         if (recorderLlmPromptPreview) recorderLlmPromptPreview.value = '';
         setRecorderLlmStatus(recorderLlmPromptStatus, '', '');
@@ -2774,10 +2766,11 @@ export function createRecorderFeature(context, maybeEnv) {
     setRecorderSimpleStep,
     setRecorderLlmHelpExpanded,
     toggleRecorderLlmHelp,
+    setRecorderJsonHelpExpanded,
+    toggleRecorderJsonHelp,
     buildRecorderLlmPromptPayload,
     getRecorderLlmPromptBuildResult,
     refreshRecorderLlmPromptPreview,
-    copyRecorderLlmPrompt,
     openRecorderLlmPromptModal,
     closeRecorderLlmPromptModal,
     stripRecorderLlmJsonWrapperNoise,

@@ -2588,6 +2588,14 @@
       font-size: 0.82rem;
     }
 
+    .recorder-llm-preview {
+      height: 12rem;
+      min-height: 12rem;
+      max-height: 12rem;
+      overflow-y: auto;
+      resize: none;
+    }
+
     .recorder-llm-textarea:focus {
       border-color: var(--focus);
       box-shadow: 0 0 0 3px rgba(138, 198, 255, 0.15);
