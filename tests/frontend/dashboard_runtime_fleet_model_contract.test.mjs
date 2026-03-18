@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeFleetView.js',
+  '../../assets/js/modules/dashboard/features/fleet/controller/createFleetFeature.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -150,13 +150,13 @@ async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source
     .replace(
-      "import { createModelAssetResolver } from '../../primitives/model-viewer/modelAssetResolver.js';",
+      "import { createModelAssetResolver } from '../../../primitives/model-viewer/modelAssetResolver.js';",
       "const createModelAssetResolver = () => ({ getInitialModelUrl: (url) => url, bindModelViewerSource: () => {} });",
     )
     .replace(
-      'export function registerFleetViewRuntime',
-      'function registerFleetViewRuntime',
-    )}\nmodule.exports = { registerFleetViewRuntime };\n`;
+      'export function createFleetFeature',
+      'function createFleetFeature',
+    )}\nmodule.exports = { createFleetFeature };\n`;
   const context = {
     console,
     document: globalThis.document,
@@ -164,7 +164,7 @@ async function loadApi() {
     exports: {},
   };
   vm.runInNewContext(transformed, context, { filename: MODULE_PATH });
-  return context.module.exports.registerFleetViewRuntime;
+  return context.module.exports.createFleetFeature;
 }
 
 function makeRuntime(env) {
@@ -252,10 +252,10 @@ function makeEnv() {
 }
 
 test('normalizeRobotData resolves effective model from overrides then type defaults', async () => {
-  const registerFleetViewRuntime = await loadApi();
+  const createFleetFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env);
-  const api = registerFleetViewRuntime(runtime, env);
+  const api = createFleetFeature(runtime, env);
 
   const robots = api.normalizeRobotData([
     { id: 'r1', name: 'one', type: 'rosbot-2-pro', ip: 'host-a' },
@@ -275,10 +275,10 @@ test('normalizeRobotData resolves effective model from overrides then type defau
 });
 
 test('normalizeRobotData appends asset version query to bust stale model caches', async () => {
-  const registerFleetViewRuntime = await loadApi();
+  const createFleetFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env);
-  const api = registerFleetViewRuntime(runtime, env);
+  const api = createFleetFeature(runtime, env);
 
   const robots = api.normalizeRobotData([
     {
@@ -298,10 +298,10 @@ test('normalizeRobotData appends asset version query to bust stale model caches'
 });
 
 test('buildRobotModelMarkup falls back to type model when robot override lacks requested quality', async () => {
-  const registerFleetViewRuntime = await loadApi();
+  const createFleetFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env);
-  const api = registerFleetViewRuntime(runtime, env);
+  const api = createFleetFeature(runtime, env);
 
   const markup = api.buildRobotModelMarkup(
     {
@@ -324,7 +324,7 @@ test('buildRobotModelMarkup falls back to type model when robot override lacks r
 
 test('renderDashboard inserts robot-type dividers in both online and offline fleet sections', async () => {
   await withFakeDocument(async () => {
-    const registerFleetViewRuntime = await loadApi();
+    const createFleetFeature = await loadApi();
     const env = makeEnv();
     env.CAN_USE_MODEL_VIEWER = false;
     env.state.robots = [
@@ -379,7 +379,7 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
     ];
     env.normalizeStatus = (value) => normalizeText(value, 'warning').toLowerCase();
     const runtime = makeRuntime(env);
-    const api = registerFleetViewRuntime(runtime, env);
+    const api = createFleetFeature(runtime, env);
 
     api.renderDashboard();
 

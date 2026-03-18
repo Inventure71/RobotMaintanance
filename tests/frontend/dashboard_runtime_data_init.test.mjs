@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeDataInit.js',
+  '../../assets/js/modules/dashboard/features/data-init/controller/createDataInitFeature.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -91,9 +91,9 @@ function makeEnv(state) {
 async function loadApi(fetchImpl) {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source.replace(
-    'export function registerDataInitRuntime',
-    'function registerDataInitRuntime',
-  )}\nmodule.exports = { registerDataInitRuntime };\n`;
+    'export function createDataInitFeature',
+    'function createDataInitFeature',
+  )}\nmodule.exports = { createDataInitFeature };\n`;
   const context = {
     console,
     fetch: fetchImpl,
@@ -109,7 +109,7 @@ async function loadApi(fetchImpl) {
   vm.runInNewContext(transformed, context, {
     filename: MODULE_PATH,
   });
-  return context.module.exports.registerDataInitRuntime;
+  return context.module.exports.createDataInitFeature;
 }
 
 test('refreshRuntimeStateFromBackend accepts zero runtime version', async () => {
@@ -122,7 +122,7 @@ test('refreshRuntimeStateFromBackend accepts zero runtime version', async () => 
     };
   };
 
-  const registerDataInitRuntime = await loadApi(fetchImpl);
+  const createDataInitFeature = await loadApi(fetchImpl);
   const state = {
     fixingRobotIds: new Set(),
     isRuntimeSyncInFlight: false,
@@ -134,7 +134,7 @@ test('refreshRuntimeStateFromBackend accepts zero runtime version', async () => 
   const env = makeEnv(state);
   const runtime = makeRuntime(env);
 
-  const api = registerDataInitRuntime(runtime, env);
+  const api = createDataInitFeature(runtime, env);
   await api.refreshRuntimeStateFromBackend();
 
   assert.equal(state.runtimeVersion, 0);
@@ -143,7 +143,7 @@ test('refreshRuntimeStateFromBackend accepts zero runtime version', async () => 
 });
 
 test('mergeRuntimeRobotsIntoList clears omitted robots in full snapshots', async () => {
-  const registerDataInitRuntime = await loadApi(async () => ({ ok: false }));
+  const createDataInitFeature = await loadApi(async () => ({ ok: false }));
   const state = {
     fixingRobotIds: new Set(),
     robots: [],
@@ -154,7 +154,7 @@ test('mergeRuntimeRobotsIntoList clears omitted robots in full snapshots', async
   const env = makeEnv(state);
   const runtime = makeRuntime(env);
 
-  const api = registerDataInitRuntime(runtime, env);
+  const api = createDataInitFeature(runtime, env);
   const existingRobot = {
     id: 'r-1',
     typeId: 'picker',
@@ -222,7 +222,7 @@ test('loadRobotsFromBackend preserves empty fleet snapshots', async () => {
     throw new Error(`Unexpected fetch URL: ${text}`);
   };
 
-  const registerDataInitRuntime = await loadApi(fetchImpl);
+  const createDataInitFeature = await loadApi(fetchImpl);
   const state = {
     fixingRobotIds: new Set(),
     robots: [],
@@ -232,7 +232,7 @@ test('loadRobotsFromBackend preserves empty fleet snapshots', async () => {
   };
   const env = makeEnv(state);
   const runtime = makeRuntime(env);
-  const api = registerDataInitRuntime(runtime, env);
+  const api = createDataInitFeature(runtime, env);
 
   const robots = await api.loadRobotsFromBackend();
   assert.deepEqual(robots, []);
@@ -256,7 +256,7 @@ test('loadRobotTypeConfig reconciles loaded robot definitions immediately', asyn
     throw new Error(`Unexpected fetch URL: ${text}`);
   };
 
-  const registerDataInitRuntime = await loadApi(fetchImpl);
+  const createDataInitFeature = await loadApi(fetchImpl);
   const state = {
     fixingRobotIds: new Set(),
     robots: [],
@@ -274,7 +274,7 @@ test('loadRobotTypeConfig reconciles loaded robot definitions immediately', asyn
     calls.push(['reconcileLoadedRobotDefinitions']);
   };
 
-  const api = registerDataInitRuntime(runtime, env);
+  const api = createDataInitFeature(runtime, env);
   await api.loadRobotTypeConfig();
 
   assert.deepEqual(
@@ -284,7 +284,7 @@ test('loadRobotTypeConfig reconciles loaded robot definitions immediately', asyn
 });
 
 test('mergeRuntimeRobotsIntoList keeps auto-monitor battery out of live test rows', async () => {
-  const registerDataInitRuntime = await loadApi(async () => ({ ok: false }));
+  const createDataInitFeature = await loadApi(async () => ({ ok: false }));
   const state = {
     fixingRobotIds: new Set(),
     robots: [],
@@ -294,7 +294,7 @@ test('mergeRuntimeRobotsIntoList keeps auto-monitor battery out of live test row
   };
   const env = makeEnv(state);
   const runtime = makeRuntime(env);
-  const api = registerDataInitRuntime(runtime, env);
+  const api = createDataInitFeature(runtime, env);
 
   const existingRobot = {
     id: 'r-1',

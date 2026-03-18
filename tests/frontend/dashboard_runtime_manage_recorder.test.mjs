@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeManageRecorder.js',
+  '../../assets/js/modules/dashboard/features/recorder/controller/createRecorderFeature.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -134,7 +134,7 @@ async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source
     .replace(
-      "import { renderRecorderLlmPromptTemplate } from '../../templates/recorderLlmPromptTemplate.js';",
+      "import { renderRecorderLlmPromptTemplate } from '../../../templates/recorderLlmPromptTemplate.js';",
       `const renderRecorderLlmPromptTemplate = ({ selectedRobot, currentDefinition, currentRecorderDraft, recorderTerminalTranscript, userSystemDetails, userTestRequest }) => ({
         promptVersion: 'recorder-llm-roundtrip.v1',
         instructions: {
@@ -214,10 +214,103 @@ async function loadApi() {
       });`,
     )
     .replace(
+      "import { buildRecorderLlmPromptPayload as buildRecorderLlmPromptPayloadValue, parseRecorderLlmImportPayload as parseRecorderLlmImportPayloadValue, stripRecorderLlmJsonWrapperNoise as stripRecorderLlmJsonWrapperNoiseValue, validateRecorderImportedDefinition as validateRecorderImportedDefinitionValue } from '../domain/recorderLlm.js';",
+      `const buildRecorderLlmPromptPayloadValue = ({ normalizeText, renderRecorderLlmPromptTemplate, definitionIdValue, exportDraftContext, buildRobotContext, buildDefinitionContext, systemDetails, userRequest, transcript }) => {
+        const definitionId = normalizeText(definitionIdValue, '');
+        const draftContext = exportDraftContext?.(definitionId) || {
+          started: false, publishReady: false, definitionId, outputCount: 0, writeCount: 0, readCount: 0, outputs: [], execute: [], checks: [], blockingIssues: [],
+        };
+        return renderRecorderLlmPromptTemplate({
+          selectedRobot: buildRobotContext(),
+          currentDefinition: buildDefinitionContext(),
+          currentRecorderDraft: draftContext,
+          recorderTerminalTranscript: transcript,
+          userSystemDetails: systemDetails,
+          userTestRequest: userRequest,
+        });
+      };
+      const stripRecorderLlmJsonWrapperNoiseValue = (rawValue) => {
+        let text = String(rawValue ?? '').trim();
+        const fenced = text.match(/^\\\`\\\`\\\`(?:json)?\\s*([\\s\\S]*?)\\s*\\\`\\\`\\\`$/i);
+        if (fenced) text = fenced[1].trim();
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+          const wrapped = text.slice(firstBrace, lastBrace + 1).trim();
+          if (wrapped.startsWith('{') && wrapped.endsWith('}')) text = wrapped;
+        }
+        return text;
+      };
+      const parseRecorderLlmImportPayloadValue = (rawValue) => {
+        const stripped = stripRecorderLlmJsonWrapperNoiseValue(rawValue);
+        if (!stripped) throw new Error('Paste the external LLM JSON result first.');
+        let parsed;
+        try { parsed = JSON.parse(stripped); } catch (error) { throw new Error(\`LLM result is invalid JSON: \${error instanceof Error ? error.message : String(error)}\`); }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('LLM result must be a JSON object.');
+        return parsed;
+      };
+      const validateRecorderImportedDefinitionValue = ({ normalizeText, inferUniformRunAtConnection, allowedReadKinds, baseReadKinds, rawDefinition }) => {
+        const validateRecorderReadSpec = ({ readSpec, contextLabel }) => {
+          if (!readSpec || typeof readSpec !== 'object' || Array.isArray(readSpec)) throw new Error(\`\${contextLabel} must define a read object.\`);
+          const kind = normalizeText(readSpec.kind, '').toLowerCase();
+          if (!allowedReadKinds.has(kind)) throw new Error(\`\${contextLabel} uses unsupported read kind '\${kind || 'unknown'}'.\`);
+          if (kind === 'all_of') {
+            const rules = Array.isArray(readSpec.rules) ? readSpec.rules : [];
+            if (!rules.length) throw new Error(\`\${contextLabel} kind 'all_of' must define non-empty rules[].\`);
+            return { ...readSpec, kind, rules: rules.map((rule, index) => {
+              const validatedRule = validateRecorderReadSpec({ readSpec: rule, contextLabel: \`\${contextLabel} rule \${index + 1}\` });
+              if (!baseReadKinds.has(validatedRule.kind)) throw new Error(\`\${contextLabel} rule \${index + 1} must use a base read kind.\`);
+              return validatedRule;
+            }) };
+          }
+          if (!normalizeText(readSpec.inputRef, '')) throw new Error(\`\${contextLabel} read.\${kind} must define inputRef.\`);
+          if (kind === 'contains_string' && !normalizeText(readSpec.needle, '')) throw new Error(\`\${contextLabel} read.contains_string must define needle.\`);
+          if (kind === 'contains_any_string') {
+            const needles = Array.isArray(readSpec.needles) ? readSpec.needles.map((item) => normalizeText(item, '')).filter(Boolean) : [];
+            if (!needles.length) throw new Error(\`\${contextLabel} read.contains_any_string must define non-empty needles[].\`);
+          }
+          if (kind === 'contains_lines_unordered') {
+            const lines = Array.isArray(readSpec.lines) ? readSpec.lines.map((item) => normalizeText(item, '')).filter(Boolean) : [];
+            if (!lines.length) throw new Error(\`\${contextLabel} read.contains_lines_unordered must define non-empty lines[].\`);
+          }
+          return { ...readSpec, kind };
+        };
+        const definition = rawDefinition && typeof rawDefinition === 'object' ? rawDefinition : {};
+        const definitionId = normalizeText(definition.id, '');
+        if (!definitionId) throw new Error('Imported definition must define a top-level id.');
+        const label = normalizeText(definition.label, '');
+        if (!label) throw new Error('Imported definition must define a top-level label.');
+        const mode = normalizeText(definition.mode, '').toLowerCase();
+        if (mode !== 'orchestrate') throw new Error(\`Imported definition mode must be 'orchestrate', received '\${mode || 'unknown'}'.\`);
+        const execute = Array.isArray(definition.execute) ? definition.execute : [];
+        if (!execute.length) throw new Error('Imported definition must define non-empty execute[].');
+        const normalizedExecute = execute.map((step, index) => {
+          if (!step || typeof step !== 'object' || Array.isArray(step)) throw new Error(\`execute[\${index}] must be an object.\`);
+          const command = normalizeText(step.command, '');
+          if (!command) throw new Error(\`execute[\${index}] must define command.\`);
+          return { ...step, command };
+        });
+        const checks = Array.isArray(definition.checks) ? definition.checks : [];
+        if (!checks.length) throw new Error('Imported definition must define non-empty checks[].');
+        const normalizedChecks = checks.map((check, index) => {
+          if (!check || typeof check !== 'object' || Array.isArray(check)) throw new Error(\`checks[\${index}] must be an object.\`);
+          const checkId = normalizeText(check.id, '');
+          if (!checkId) throw new Error(\`checks[\${index}] must define id.\`);
+          if (typeof check.runAtConnection !== 'boolean') throw new Error(\`checks[\${index}] must define a top-level boolean runAtConnection.\`);
+          if (!check.pass || typeof check.pass !== 'object' || Array.isArray(check.pass)) throw new Error(\`checks[\${index}] must define a pass object.\`);
+          if (!check.fail || typeof check.fail !== 'object' || Array.isArray(check.fail)) throw new Error(\`checks[\${index}] must define a fail object.\`);
+          return { ...check, id: checkId, read: validateRecorderReadSpec({ readSpec: check.read, contextLabel: \`checks[\${index}]\` }) };
+        });
+        const uniformRunAtConnection = inferUniformRunAtConnection(normalizedChecks, true);
+        if (uniformRunAtConnection === null) throw new Error('Imported definition checks must share one runAtConnection value.');
+        return { ...definition, id: definitionId, label, mode: 'orchestrate', execute: normalizedExecute, checks: normalizedChecks };
+      };`,
+    )
+    .replace(
       "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",
       'const renderManageEntityList = () => {};',
     )
-    .replace('export function registerManageRecorderRuntime', 'function registerManageRecorderRuntime')}\nmodule.exports = { registerManageRecorderRuntime };\n`;
+    .replace('export function createRecorderFeature', 'function createRecorderFeature')}\nmodule.exports = { createRecorderFeature };\n`;
   const context = {
     console,
     module: { exports: {} },
@@ -242,7 +335,7 @@ async function loadApi() {
     confirm: () => true,
   };
   vm.runInNewContext(transformed, context, { filename: MODULE_PATH });
-  return context.module.exports.registerManageRecorderRuntime;
+  return context.module.exports.createRecorderFeature;
 }
 
 function makeRuntime(state) {
@@ -494,10 +587,10 @@ function makeEnv() {
 }
 
 test('loadExistingTestIntoRecorder hydrates the full flow builder and switches to recorder tab', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   const definition = {
     id: 'battery_health',
@@ -538,7 +631,7 @@ test('loadExistingTestIntoRecorder hydrates the full flow builder and switches t
 });
 
 test('renderManageDefinitionsList filters entries and edit/view opens fix definitions in the flow editor', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.definitionsSummary.tests = [
     { id: 'battery_health', label: 'Battery health', checks: [{ id: 'battery_health__battery' }] },
@@ -553,7 +646,7 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
     },
   ];
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.renderManageDefinitionsList();
   assert.equal(env.manageDefinitionsList.children.length, 2);
@@ -578,7 +671,7 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
 });
 
 test('duplicate test action opens a copied recorder draft', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.definitionsSummary.tests = [
     {
@@ -595,7 +688,7 @@ test('duplicate test action opens a copied recorder draft', async () => {
     },
   ];
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.setManageDefinitionsFilter('tests');
   const testRow = env.manageDefinitionsList.children[0];
@@ -613,10 +706,10 @@ test('duplicate test action opens a copied recorder draft', async () => {
 });
 
 test('setFlowEditorMode initializes fix robot type targets from definitions summary', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   assert.equal(env.manageFixRobotTypeTargets.children.length, 0);
 
@@ -630,10 +723,10 @@ test('setFlowEditorMode initializes fix robot type targets from definitions summ
 });
 
 test('toggleRecorderLlmHelp updates aria-expanded state', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.setRecorderLlmHelpExpanded(false);
   assert.equal(env.recorderAskLlmHelpButton.getAttribute('aria-expanded'), 'false');
@@ -649,10 +742,10 @@ test('toggleRecorderLlmHelp updates aria-expanded state', async () => {
 });
 
 test('getRecorderLlmPromptBuildResult blocks prompt copy when transcript or required fields are missing', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   env.state.recorderTerminalComponent.exportTranscript = () => '';
   let result = api.getRecorderLlmPromptBuildResult();
@@ -671,7 +764,7 @@ test('getRecorderLlmPromptBuildResult blocks prompt copy when transcript or requ
 });
 
 test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in recorder order', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderRobotSelect.value = 'rosbot';
   env.recorderDefinitionIdInput.value = 'battery_health';
@@ -679,7 +772,7 @@ test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in reco
   env.recorderLlmSystemDetailsInput.value = 'ROS 2 Humble, Ubuntu 22.04, rostopic available';
   env.recorderLlmTestRequestInput.value = 'Verify battery and camera topics are present after startup.';
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   const result = api.getRecorderLlmPromptBuildResult();
 
@@ -715,13 +808,13 @@ test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in reco
 });
 
 test('loadRecorderLlmImportResult rejects invalid JSON without mutating the current draft', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const currentDraft = { id: 'existing_draft' };
   env.state.workflowRecorder.loaded = currentDraft;
   env.recorderLlmImportInput.value = 'not valid json';
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   const loaded = api.loadRecorderLlmImportResult();
 
@@ -731,7 +824,7 @@ test('loadRecorderLlmImportResult rejects invalid JSON without mutating the curr
 });
 
 test('validateRecorderLlmImportInput reports unsupported read kinds explicitly', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderLlmImportInput.value = JSON.stringify({
     id: 'battery_health',
@@ -750,7 +843,7 @@ test('validateRecorderLlmImportInput reports unsupported read kinds explicitly',
     ],
   });
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   const definition = api.validateRecorderLlmImportInput();
 
@@ -759,7 +852,7 @@ test('validateRecorderLlmImportInput reports unsupported read kinds explicitly',
 });
 
 test('validateRecorderLlmImportInput reports mixed runAtConnection values explicitly', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderLlmImportInput.value = JSON.stringify({
     id: 'battery_health',
@@ -786,7 +879,7 @@ test('validateRecorderLlmImportInput reports mixed runAtConnection values explic
     ],
   });
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   const definition = api.validateRecorderLlmImportInput();
 
@@ -795,7 +888,7 @@ test('validateRecorderLlmImportInput reports mixed runAtConnection values explic
 });
 
 test('loadRecorderLlmImportResult hydrates valid JSON into the recorder draft', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderLlmImportInput.value = [
     '```json',
@@ -819,7 +912,7 @@ test('loadRecorderLlmImportResult hydrates valid JSON into the recorder draft', 
     '```',
   ].join('\n');
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.openRecorderLlmImportModal();
   const validated = api.validateRecorderLlmImportInput();
@@ -841,12 +934,12 @@ test('loadRecorderLlmImportResult hydrates valid JSON into the recorder draft', 
 });
 
 test('addRecorderWriteVisual adds a manual write block and seeds recorder draft metadata', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderCommandInput.value = 'echo battery';
   env.recorderRobotSelect.value = 'rosbot';
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.addRecorderWriteVisual();
 
@@ -866,10 +959,10 @@ test('addRecorderWriteVisual adds a manual write block and seeds recorder draft 
 });
 
 test('setRecorderMode simple starts on robot selection before terminal context', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.setRecorderMode('simple', { targetStep: 'select-robot' });
 
@@ -891,10 +984,10 @@ test('setRecorderMode simple starts on robot selection before terminal context',
 });
 
 test('setRecorderMode advanced shows the full manual workspace', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.setRecorderMode('advanced');
 
@@ -912,7 +1005,7 @@ test('setRecorderMode advanced shows the full manual workspace', async () => {
 });
 
 test('resetRecorderTestEntry clears the current recorder draft and returns to mode selector', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.recorderMode = 'advanced';
   env.recorderRobotSelect.value = 'rosbot';
@@ -922,7 +1015,7 @@ test('resetRecorderTestEntry clears the current recorder draft and returns to mo
   env.recorderLlmTestRequestInput.value = 'Check battery topic';
   env.recorderSimpleTranscriptAcknowledge.checked = true;
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.resetRecorderTestEntry({ target: 'mode-selector' });
 
@@ -939,14 +1032,14 @@ test('resetRecorderTestEntry clears the current recorder draft and returns to mo
 });
 
 test('clicking Test Editor nav resets into mode selector', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.activeManageTab = 'recorder';
   env.state.manageFlowEditorMode = 'test';
   env.state.recorderMode = 'advanced';
   env.recorderRobotSelect.value = 'rosbot';
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
   api.initManageTabs();
 
   env.manageTabButtons[1].click();
@@ -960,7 +1053,7 @@ test('clicking Test Editor nav resets into mode selector', async () => {
 });
 
 test('clicking Simple mode card always starts at Select Robot step', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.recorderMode = '';
   env.state.recorderSimpleStep = 'preview';
@@ -977,7 +1070,7 @@ test('clicking Simple mode card always starts at Select Robot step', async () =>
     };
   };
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
   api.initWorkflowRecorder();
 
   env.recorderSelectSimpleModeButton.click();
@@ -990,7 +1083,7 @@ test('clicking Simple mode card always starts at Select Robot step', async () =>
 });
 
 test('Simple terminal step enables next when recorder transcript changes', async () => {
-  const registerManageRecorderRuntime = await loadApi();
+  const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.recorderRobotSelect.value = 'rosbot';
   env.state.recorderMode = 'simple';
@@ -1018,7 +1111,7 @@ test('Simple terminal step enables next when recorder transcript changes', async
     };
   };
   const runtime = makeRuntime(env.state);
-  const api = registerManageRecorderRuntime(runtime, env);
+  const api = createRecorderFeature(runtime, env);
 
   api.initWorkflowRecorder();
   api.setRecorderMode('simple', { targetStep: 'terminal' });

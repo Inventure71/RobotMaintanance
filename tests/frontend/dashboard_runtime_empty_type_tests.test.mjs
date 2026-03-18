@@ -9,11 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MONITOR_MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeMonitorConfig.js',
+  '../../assets/js/modules/dashboard/features/monitor-config/controller/createMonitorConfigFeature.js',
 );
 const FIX_TESTS_MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeFixTests.js',
+  '../../assets/js/modules/dashboard/features/fix-tests/controller/createFixTestsFeature.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -143,13 +143,13 @@ function makeRuntime(overrides = {}) {
 }
 
 test('normalizeRobotTests preserves empty definitions for known robot types', async () => {
-  const registerMonitorConfigRuntime = await loadNamedExport(
+  const createMonitorConfigFeature = await loadNamedExport(
     MONITOR_MODULE_PATH,
-    'registerMonitorConfigRuntime',
+    'createMonitorConfigFeature',
   );
   const env = makeEnv();
   const runtime = makeRuntime();
-  const api = registerMonitorConfigRuntime(runtime, env);
+  const api = createMonitorConfigFeature(runtime, env);
 
   api.setRobotTypeDefinitions([
     {
@@ -174,13 +174,13 @@ test('normalizeRobotTests preserves empty definitions for known robot types', as
 });
 
 test('getConfiguredDefaultTestIds does not inject global tests for known empty types', async () => {
-  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+  const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
-    'registerRuntimeFixTestsRuntime',
+    'createFixTestsFeature',
   );
   const env = makeEnv();
   const runtime = makeRuntime();
-  const api = registerRuntimeFixTestsRuntime(runtime, env);
+  const api = createFixTestsFeature(runtime, env);
 
   assert.deepEqual(
     Array.from(api.getConfiguredDefaultTestIds(
@@ -207,13 +207,13 @@ test('getConfiguredDefaultTestIds does not inject global tests for known empty t
 });
 
 test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include online', async () => {
-  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+  const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
-    'registerRuntimeFixTestsRuntime',
+    'createFixTestsFeature',
   );
   const env = makeEnv();
   const runtime = makeRuntime();
-  const api = registerRuntimeFixTestsRuntime(runtime, env);
+  const api = createFixTestsFeature(runtime, env);
 
   assert.deepEqual(
     Array.from(api.getConfiguredDefaultTestIds(
@@ -233,9 +233,9 @@ test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include 
 
 test('setRunningButtonState disables the detail Run tests button while the active robot is auto testing', async () => {
   const runButton = makeButton('Run tests');
-  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+  const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
-    'registerRuntimeFixTestsRuntime',
+    'createFixTestsFeature',
   );
   const env = makeEnv({
     $: (selector) => (selector === '#runRobotTests' ? runButton : null),
@@ -265,7 +265,7 @@ test('setRunningButtonState disables the detail Run tests button while the activ
       env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
     robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
   });
-  const api = registerRuntimeFixTestsRuntime(runtime, env);
+  const api = createFixTestsFeature(runtime, env);
 
   api.setRunningButtonState(false);
 
@@ -276,9 +276,9 @@ test('setRunningButtonState disables the detail Run tests button while the activ
 
 test('setRunningButtonState disables Run selected while one of the target robots is already testing', async () => {
   const runSelectedButton = makeButton('Run selected');
-  const registerRuntimeFixTestsRuntime = await loadNamedExport(
+  const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
-    'registerRuntimeFixTestsRuntime',
+    'createFixTestsFeature',
   );
   const env = makeEnv({
     $: (selector) => (selector === '#runSelectedRobotTests' ? runSelectedButton : null),
@@ -308,7 +308,7 @@ test('setRunningButtonState disables Run selected while one of the target robots
       env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
     robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
   });
-  const api = registerRuntimeFixTestsRuntime(runtime, env);
+  const api = createFixTestsFeature(runtime, env);
 
   api.setRunningButtonState(false);
 
@@ -318,13 +318,13 @@ test('setRunningButtonState disables Run selected while one of the target robots
 });
 
 test('setRobotTypeDefinitions preserves robot type test refs and battery command metadata', async () => {
-  const registerMonitorConfigRuntime = await loadNamedExport(
+  const createMonitorConfigFeature = await loadNamedExport(
     MONITOR_MODULE_PATH,
-    'registerMonitorConfigRuntime',
+    'createMonitorConfigFeature',
   );
   const env = makeEnv();
   const runtime = makeRuntime();
-  const api = registerMonitorConfigRuntime(runtime, env);
+  const api = createMonitorConfigFeature(runtime, env);
 
   api.setRobotTypeDefinitions([
     {
@@ -346,13 +346,13 @@ test('setRobotTypeDefinitions preserves robot type test refs and battery command
 });
 
 test('normalizeTestDefinition preserves enabled manualOnly and runAtConnection metadata', async () => {
-  const registerMonitorConfigRuntime = await loadNamedExport(
+  const createMonitorConfigFeature = await loadNamedExport(
     MONITOR_MODULE_PATH,
-    'registerMonitorConfigRuntime',
+    'createMonitorConfigFeature',
   );
   const env = makeEnv();
   const runtime = makeRuntime();
-  const api = registerMonitorConfigRuntime(runtime, env);
+  const api = createMonitorConfigFeature(runtime, env);
 
   api.setRobotTypeDefinitions([
     {

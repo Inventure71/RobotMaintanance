@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/controllers/runtime/dashboardRuntimeDetailShell.js',
+  '../../assets/js/modules/dashboard/features/detail/controller/createDetailFeature.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -91,10 +91,54 @@ async function loadApi(fetchImpl, options = {}) {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
   const transformed = `${source
     .replace(
-      "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",
+      "import { renderManageEntityList } from '../../manage/manageEntityList.js';",
       'const renderManageEntityList = globalThis.__renderManageEntityListStub;',
     )
-    .replace('export function registerDetailShellRuntime', 'function registerDetailShellRuntime')}\nmodule.exports = { registerDetailShellRuntime };\n`;
+    .replace(
+      "import { buildManageHashValue, normalizeManageTabValue, normalizeRobotRegistryPanelValue, parseManageRouteValue } from '../domain/manageNavigation.js';",
+      `const normalizeManageTabValue = ({ normalizeText, manageTabs, tabId }) => {
+        const normalized = normalizeText(tabId, '').toLowerCase();
+        if (normalized === 'tests' || normalized === 'fixes') return 'definitions';
+        return manageTabs.includes(normalized) ? normalized : '';
+      };
+      const buildManageHashValue = ({ normalizeManageTab, manageViewHash, tabId }) => {
+        const normalized = normalizeManageTab(tabId) || 'robots';
+        return normalized === 'robots' ? manageViewHash : \`\${manageViewHash}/\${normalized}\`;
+      };
+      const parseManageRouteValue = ({ normalizeManageTab, normalizeText, manageViewHash, hashValue }) => {
+        const hash = normalizeText(hashValue, '').replace(/^#/, '');
+        if (hash === manageViewHash || hash === 'add-robot') return { isManageRoute: true, tabId: '' };
+        if (!hash.startsWith(\`\${manageViewHash}/\`)) return { isManageRoute: false, tabId: '' };
+        const tabId = hash.slice(manageViewHash.length + 1);
+        return { isManageRoute: true, tabId: normalizeManageTab(tabId) || 'robots' };
+      };
+      const normalizeRobotRegistryPanelValue = (normalizeText, panelId) => {
+        const normalized = normalizeText(panelId, '').toLowerCase();
+        if (normalized === 'manage' || normalized === 'existing-robots') return 'existing-robots';
+        if (normalized === 'add' || normalized === 'new-robot') return 'new-robot';
+        if (normalized === 'robot-types' || normalized === 'existing-robot-types' || normalized === 'types' || normalized === 'type') return 'existing-robot-types';
+        if (normalized === 'new-robot-type' || normalized === 'add-type' || normalized === 'new-type') return 'new-robot-type';
+        return 'existing-robots';
+      };`,
+    )
+    .replace(
+      "import { renderRobotRegistryPanel } from '../view/robotRegistryView.js';",
+      `const renderRobotRegistryPanel = ({ buttons, panels, normalizeRobotRegistryPanel, panelId }) => {
+        const nextPanel = normalizeRobotRegistryPanel(panelId);
+        buttons.forEach((button) => {
+          const isActive = normalizeRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton) === nextPanel;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        panels.forEach((panel) => {
+          const isActive = normalizeRobotRegistryPanel(panel?.dataset?.robotRegistryPanel) === nextPanel;
+          panel.classList.toggle('active', isActive);
+          panel.classList.toggle('hidden', !isActive);
+        });
+        return nextPanel;
+      };`,
+    )
+    .replace('export function createDetailFeature', 'function createDetailFeature')}\nmodule.exports = { createDetailFeature };\n`;
   const context = {
     console,
     fetch: fetchImpl,
@@ -117,7 +161,7 @@ async function loadApi(fetchImpl, options = {}) {
     },
   };
   vm.runInNewContext(transformed, context, { filename: MODULE_PATH });
-  return context.module.exports.registerDetailShellRuntime;
+  return context.module.exports.createDetailFeature;
 }
 
 function makeRuntime(calls, env) {
@@ -259,7 +303,7 @@ function makeEnv() {
 
 test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type update', async () => {
   const fetchCalls = [];
-  const registerDetailShellRuntime = await loadApi(async (url, init = {}) => {
+  const createDetailFeature = await loadApi(async (url, init = {}) => {
     fetchCalls.push({ url: String(url), init });
     return {
       ok: true,
@@ -273,7 +317,7 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
   };
   const env = makeEnv();
   const runtime = makeRuntime(calls, env);
-  const api = registerDetailShellRuntime(runtime, env);
+  const api = createDetailFeature(runtime, env);
 
   await api.saveRobotTypeEditsFromForm();
 
@@ -286,7 +330,7 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
 
 test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
   const fetchCalls = [];
-  const registerDetailShellRuntime = await loadApi(async (url, init = {}) => {
+  const createDetailFeature = await loadApi(async (url, init = {}) => {
     fetchCalls.push({ url: String(url), init });
     return {
       ok: true,
@@ -300,7 +344,7 @@ test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
   };
   const env = makeEnv();
   const runtime = makeRuntime(calls, env);
-  const api = registerDetailShellRuntime(runtime, env);
+  const api = createDetailFeature(runtime, env);
 
   api.initRobotTypeUploadInputs();
   env.addRobotTypeBatteryInfoButton.click();
@@ -317,7 +361,7 @@ test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
 
 test('populateEditRobotSelectOptions passes split robot name and type metadata to the Robot Catalog list', async () => {
   const manageListCalls = [];
-  const registerDetailShellRuntime = await loadApi(
+  const createDetailFeature = await loadApi(
     async () => ({
       ok: true,
       json: async () => ({}),
@@ -344,7 +388,7 @@ test('populateEditRobotSelectOptions passes split robot name and type metadata t
   ];
   const runtime = makeRuntime(calls, env);
   runtime.getRobotById = (id) => env.state.robots.find((robot) => robot.id === id) || null;
-  const api = registerDetailShellRuntime(runtime, env);
+  const api = createDetailFeature(runtime, env);
 
   api.populateEditRobotSelectOptions('robot-01');
 
