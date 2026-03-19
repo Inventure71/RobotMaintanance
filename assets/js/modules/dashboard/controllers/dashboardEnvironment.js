@@ -445,6 +445,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderLlmImportLoadButton = $('#recorderLlmImportLoadButton');
     const recorderLlmImportInput = $('#recorderLlmImportInput');
     const recorderLlmImportStatus = $('#recorderLlmImportStatus');
+    const publishSuccessCelebration = $('#publishSuccessCelebration');
+    const publishSuccessCelebrationVideo = $('#publishSuccessCelebrationVideo');
 
     const toggleDashboardFixModeButton = $('#toggleDashboardFixMode');
     const toggleDetailFixModeButton = $('#toggleDetailFixMode');
@@ -792,6 +794,8 @@ const runtimeEnv = {
   recorderLlmImportLoadButton,
   recorderLlmImportInput,
   recorderLlmImportStatus,
+  publishSuccessCelebration,
+  publishSuccessCelebrationVideo,
   recorderTerminalPopReadBtn,
   recorderTerminalShell,
   recorderTerminalToolbar,

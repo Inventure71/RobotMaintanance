@@ -1,4 +1,4 @@
-import { renderRecorderLlmPromptTemplate } from '../../../templates/recorderLlmPromptTemplate.js';
+import { renderRecorderLlmPromptTemplate, renderRecorderLlmPromptText } from '../../../templates/recorderLlmPromptTemplate.js';
 import { buildRecorderLlmPromptPayload as buildRecorderLlmPromptPayloadValue, parseRecorderLlmImportPayload as parseRecorderLlmImportPayloadValue, stripRecorderLlmJsonWrapperNoise as stripRecorderLlmJsonWrapperNoiseValue, validateRecorderImportedDefinition as validateRecorderImportedDefinitionValue } from '../domain/recorderLlm.js';
 
 export function createRecorderFeature(context, maybeEnv) {
@@ -239,6 +239,8 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderLlmImportLoadButton,
     recorderLlmImportInput,
     recorderLlmImportStatus,
+    publishSuccessCelebration,
+    publishSuccessCelebrationVideo,
     recorderTerminalActivationOverlay,
     recorderTerminalBadge,
     recorderTerminalDisplay,
@@ -281,6 +283,13 @@ export function createRecorderFeature(context, maybeEnv) {
   const RECORDER_LLM_ALLOWED_READ_KINDS = new Set([...RECORDER_LLM_BASE_READ_KINDS, 'all_of']);
   const RECORDER_START_DISABLED_TOOLTIP = 'Enter Definition ID and Label to enable "Start creation of new test".';
   const RECORDER_NOT_STARTED_TOOLTIP = 'Complete Definition ID and Label, then click "Start creation of new test".';
+  const PUBLISH_SUCCESS_CELEBRATION_FALLBACK_MS = 2400;
+  const scheduleDelay = typeof globalThis !== 'undefined' && typeof globalThis.setTimeout === 'function'
+    ? globalThis.setTimeout.bind(globalThis)
+    : null;
+  const cancelDelay = typeof globalThis !== 'undefined' && typeof globalThis.clearTimeout === 'function'
+    ? globalThis.clearTimeout.bind(globalThis)
+    : null;
 
   const addRobotIdsToSelection = (...args) => runtime.addRobotIdsToSelection(...args);
   const appendTerminalLine = (...args) => runtime.appendTerminalLine(...args);
@@ -1098,7 +1107,7 @@ export function createRecorderFeature(context, maybeEnv) {
         return {
           ok: true,
           payload,
-          promptText: JSON.stringify(payload, null, 2),
+          promptText: renderRecorderLlmPromptText(payload),
         };
       }
 
@@ -1875,11 +1884,14 @@ export function createRecorderFeature(context, maybeEnv) {
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
           setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}' and updated mappings.`, 'ok');
+          await playPublishSuccessCelebration();
+          resetManageFixEntryForNextDraft();
+          setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}'. Ready for a new fix draft.`, 'ok');
           if (refreshed) {
-            setManageTabStatus(`Saved fix definition '${fixId}'.`, 'ok');
+            setManageTabStatus(`Saved fix definition '${fixId}'. Fix editor cleared for a new draft.`, 'ok');
           } else {
             setManageTabStatus(
-              `Saved fix definition '${fixId}'. Local robot mappings were updated immediately; backend snapshot refresh will catch up automatically.`,
+              `Saved fix definition '${fixId}'. Fix editor cleared for a new draft; backend snapshot refresh will catch up automatically.`,
               'warn',
             );
           }
@@ -2006,6 +2018,81 @@ export function createRecorderFeature(context, maybeEnv) {
         if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
         if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
         setManageEditorStatus(manageFixEditorStatus, '', '');
+      }
+
+  function setPublishSuccessCelebrationVisible(visible) {
+        if (!publishSuccessCelebration) return;
+        publishSuccessCelebration.classList.toggle('hidden', !visible);
+        publishSuccessCelebration.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      }
+
+  function resetPublishSuccessCelebration() {
+        if (publishSuccessCelebrationVideo) {
+          try {
+            publishSuccessCelebrationVideo.pause?.();
+          } catch (_error) {}
+          try {
+            publishSuccessCelebrationVideo.currentTime = 0;
+          } catch (_error) {}
+        }
+        setPublishSuccessCelebrationVisible(false);
+      }
+
+  async function playPublishSuccessCelebration() {
+        if (!publishSuccessCelebration || !publishSuccessCelebrationVideo) return;
+        await new Promise((resolve) => {
+          let settled = false;
+          let timeoutId = null;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            if (timeoutId !== null && cancelDelay) {
+              cancelDelay(timeoutId);
+            }
+            publishSuccessCelebrationVideo.removeEventListener?.('ended', finish);
+            publishSuccessCelebrationVideo.removeEventListener?.('error', finish);
+            resetPublishSuccessCelebration();
+            resolve();
+          };
+
+          setPublishSuccessCelebrationVisible(true);
+          try {
+            publishSuccessCelebrationVideo.pause?.();
+          } catch (_error) {}
+          try {
+            publishSuccessCelebrationVideo.currentTime = 0;
+          } catch (_error) {}
+
+          publishSuccessCelebrationVideo.addEventListener?.('ended', finish);
+          publishSuccessCelebrationVideo.addEventListener?.('error', finish);
+
+          const durationMs = Number.isFinite(Number(publishSuccessCelebrationVideo.duration))
+            && Number(publishSuccessCelebrationVideo.duration) > 0
+            ? Math.ceil(Number(publishSuccessCelebrationVideo.duration) * 1000) + 150
+            : PUBLISH_SUCCESS_CELEBRATION_FALLBACK_MS;
+          if (scheduleDelay) {
+            timeoutId = scheduleDelay(finish, durationMs);
+          }
+
+          try {
+            const playResult = publishSuccessCelebrationVideo.play?.();
+            if (playResult && typeof playResult.catch === 'function') {
+              playResult.catch(() => {});
+            }
+          } catch (_error) {}
+
+          if (!scheduleDelay) {
+            finish();
+          }
+        });
+      }
+
+  function resetManageFixEntryForNextDraft() {
+        clearManageFixEditor();
+        setFlowEditorMode('fix', { announce: false });
+        setActiveManageTab('recorder', { syncHash: true, persist: true });
+        renderFixRobotTypeTargets('');
+        clearCheckedMappings(manageFixRobotTypeTargets);
       }
 
   function loadExistingTestIntoRecorder(testDefinition) {
@@ -2549,7 +2636,9 @@ export function createRecorderFeature(context, maybeEnv) {
           await refreshRobotsFromBackendSnapshot();
           renderManageDefinitions();
           state.workflowRecorder.setPublishStatus('Test definition published and mapped to selected robot types.', 'ok');
-          setManageTabStatus('Recorder test published.', 'ok');
+          await playPublishSuccessCelebration();
+          resetRecorderTestEntry({ target: 'mode-selector' });
+          setManageTabStatus('Recorder test published. Choose a mode to start again.', 'ok');
         } catch (error) {
           state.workflowRecorder.setPublishStatus(
             error instanceof Error ? error.message : String(error),

@@ -166,6 +166,10 @@ async function loadApi(fetchImpl, options = {}) {
 
 function makeRuntime(calls, env) {
   const runtime = {
+    loadDefinitionsSummary: async () => {
+      calls.loadDefinitionsSummary += 1;
+      return {};
+    },
     loadRobotTypeConfig: async () => {
       calls.loadRobotTypeConfig += 1;
       return [];
@@ -270,6 +274,8 @@ function makeEnv() {
     addRobotTypeHighModelDropzone,
     addRobotTypeHighModelFileInput,
     addRobotTypeHighModelFileName: makeNode(),
+    robotRegistryPanelButtons: [],
+    robotRegistryPanels: [],
     editRobotTypeLowModelFileName: makeNode(),
     editRobotTypeHighModelFileName: makeNode(),
     editRobotTypeSummary: makeNode(),
@@ -301,7 +307,7 @@ function makeEnv() {
   };
 }
 
-test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type update', async () => {
+test('saveRobotTypeEditsFromForm refreshes robot snapshot and definitions after successful type update', async () => {
   const fetchCalls = [];
   const createDetailFeature = await loadApi(async (url, init = {}) => {
     fetchCalls.push({ url: String(url), init });
@@ -312,6 +318,7 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
     };
   });
   const calls = {
+    loadDefinitionsSummary: 0,
     loadRobotTypeConfig: 0,
     loadRobotsFromBackend: 0,
   };
@@ -323,9 +330,50 @@ test('saveRobotTypeEditsFromForm refreshes robot snapshot after successful type 
 
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].url, 'http://localhost/api/robot-types/rosbot-2-pro');
-  assert.equal(calls.loadRobotTypeConfig, 1);
+  assert.equal(calls.loadDefinitionsSummary, 1);
   assert.equal(calls.loadRobotsFromBackend, 1);
   assert.equal(env.editRobotTypeStatus.textContent, 'Robot type updated successfully.');
+});
+
+test('createRobotTypeFromForm refreshes definitions so new types appear immediately in manage mappings', async () => {
+  const fetchCalls = [];
+  const createDetailFeature = await loadApi(async (url, init = {}) => {
+    fetchCalls.push({ url: String(url), init });
+    return {
+      ok: true,
+      json: async () => ({ typeId: 'tiago' }),
+      text: async () => '',
+    };
+  });
+  const calls = {
+    loadDefinitionsSummary: 0,
+    loadRobotTypeConfig: 0,
+    loadRobotsFromBackend: 0,
+  };
+  const env = makeEnv();
+  env.addRobotTypeForm = {
+    __formEntries: [
+      ['name', 'TIAGo'],
+      ['batteryCommand', 'ros2 topic echo /battery'],
+    ],
+    resetCalled: 0,
+    reset() {
+      this.resetCalled += 1;
+    },
+  };
+  env.addRobotTypeLowModelFileInput.files = [{ name: 'tiago-low.glb' }];
+  env.addRobotTypeHighModelFileInput.files = [{ name: 'tiago-high.glb' }];
+  const runtime = makeRuntime(calls, env);
+  const api = createDetailFeature(runtime, env);
+
+  await api.createRobotTypeFromForm();
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'http://localhost/api/robot-types');
+  assert.equal(calls.loadDefinitionsSummary, 1);
+  assert.equal(calls.loadRobotsFromBackend, 1);
+  assert.equal(env.addRobotTypeMessage.textContent, 'Robot type created and saved.');
+  assert.equal(env.addRobotTypeForm.resetCalled, 1);
 });
 
 test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
@@ -339,6 +387,7 @@ test('initRobotTypeUploadInputs toggles the battery info panel', async () => {
     };
   });
   const calls = {
+    loadDefinitionsSummary: 0,
     loadRobotTypeConfig: 0,
     loadRobotsFromBackend: 0,
   };
@@ -374,6 +423,7 @@ test('populateEditRobotSelectOptions passes split robot name and type metadata t
     },
   );
   const calls = {
+    loadDefinitionsSummary: 0,
     loadRobotTypeConfig: 0,
     loadRobotsFromBackend: 0,
   };

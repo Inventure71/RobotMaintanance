@@ -2307,6 +2307,12 @@ export function createDetailFeature(context, maybeEnv) {
         return normalizeText(message, fallbackMessage);
       }
 
+  async function refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId = '' } = {}) {
+        const refreshed = await refreshRobotsFromBackendSnapshot({ preferredTypeId });
+        await loadDefinitionsSummary();
+        return refreshed;
+      }
+
   function setAddRobotPasswordVisibility(isVisible) {
         if (!addRobotPasswordInput || !addRobotPasswordToggle) return;
         addRobotPasswordInput.type = isVisible ? 'text' : 'password';
@@ -2558,8 +2564,7 @@ export function createDetailFeature(context, maybeEnv) {
             return;
           }
           setEditRobotTypeMessage('Robot type updated successfully.', 'ok');
-          await loadRobotTypeConfig();
-          await refreshRobotsFromBackendSnapshot({ preferredTypeId: selectedTypeId });
+          await refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId: selectedTypeId });
         } finally {
           state.isEditRobotTypeInProgress = false;
           if (editRobotTypeSaveButton) {
@@ -2594,9 +2599,8 @@ export function createDetailFeature(context, maybeEnv) {
           if (normalizeText(state.selectedManageRobotTypeId, '') === selectedTypeId) {
             state.selectedManageRobotTypeId = '';
           }
-          await loadRobotTypeConfig();
           setEditRobotTypeMessage('Robot type deleted.', 'ok');
-          await refreshRobotsFromBackendSnapshot();
+          await refreshDefinitionDependentViewsAfterRobotTypeMutation();
         } finally {
           state.isDeleteRobotTypeInProgress = false;
           if (editRobotTypeDeleteButton) {
@@ -2644,8 +2648,7 @@ export function createDetailFeature(context, maybeEnv) {
           const createdType = await response.json();
           const createdTypeId = normalizeText(createdType?.typeId || createdType?.id, '');
           setAddRobotTypeMessage('Robot type created and saved.', 'ok');
-          await loadRobotTypeConfig();
-          await refreshRobotsFromBackendSnapshot({ preferredTypeId: createdTypeId });
+          await refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId: createdTypeId });
           if (addRobotTypeForm) addRobotTypeForm.reset();
           resetRobotTypeUploadInputs();
           resetRobotTypeBatteryInfoPanels();

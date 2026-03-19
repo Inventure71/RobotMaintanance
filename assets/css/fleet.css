@@ -3185,6 +3185,27 @@
   box-shadow: var(--elevation-3);
 }
 
+.publish-success-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.16), transparent 58%);
+}
+
+.publish-success-celebration.hidden {
+  display: none;
+}
+
+.publish-success-celebration video {
+  width: min(92vw, 1100px);
+  max-height: 92vh;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.34));
+}
+
 .floating-bug-button {
   width: 48px;
   height: 48px;
