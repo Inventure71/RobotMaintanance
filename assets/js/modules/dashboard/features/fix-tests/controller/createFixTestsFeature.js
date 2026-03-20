@@ -847,7 +847,6 @@ export function createFixTestsFeature(context, maybeEnv) {
           .filter((definition) => definition?.enabled !== false)
           .map((definition) => normalizeText(definition?.id, ''))
           .filter(Boolean);
-        let sawPostTests = false;
   
         const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
         if (currentOnlineStatus !== 'ok') {
@@ -890,86 +889,84 @@ export function createFixTestsFeature(context, maybeEnv) {
         let runId = '';
         let cursor = 0;
         let finalPayload = null;
-  
-        const startResponse = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/${encodeURIComponent(candidate.id)}/runs`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pageSessionId: state.pageSessionId,
-          }),
-        });
-        if (!startResponse.ok) {
-          const message = await startResponse.text();
-          throw new Error(message || `HTTP ${startResponse.status}`);
-        }
-        const startPayload = await startResponse.json();
-        runId = normalizeText(startPayload?.runId, '');
-        if (!runId) {
-          throw new Error('Fix run did not return a runId');
-        }
-  
-        appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name} (run ${runId}).`, 'warn');
-  
-        while (true) {
-          const response = await fetch(
-            buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/runs/${encodeURIComponent(runId)}`),
-            { method: 'GET' },
-          );
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `HTTP ${response.status}`);
-          }
-          const payload = await response.json();
-          finalPayload = payload;
-  
-          const events = Array.isArray(payload?.events) ? payload.events : [];
-          const unseen = events.slice(cursor);
-          cursor = events.length;
-          unseen.forEach((event) => {
-            const message = normalizeText(event?.message, '');
-            if (message) {
-              const tone = normalizeText(event?.type, '').includes('failed') ? 'err' : 'warn';
-              appendTerminalLine(message, tone);
-            }
-            const eventData = event?.data;
-            if (eventData && typeof eventData === 'object' && eventData.output !== undefined) {
-              appendTerminalPayload(eventData.output);
-            }
-            if (normalizeText(event?.type, '') === 'post_tests_started') {
-              sawPostTests = true;
-              setRobotFixing(normalizedRobotId, false);
-              setRobotTesting(
-                normalizedRobotId,
-                true,
-                estimateTestCountdownMsFromBody({ testIds: configuredPostTestIds }),
-              );
-            }
-            if (normalizeText(event?.type, '') === 'post_tests_finished') {
-              setRobotTesting(normalizedRobotId, false);
-            }
+        try {
+          const startResponse = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/${encodeURIComponent(candidate.id)}/runs`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pageSessionId: state.pageSessionId,
+            }),
           });
-  
-          const status = normalizeText(payload?.status, '').toLowerCase();
-          if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
-            break;
+          if (!startResponse.ok) {
+            const message = await startResponse.text();
+            throw new Error(message || `HTTP ${startResponse.status}`);
           }
-          await new Promise((resolve) => window.setTimeout(resolve, FIX_JOB_POLL_INTERVAL_MS));
-        }
+          const startPayload = await startResponse.json();
+          runId = normalizeText(startPayload?.runId, '');
+          if (!runId) {
+            throw new Error('Fix run did not return a runId');
+          }
   
-        if (sawPostTests) {
+          appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name} (run ${runId}).`, 'warn');
+  
+          while (true) {
+            const response = await fetch(
+              buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/runs/${encodeURIComponent(runId)}`),
+              { method: 'GET' },
+            );
+            if (!response.ok) {
+              const message = await response.text();
+              throw new Error(message || `HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            finalPayload = payload;
+  
+            const events = Array.isArray(payload?.events) ? payload.events : [];
+            const unseen = events.slice(cursor);
+            cursor = events.length;
+            unseen.forEach((event) => {
+              const message = normalizeText(event?.message, '');
+              if (message) {
+                const tone = normalizeText(event?.type, '').includes('failed') ? 'err' : 'warn';
+                appendTerminalLine(message, tone);
+              }
+              const eventData = event?.data;
+              if (eventData && typeof eventData === 'object' && eventData.output !== undefined) {
+                appendTerminalPayload(eventData.output);
+              }
+              if (normalizeText(event?.type, '') === 'post_tests_started') {
+                setRobotFixing(normalizedRobotId, false);
+                setRobotTesting(
+                  normalizedRobotId,
+                  true,
+                  estimateTestCountdownMsFromBody({ testIds: configuredPostTestIds }),
+                );
+              }
+              if (normalizeText(event?.type, '') === 'post_tests_finished') {
+                setRobotTesting(normalizedRobotId, false);
+              }
+            });
+  
+            const status = normalizeText(payload?.status, '').toLowerCase();
+            if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
+              break;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, FIX_JOB_POLL_INTERVAL_MS));
+          }
+  
+          const status = normalizeText(finalPayload?.status, '').toLowerCase();
+          if (status !== 'succeeded') {
+            const errorMessage = normalizeText(finalPayload?.error, `Auto-fix failed with status: ${status || 'unknown'}`);
+            throw new Error(errorMessage);
+          }
+  
+          const testResults = Array.isArray(finalPayload?.testRun?.results) ? finalPayload.testRun.results : [];
+          if (testResults.length) {
+            updateRobotTestState(normalizedRobotId, testResults, finalPayload?.testRun || {});
+          }
+        } finally {
           setRobotTesting(normalizedRobotId, false);
-        }
-        setRobotFixing(normalizedRobotId, false);
-  
-        const status = normalizeText(finalPayload?.status, '').toLowerCase();
-        if (status !== 'succeeded') {
-          const errorMessage = normalizeText(finalPayload?.error, `Auto-fix failed with status: ${status || 'unknown'}`);
-          throw new Error(errorMessage);
-        }
-  
-        const testResults = Array.isArray(finalPayload?.testRun?.results) ? finalPayload.testRun.results : [];
-        if (testResults.length) {
-          updateRobotTestState(normalizedRobotId, testResults, finalPayload?.testRun || {});
+          setRobotFixing(normalizedRobotId, false);
         }
       }
 

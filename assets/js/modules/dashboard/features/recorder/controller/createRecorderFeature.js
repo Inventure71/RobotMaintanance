@@ -1884,7 +1884,7 @@ export function createRecorderFeature(context, maybeEnv) {
           renderManageDefinitions();
           const refreshed = await refreshRobotsFromBackendSnapshot();
           setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}' and updated mappings.`, 'ok');
-          await playPublishSuccessCelebration();
+          void playPublishSuccessCelebration().catch(() => {});
           resetManageFixEntryForNextDraft();
           setManageEditorStatus(manageFixEditorStatus, `Saved fix definition '${fixId}'. Ready for a new fix draft.`, 'ok');
           if (refreshed) {
@@ -2636,7 +2636,7 @@ export function createRecorderFeature(context, maybeEnv) {
           await refreshRobotsFromBackendSnapshot();
           renderManageDefinitions();
           state.workflowRecorder.setPublishStatus('Test definition published and mapped to selected robot types.', 'ok');
-          await playPublishSuccessCelebration();
+          void playPublishSuccessCelebration().catch(() => {});
           resetRecorderTestEntry({ target: 'mode-selector' });
           setManageTabStatus('Recorder test published. Choose a mode to start again.', 'ok');
         } catch (error) {

@@ -70,24 +70,32 @@ function makeButton(label = '') {
   };
 }
 
-async function loadNamedExport(modulePath, exportName) {
+async function loadNamedExport(modulePath, exportName, extraContext = {}) {
   const source = await fs.readFile(modulePath, 'utf8');
   const transformed = `${source.replace(
     `export function ${exportName}`,
     `function ${exportName}`,
   )}\nmodule.exports = { ${exportName} };\n`;
+  const defaultWindow = {
+    addEventListener: () => {},
+    clearInterval,
+    clearTimeout,
+    setInterval,
+    setTimeout,
+  };
   const context = {
     console,
     module: { exports: {} },
     exports: {},
-    window: {
-      addEventListener: () => {},
-      clearInterval,
-      clearTimeout,
-      setInterval,
-      setTimeout,
-    },
+    window: defaultWindow,
+    ...extraContext,
   };
+  if (extraContext.window) {
+    context.window = {
+      ...defaultWindow,
+      ...extraContext.window,
+    };
+  }
   vm.runInNewContext(transformed, context, { filename: modulePath });
   return context.module.exports[exportName];
 }
@@ -235,6 +243,200 @@ test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include 
       true,
     )),
     ['online', 'general', 'movement'],
+  );
+});
+
+test('runAutoFixForRobot clears local fixing state when the backend reports a terminal failure', async () => {
+  const fetchCalls = [];
+  const fetchMock = async (url, options = {}) => {
+    fetchCalls.push({ url, method: options.method || 'GET' });
+    if ((options.method || 'GET') === 'POST') {
+      return {
+        ok: true,
+        json: async () => ({ runId: 'fix-run-1' }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'failed',
+        error: 'Command timed out after default seconds',
+        events: [],
+      }),
+    };
+  };
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+    {
+      fetch: fetchMock,
+      window: {
+        setTimeout: (handler) => {
+          if (typeof handler === 'function') handler();
+          return 0;
+        },
+      },
+    },
+  );
+  const env = makeEnv({
+    FIX_JOB_POLL_INTERVAL_MS: 0,
+    TEST_STEP_TIMEOUT_MS: 1000,
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{
+        id: 'robot-1',
+        name: 'Robot 1',
+        typeId: 'rosbot',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'Ready' } },
+      }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+    getRobotDefinitionsForType: () => [],
+    appendTerminalLine: () => {},
+    appendTerminalPayload: () => {},
+    runOneRobotOnlineCheck: async () => ({ status: 'ok', value: 'reachable', details: 'Ready' }),
+    updateOnlineCheckEstimateFromResults: () => {},
+    mapRobots: (updater) => {
+      env.state.robots = env.state.robots.map((item) => updater(item));
+    },
+    renderDashboard: () => {},
+    renderDetail: () => {},
+    setRobotFixing: (robotIdValue, isFixing) => {
+      const id = normalizeText(robotIdValue, '');
+      if (!id) return;
+      if (isFixing) env.state.fixingRobotIds.add(id);
+      else env.state.fixingRobotIds.delete(id);
+    },
+    setRobotTesting: (robotIdValue, isTesting) => {
+      const id = normalizeText(robotIdValue, '');
+      if (!id) return;
+      if (isTesting) env.state.testingRobotIds.add(id);
+      else env.state.testingRobotIds.delete(id);
+    },
+    updateRobotTestState: () => {},
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  await assert.rejects(
+    api.runAutoFixForRobot(env.state.robots[0], { id: 'flash-fix', label: 'Flash fix' }),
+    /Command timed out after default seconds/,
+  );
+
+  assert.equal(env.state.fixingRobotIds.has('robot-1'), false);
+  assert.equal(env.state.testingRobotIds.has('robot-1'), false);
+  assert.deepEqual(
+    fetchCalls.map((entry) => entry.method),
+    ['POST', 'GET'],
+  );
+});
+
+test('runAutoFixForRobot clears both fixing and testing state if polling aborts after post-tests start', async () => {
+  let pollCount = 0;
+  const transitions = [];
+  const fetchMock = async (_url, options = {}) => {
+    if ((options.method || 'GET') === 'POST') {
+      return {
+        ok: true,
+        json: async () => ({ runId: 'fix-run-2' }),
+      };
+    }
+    pollCount += 1;
+    if (pollCount === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          status: 'running',
+          events: [
+            { type: 'post_tests_started', message: 'Post tests started.' },
+          ],
+        }),
+      };
+    }
+    throw new Error('poll disconnected');
+  };
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+    {
+      fetch: fetchMock,
+      window: {
+        setTimeout: (handler) => {
+          if (typeof handler === 'function') handler();
+          return 0;
+        },
+      },
+    },
+  );
+  const env = makeEnv({
+    FIX_JOB_POLL_INTERVAL_MS: 0,
+    TEST_STEP_TIMEOUT_MS: 1000,
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{
+        id: 'robot-1',
+        name: 'Robot 1',
+        typeId: 'rosbot',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'Ready' } },
+      }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+    getRobotDefinitionsForType: () => [{ id: 'general', enabled: true }],
+    estimateTestCountdownMsFromBody: () => 5000,
+    appendTerminalLine: () => {},
+    appendTerminalPayload: () => {},
+    runOneRobotOnlineCheck: async () => ({ status: 'ok', value: 'reachable', details: 'Ready' }),
+    updateOnlineCheckEstimateFromResults: () => {},
+    mapRobots: (updater) => {
+      env.state.robots = env.state.robots.map((item) => updater(item));
+    },
+    renderDashboard: () => {},
+    renderDetail: () => {},
+    setRobotFixing: (robotIdValue, isFixing) => {
+      const id = normalizeText(robotIdValue, '');
+      if (!id) return;
+      transitions.push({ kind: 'fix', value: isFixing });
+      if (isFixing) env.state.fixingRobotIds.add(id);
+      else env.state.fixingRobotIds.delete(id);
+    },
+    setRobotTesting: (robotIdValue, isTesting) => {
+      const id = normalizeText(robotIdValue, '');
+      if (!id) return;
+      transitions.push({ kind: 'test', value: isTesting });
+      if (isTesting) env.state.testingRobotIds.add(id);
+      else env.state.testingRobotIds.delete(id);
+    },
+    updateRobotTestState: () => {},
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  await assert.rejects(
+    api.runAutoFixForRobot(env.state.robots[0], { id: 'flash-fix', label: 'Flash fix' }),
+    /poll disconnected/,
+  );
+
+  assert.equal(env.state.fixingRobotIds.has('robot-1'), false);
+  assert.equal(env.state.testingRobotIds.has('robot-1'), false);
+  assert.equal(
+    transitions.some((entry) => entry.kind === 'test' && entry.value === true),
+    true,
   );
 });
 

@@ -645,9 +645,9 @@ function makeEnv() {
       playCount: 0,
       play() {
         this.playCount += 1;
-        Promise.resolve().then(() => {
+        setTimeout(() => {
           this.dispatchEvent({ type: 'ended' });
-        });
+        }, 0);
         return Promise.resolve();
       },
       pause() {},
@@ -1228,6 +1228,9 @@ test('publishRecorderAsTest plays confetti on success and resets to the recorder
   await api.publishRecorderAsTest();
 
   assert.equal(env.publishSuccessCelebrationVideo.playCount, 1);
+  assert.equal(env.publishSuccessCelebration.classList.contains('hidden'), false);
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(env.publishSuccessCelebration.classList.contains('hidden'), true);
   assert.equal(env.state.workflowRecorder.resetCalled, true);
   assert.equal(env.state.recorderMode, '');
@@ -1287,6 +1290,9 @@ test('saveManageFixDefinition plays confetti on success and clears the fix edito
   await api.saveManageFixDefinition();
 
   assert.equal(env.publishSuccessCelebrationVideo.playCount, 1);
+  assert.equal(env.publishSuccessCelebration.classList.contains('hidden'), false);
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(env.publishSuccessCelebration.classList.contains('hidden'), true);
   assert.equal(env.state.manageFlowEditorMode, 'fix');
   assert.equal(env.manageFixIdInput.value, '');
