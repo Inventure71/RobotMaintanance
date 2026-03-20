@@ -79,6 +79,7 @@ class TerminalManager(
     MANUAL_AUTO_FIX_DEFER_SEC = 90.0
     CONNECTION_RETRY_INTERVAL_SEC = 5.0
     CONNECTION_RETRY_WINDOW_SEC = 60.0
+    CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 2.0
     IDLE_SWEEP_INTERVAL_SEC = 2.0
     COMMAND_DEFAULT_TIMEOUT_SEC = 20.0
     COMMAND_MIN_TIMEOUT_SEC = 0.5
@@ -139,6 +140,7 @@ class TerminalManager(
         self._active_fix_runs = set()
         self._last_auto_monitor_online_state = {}
         self._auto_recovery_test_inflight = set()
+        self._auto_recovery_cancel_requested = set()
         self._connection_retry_sessions: dict[str, dict[str, Any]] = {}
         self._connection_retry_inflight: dict[str, int] = {}
         self._connection_retry_attempt_owner: dict[str, int] = {}

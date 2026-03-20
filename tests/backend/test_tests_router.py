@@ -182,6 +182,8 @@ def test_online_batch_skips_busy_robot_without_refreshing_it():
             return robot_id == "r1"
 
         def start_search_run(self, robot_id):
+            if robot_id == "r1":
+                return False
             self.search_started.append(robot_id)
             return True
 
@@ -245,7 +247,7 @@ def test_online_batch_handoff_runs_refresh_after_busy_phase_ends():
 
         def start_search_run(self, robot_id):
             _ = robot_id
-            return True
+            return not self.busy
 
         def finish_search_run(self, robot_id):
             _ = robot_id

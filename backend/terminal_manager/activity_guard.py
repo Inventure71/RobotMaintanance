@@ -25,6 +25,53 @@ class ActivityGuardMixin:
             return True
         return robot_id in getattr(self, "_connection_retry_inflight", {})
 
+    def _mark_manual_action_requested(self, robot_id: str) -> None:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return
+        with self._lock:
+            self._manual_activity_by_robot[normalized_robot_id] = time.time()
+
+    def _preempt_auto_robot_activity_for_manual_action(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+        self._mark_manual_action_requested(normalized_robot_id)
+
+        with self._lock:
+            has_connection_retry = normalized_robot_id in getattr(self, "_connection_retry_inflight", {})
+            has_auto_recovery = normalized_robot_id in getattr(self, "_auto_recovery_test_inflight", set())
+
+        cancelled_connection_retry = True
+        if has_connection_retry and hasattr(self, "cancel_connection_retry_for_manual_takeover"):
+            cancelled_connection_retry = bool(self.cancel_connection_retry_for_manual_takeover(normalized_robot_id))
+        if not cancelled_connection_retry:
+            return False
+
+        cancelled_auto_recovery = True
+        if has_auto_recovery and hasattr(self, "cancel_auto_recovery_for_manual_takeover"):
+            cancelled_auto_recovery = bool(self.cancel_auto_recovery_for_manual_takeover(normalized_robot_id))
+        return cancelled_auto_recovery
+
+    def _admit_manual_robot_action(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+        with self._lock:
+            if self._has_foreground_robot_activity_locked(normalized_robot_id):
+                return False
+            has_preemptable_auto_activity = self._has_background_test_activity_locked(normalized_robot_id)
+
+        if has_preemptable_auto_activity and not self._preempt_auto_robot_activity_for_manual_action(normalized_robot_id):
+            return False
+
+        with self._lock:
+            if self._has_background_test_activity_locked(normalized_robot_id):
+                return False
+            if self._has_foreground_robot_activity_locked(normalized_robot_id):
+                return False
+        return True
+
     def _mark_manual_activity(
         self,
         robot_id: str,
@@ -72,6 +119,8 @@ class ActivityGuardMixin:
         normalized_robot_id = normalize_text(robot_id, "")
         if not normalized_robot_id:
             return False
+        if not self._admit_manual_robot_action(normalized_robot_id):
+            return False
         with self._lock:
             if self._has_foreground_robot_activity_locked(normalized_robot_id):
                 return False
@@ -108,6 +157,9 @@ class ActivityGuardMixin:
         normalized_page_session_id = normalize_text(page_session_id, "")
         if not normalized_robot_id or not normalized_page_session_id:
             return False
+        if not self._admit_manual_robot_action(normalized_robot_id):
+            return False
+
         with self._lock:
             if self._has_background_test_activity_locked(normalized_robot_id):
                 return False

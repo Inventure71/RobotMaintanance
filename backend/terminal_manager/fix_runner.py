@@ -99,7 +99,7 @@ class FixRunnerMixin:
             raise HTTPException(status_code=400, detail="robot_id and fix_id are required")
 
         fix_spec = self._resolve_fix_spec(normalized_robot_id, normalized_fix_id)
-        if self._is_robot_busy(normalized_robot_id):
+        if not self._admit_manual_robot_action(normalized_robot_id):
             raise HTTPException(status_code=409, detail="Robot is busy with another active operation.")
 
         run_id = self._new_fix_run_id()

@@ -946,11 +946,125 @@ def test_auto_monitor_skips_battery_and_topics_while_connection_retry_is_infligh
 
 def test_connection_retry_inflight_counts_as_busy_for_manual_runs():
     manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.2
+
+    with manager._lock:
+        manager._connection_retry_sessions["r1"] = {
+            "token": 1,
+            "connectedAt": time.time(),
+            "cancelled": False,
+        }
     manager._connection_retry_inflight["r1"] = 1
 
+    closed_sessions: list[tuple[str, str]] = []
+    original_close_session = manager.close_session
+
+    def close_session(page_session_id: str, robot_id: str) -> None:
+        closed_sessions.append((page_session_id, robot_id))
+        original_close_session(page_session_id=page_session_id, robot_id=robot_id)
+
+    manager.close_session = close_session
+
+    def release_retry() -> None:
+        time.sleep(0.03)
+        with manager._lock:
+            manager._connection_retry_inflight.pop("r1", None)
+
+    threading.Thread(target=release_retry, daemon=True).start()
+
     assert manager.is_robot_busy("r1") is True
-    assert manager.start_search_run("r1") is False
+    assert manager.start_search_run("r1") is True
+    with manager._lock:
+        assert "r1" in manager._active_search_runs
+        assert manager._connection_retry_sessions["r1"]["cancelled"] is True
+    assert closed_sessions == [(manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, "r1")]
+
+
+def test_start_test_run_cancels_connection_retry_for_manual_takeover():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.2
+
+    with manager._lock:
+        manager._connection_retry_sessions["r1"] = {
+            "token": 1,
+            "connectedAt": time.time(),
+            "cancelled": False,
+        }
+        manager._connection_retry_inflight["r1"] = 1
+
+    closed_sessions: list[tuple[str, str]] = []
+    original_close_session = manager.close_session
+
+    def close_session(page_session_id: str, robot_id: str) -> None:
+        closed_sessions.append((page_session_id, robot_id))
+        original_close_session(page_session_id=page_session_id, robot_id=robot_id)
+
+    manager.close_session = close_session
+
+    def release_retry() -> None:
+        time.sleep(0.03)
+        with manager._lock:
+            manager._connection_retry_inflight.pop("r1", None)
+
+    threading.Thread(target=release_retry, daemon=True).start()
+
+    assert manager.start_test_run("r1", "manual-session") is True
+    with manager._lock:
+        session = manager._connection_retry_sessions["r1"]
+        assert session["cancelled"] is True
+        assert ("r1", "manual-session") in manager._active_test_runs
+    assert closed_sessions == [(manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, "r1")]
+
+
+def test_start_test_run_rejects_when_connection_retry_takeover_times_out():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.01
+
+    with manager._lock:
+        manager._connection_retry_sessions["r1"] = {
+            "token": 1,
+            "connectedAt": time.time(),
+            "cancelled": False,
+        }
+        manager._connection_retry_inflight["r1"] = 1
+        manager._connection_retry_attempt_owner["r1"] = 1
+
+    manager.close_session = lambda *_args, **_kwargs: None
+
     assert manager.start_test_run("r1", "manual-session") is False
+    with manager._lock:
+        assert ("r1", "manual-session") not in manager._active_test_runs
+        assert manager._connection_retry_sessions["r1"]["cancelled"] is True
+
+
+def test_start_test_run_cancels_auto_recovery_for_manual_takeover():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.2
+
+    with manager._lock:
+        manager._auto_recovery_test_inflight.add("r1")
+
+    closed_sessions: list[tuple[str, str]] = []
+    original_close_session = manager.close_session
+
+    def close_session(page_session_id: str, robot_id: str) -> None:
+        closed_sessions.append((page_session_id, robot_id))
+        original_close_session(page_session_id=page_session_id, robot_id=robot_id)
+
+    manager.close_session = close_session
+
+    def release_recovery() -> None:
+        time.sleep(0.03)
+        with manager._lock:
+            manager._auto_recovery_test_inflight.discard("r1")
+
+    threading.Thread(target=release_recovery, daemon=True).start()
+
+    assert manager.start_test_run("r1", "manual-session") is True
+    with manager._lock:
+        assert ("r1", "manual-session") in manager._active_test_runs
+        assert "r1" not in manager._auto_recovery_cancel_requested
+    assert closed_sessions == [(manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, "r1")]
 
 
 def test_start_test_run_rejects_same_robot_across_different_sessions():
@@ -1154,6 +1268,42 @@ def test_auto_monitor_skips_online_probe_while_auto_testing_active():
     assert observed["check_calls"] == 0
 
 
+def test_auto_monitor_keeps_online_probe_running_during_connection_retry_phase():
+    manager = _connection_retry_manager()
+    manager._set_runtime_activity("r1", testing=True, phase="connection_retry")
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "warning",
+                "value": "unknown",
+                "details": "pending",
+                "checkedAt": time.time(),
+                "source": "auto-monitor",
+            }
+        },
+    )
+    manager._connection_retry_inflight["r1"] = 1
+
+    observed = {"check_calls": 0}
+
+    def fake_check_online(*_args, **_kwargs):
+        observed["check_calls"] += 1
+        return {
+            "status": "ok",
+            "value": "reachable",
+            "details": "online",
+            "ms": 1,
+            "checkedAt": time.time(),
+            "source": "live",
+        }
+
+    manager.check_online = fake_check_online
+    manager._run_auto_monitor_tick()
+
+    assert observed["check_calls"] == 1
+
+
 def test_auto_monitor_skips_checks_while_search_run_active():
     manager = _manager()
     manager.start_search_run("r1")
@@ -1234,8 +1384,8 @@ def test_connection_event_runner_retries_until_selected_tests_pass():
         [{"id": "general", "status": "ok", "value": "present", "details": "ok", "ms": 1}],
     ]
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
-        _ = robot_id, test_ids, source, should_commit
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
         attempts.append(len(attempts) + 1)
         return results.pop(0) if results else [{"id": "general", "status": "ok"}]
 
@@ -1255,6 +1405,38 @@ def test_connection_event_runner_retries_until_selected_tests_pass():
         assert "r1" not in manager._connection_retry_inflight
 
 
+def test_connection_event_runner_keeps_retry_activity_visible_between_attempts():
+    manager = _connection_retry_manager()
+    manager.CONNECTION_RETRY_INTERVAL_SEC = 0.08
+    manager.CONNECTION_RETRY_WINDOW_SEC = 0.25
+    manager.AUTO_ACTIVITY_MIN_VISIBLE_SEC = 0.0
+
+    first_attempt_started = threading.Event()
+
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
+        first_attempt_started.set()
+        return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
+
+    manager._run_connection_retry_attempt = fake_attempt
+    manager._emit_connection_event_connected("r1", connected_at=time.time())
+
+    assert first_attempt_started.wait(1.0) is True
+    time.sleep(0.03)
+    activity = manager.get_runtime_activity("r1")
+    assert activity["testing"] is True
+    assert activity["phase"] == manager.ACTIVITY_PHASE_CONNECTION_RETRY
+
+    manager._emit_connection_event_manual_activity("r1")
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with manager._lock:
+            inflight = "r1" in manager._connection_retry_inflight
+        if not inflight:
+            break
+        time.sleep(0.01)
+
+
 def test_connection_event_runner_cancels_on_manual_activity():
     manager = _connection_retry_manager()
     manager.CONNECTION_RETRY_INTERVAL_SEC = 0.05
@@ -1262,8 +1444,8 @@ def test_connection_event_runner_cancels_on_manual_activity():
 
     attempts: list[int] = []
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
-        _ = robot_id, test_ids, source, should_commit
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
         attempts.append(len(attempts) + 1)
         return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
 
@@ -1287,8 +1469,8 @@ def test_connection_event_runner_stops_retrying_when_manual_test_is_active():
 
     attempts: list[int] = []
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
-        _ = robot_id, test_ids, source, should_commit
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
         attempts.append(len(attempts) + 1)
         with manager._lock:
             manager._active_test_runs.add(("r1", "manual-session"))
@@ -1317,8 +1499,8 @@ def test_connection_event_runner_cancels_on_disconnect():
 
     attempts: list[int] = []
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
-        _ = robot_id, test_ids, source, should_commit
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
         attempts.append(len(attempts) + 1)
         return [{"id": "general", "status": "error", "value": "missing", "details": "missing", "ms": 1}]
 
@@ -1344,8 +1526,8 @@ def test_connection_event_runner_reconnect_replaces_prior_token():
     max_active_attempts = 0
     lock = threading.Lock()
 
-    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", should_commit=None):
-        _ = robot_id, test_ids, source, should_commit
+    def fake_attempt(*, robot_id, test_ids, source="auto-monitor", phase=None, manage_runtime_activity=True, should_commit=None):
+        _ = robot_id, test_ids, source, phase, manage_runtime_activity, should_commit
         nonlocal active_attempts, max_active_attempts
         with lock:
             active_attempts += 1

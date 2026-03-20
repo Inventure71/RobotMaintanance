@@ -115,19 +115,7 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                 "skipped": True,
             }
 
-        def is_robot_busy(robot_id: str) -> bool:
-            checker = getattr(terminal_manager, "is_robot_busy", None)
-            if not callable(checker):
-                return False
-            try:
-                return bool(checker(robot_id))
-            except Exception:
-                return False
-
         def check_one_robot(robot_id: str) -> dict[str, Any]:
-            if is_robot_busy(robot_id):
-                return busy_skip_payload(robot_id)
-
             started_search = False
             if hasattr(terminal_manager, "start_search_run"):
                 started = terminal_manager.start_search_run(robot_id=robot_id)

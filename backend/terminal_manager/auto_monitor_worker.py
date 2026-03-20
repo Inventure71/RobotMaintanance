@@ -4,7 +4,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..normalization import normalize_status
+from ..normalization import normalize_status, normalize_text
 
 
 class AutoMonitorWorkerMixin:
@@ -70,7 +70,7 @@ class AutoMonitorWorkerMixin:
     def _run_auto_monitor_for_robot(self, robot_id: str, now: float) -> None:
         if self._auto_monitor_stop.is_set():
             return
-        if self._is_robot_busy(robot_id):
+        if self._has_foreground_robot_activity(robot_id):
             return
         if self._is_manual_activity_recent(robot_id, now):
             return
@@ -84,8 +84,11 @@ class AutoMonitorWorkerMixin:
             topics_interval_sec = float(self._topics_interval_sec)
 
         probe_state = self.get_runtime_probe_state(robot_id)
+        runtime_activity = self.get_runtime_activity(robot_id)
         is_online = bool(probe_state.get("isOnline"))
-        if bool(probe_state.get("isTesting")):
+        runtime_phase = normalize_text(runtime_activity.get("phase"), "")
+        is_testing = bool(runtime_activity.get("testing"))
+        if is_testing and runtime_phase != self.ACTIVITY_PHASE_CONNECTION_RETRY:
             with self._lock:
                 self._last_auto_monitor_online_state[robot_id] = is_online
             return

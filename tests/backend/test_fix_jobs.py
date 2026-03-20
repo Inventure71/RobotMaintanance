@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import pytest
@@ -180,6 +181,71 @@ def test_fix_job_rejects_start_when_robot_is_busy():
         manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
     manager.finish_search_run("r1")
     assert getattr(exc_info.value, "status_code", None) == 409
+
+
+def test_fix_job_cancels_connection_retry_before_start(monkeypatch):
+    manager = _manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.2
+
+    with manager._lock:
+        manager._connection_retry_sessions["r1"] = {
+            "token": 1,
+            "connectedAt": time.time(),
+            "cancelled": False,
+        }
+        manager._connection_retry_inflight["r1"] = 1
+
+    closed_sessions: list[tuple[str, str]] = []
+    original_close_session = manager.close_session
+
+    def close_session(page_session_id: str, robot_id: str) -> None:
+        closed_sessions.append((page_session_id, robot_id))
+        original_close_session(page_session_id=page_session_id, robot_id=robot_id)
+
+    monkeypatch.setattr(manager, "close_session", close_session)
+
+    def release_retry() -> None:
+        time.sleep(0.03)
+        with manager._lock:
+            manager._connection_retry_inflight.pop("r1", None)
+
+    threading.Thread(target=release_retry, daemon=True).start()
+
+    started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
+
+    assert started["status"] in {"queued", "running", "succeeded"}
+    with manager._lock:
+        assert manager._connection_retry_sessions["r1"]["cancelled"] is True
+    assert closed_sessions == [(manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, "r1")]
+
+
+def test_fix_job_cancels_auto_recovery_before_start(monkeypatch):
+    manager = _manager()
+    manager.CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC = 0.2
+
+    with manager._lock:
+        manager._auto_recovery_test_inflight.add("r1")
+
+    closed_sessions: list[tuple[str, str]] = []
+    original_close_session = manager.close_session
+
+    def close_session(page_session_id: str, robot_id: str) -> None:
+        closed_sessions.append((page_session_id, robot_id))
+        original_close_session(page_session_id=page_session_id, robot_id=robot_id)
+
+    monkeypatch.setattr(manager, "close_session", close_session)
+
+    def release_recovery() -> None:
+        time.sleep(0.03)
+        with manager._lock:
+            manager._auto_recovery_test_inflight.discard("r1")
+
+    threading.Thread(target=release_recovery, daemon=True).start()
+
+    started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
+
+    assert started["status"] in {"queued", "running", "succeeded"}
+    assert closed_sessions == [(manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID, "r1")]
 
 
 def test_fix_job_emits_post_test_events(monkeypatch):

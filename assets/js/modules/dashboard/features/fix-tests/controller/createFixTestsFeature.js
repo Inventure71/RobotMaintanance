@@ -267,7 +267,6 @@ export function createFixTestsFeature(context, maybeEnv) {
   const invalidateCountdownNodeCache = (...args) => runtime.invalidateCountdownNodeCache(...args);
   const isManageViewActive = (...args) => runtime.isManageViewActive(...args);
   const isRobotAutoSearching = (...args) => runtime.isRobotAutoSearching(...args);
-  const isRobotBusyForOnlineRefresh = (...args) => runtime.isRobotBusyForOnlineRefresh(...args);
   const isRobotFixing = (...args) => runtime.isRobotFixing(...args);
   const isRobotSearching = (...args) => runtime.isRobotSearching(...args);
   const isRobotSelected = (...args) => runtime.isRobotSelected(...args);
@@ -976,9 +975,35 @@ export function createFixTestsFeature(context, maybeEnv) {
 
   async function runAutoFixCandidate(context, candidate) {
         if (state.isAutoFixInProgress || state.isTestRunInProgress || state.isOnlineRefreshInFlight) return;
-        const robotIds = (candidate?.robotIds || []).map((id) => robotId(id)).filter(Boolean);
-        if (!robotIds.length) {
+        const candidateRobotIds = (candidate?.robotIds || []).map((id) => robotId(id)).filter(Boolean);
+        if (!candidateRobotIds.length) {
           setFixModeStatus(context, 'No robots available for this fix action.', 'warn');
+          return;
+        }
+
+        const robotIds = [];
+        candidateRobotIds.forEach((targetId) => {
+          const availability = getRobotActionAvailability(targetId, 'fix');
+          if (availability?.allowed) {
+            robotIds.push(targetId);
+            return;
+          }
+          const robot = getRobotById(targetId);
+          appendTerminalLine(
+            `Skipping fix for ${robot?.name || targetId}: ${availability?.title || 'Robot is busy with another active operation.'}`,
+            'warn',
+          );
+        });
+        if (!robotIds.length) {
+          setFixModeStatus(
+            context,
+            summarizeBlockedRobotActionTitle(
+              candidateRobotIds.map((targetId) => getRobotActionAvailability(targetId, 'fix')),
+              'No robots can run this fix right now.',
+            ),
+            'warn',
+          );
+          syncFixModePanels();
           return;
         }
   
@@ -1066,12 +1091,13 @@ export function createFixTestsFeature(context, maybeEnv) {
   
           elements.summary.textContent = `${candidates.length} fix action(s) available for ${robot.name}.`;
           candidates.forEach((candidate) => {
+            const availability = getRobotActionAvailability(candidate.robotIds[0], 'fix');
             const button = createActionButton({
               intent: 'fix',
               compact: true,
               label: buildFixButtonLabel(candidate, false),
-              title: candidate.description || `Run ${candidate.label}`,
-              disabled: state.isAutoFixInProgress,
+              title: availability?.title || candidate.description || `Run ${candidate.label}`,
+              disabled: state.isAutoFixInProgress || availability?.allowed === false,
             });
             button.addEventListener('click', () => {
               runAutoFixCandidate(context, candidate);
@@ -1103,12 +1129,20 @@ export function createFixTestsFeature(context, maybeEnv) {
         elements.summary.textContent =
           `${candidates.length} fix action(s) across ${payload.selectedCount} selected robot(s).`;
         candidates.forEach((candidate) => {
+          const availabilities = candidate.robotIds.map((targetId) => getRobotActionAvailability(targetId, 'fix'));
+          const hasActionableRobot = availabilities.some((entry) => entry.allowed);
           const button = createActionButton({
             intent: 'fix',
             compact: true,
             label: buildFixButtonLabel(candidate, true),
-            title: candidate.description || `Run ${candidate.label} for ${candidate.typeLabel}`,
-            disabled: state.isAutoFixInProgress,
+            title:
+              hasActionableRobot
+                ? (candidate.description || `Run ${candidate.label} for ${candidate.typeLabel}`)
+                : summarizeBlockedRobotActionTitle(
+                    availabilities,
+                    candidate.description || `Run ${candidate.label} for ${candidate.typeLabel}`,
+                  ),
+            disabled: state.isAutoFixInProgress || !hasActionableRobot,
           });
           button.addEventListener('click', () => {
             runAutoFixCandidate(context, candidate);
@@ -1146,7 +1180,10 @@ export function createFixTestsFeature(context, maybeEnv) {
   
         const activeRobotIds = state.robots.map((robot) => robotId(robot)).filter(Boolean);
         if (!activeRobotIds.length) return;
-        const busyRobotIds = activeRobotIds.filter((id) => isRobotBusyForOnlineRefresh(id));
+        const availabilityById = new Map(
+          activeRobotIds.map((id) => [id, getRobotActionAvailability(id, 'online')]),
+        );
+        const busyRobotIds = activeRobotIds.filter((id) => availabilityById.get(id)?.allowed === false);
         const busyRobotIdSet = new Set(busyRobotIds);
         const eligibleRobotIds = activeRobotIds.filter((id) => !busyRobotIdSet.has(id));
         const skippedNameSet = new Set(
@@ -1410,8 +1447,100 @@ export function createFixTestsFeature(context, maybeEnv) {
         if (options.fallbackToActive && state.detailRobotId) {
           return [state.detailRobotId];
         }
-  
+
         return [];
+      }
+
+  function getRobotActionAvailability(robotIdValue, actionKind = 'test') {
+        const id = robotId(robotIdValue);
+        const robot = getRobotById(id);
+        if (!id || !robot) {
+          return {
+            allowed: false,
+            blocked: true,
+            preemptableAuto: false,
+            title: 'Robot not found.',
+          };
+        }
+
+        const actionLabel =
+          actionKind === 'fix'
+            ? 'fix'
+            : actionKind === 'online'
+              ? 'online check'
+              : 'tests';
+        const activity = normalizeRobotActivity(robot?.activity);
+        const phase = normalizeText(activity?.phase, '');
+
+        if (state.fixingRobotIds.has(id) || phase === 'fixing') {
+          return {
+            allowed: false,
+            blocked: true,
+            preemptableAuto: false,
+            title: 'Fix is already running for this robot.',
+          };
+        }
+        if (state.testingRobotIds.has(id)) {
+          return {
+            allowed: false,
+            blocked: true,
+            preemptableAuto: false,
+            title: 'Tests are already running for this robot.',
+          };
+        }
+        if (state.searchingRobotIds.has(id)) {
+          return {
+            allowed: false,
+            blocked: true,
+            preemptableAuto: false,
+            title: 'Online check is already running for this robot.',
+          };
+        }
+
+        const autoTesting = state.autoTestingRobotIds.has(id);
+        const preemptableAuto = autoTesting && (
+          phase === 'connection_retry' || phase === 'full_test_after_recovery'
+        );
+        if (preemptableAuto) {
+          return {
+            allowed: true,
+            blocked: false,
+            preemptableAuto: true,
+            title: `Stops automatic recovery tests and runs ${actionLabel}.`,
+          };
+        }
+
+        if (autoTesting || state.autoSearchingRobotIds.has(id)) {
+          return {
+            allowed: false,
+            blocked: true,
+            preemptableAuto: false,
+            title: 'Robot is busy with an automatic operation that cannot be interrupted.',
+          };
+        }
+
+        return {
+          allowed: true,
+          blocked: false,
+          preemptableAuto: false,
+          title:
+            actionKind === 'fix'
+              ? 'Run fix'
+              : actionKind === 'online'
+                ? 'Run online check'
+                : 'Run tests',
+        };
+      }
+
+  function summarizeBlockedRobotActionTitle(availabilities, fallbackTitle) {
+        const titles = Array.from(new Set(
+          (Array.isArray(availabilities) ? availabilities : [])
+            .map((entry) => normalizeText(entry?.title, ''))
+            .filter(Boolean),
+        ));
+        if (!titles.length) return fallbackTitle;
+        if (titles.length === 1) return titles[0];
+        return 'Selected robots are busy with operations that cannot be interrupted.';
       }
 
   function getManualRunButtonState() {
@@ -1423,16 +1552,19 @@ export function createFixTestsFeature(context, maybeEnv) {
           { fallbackToActive: false, autoSelectOnlineWhenEmpty: true },
           { persistSelection: false },
         );
-        const detailTesting = detailTargetIds.some((id) => isRobotTesting(id));
-        const selectedTesting = selectedTargetIds.some((id) => isRobotTesting(id));
+        const detailAvailability = detailTargetIds.length
+          ? getRobotActionAvailability(detailTargetIds[0], 'test')
+          : null;
+        const selectedAvailabilities = selectedTargetIds.map((id) => getRobotActionAvailability(id, 'test'));
+        const hasSelectedActionableRobot = selectedAvailabilities.some((entry) => entry.allowed);
 
         return {
-          detailDisabled: detailTesting,
-          detailTitle: detailTesting ? 'Tests are already running for this robot.' : 'Run tests',
-          selectedDisabled: selectedTesting,
+          detailDisabled: Boolean(detailAvailability) && !detailAvailability.allowed,
+          detailTitle: detailAvailability?.title || 'Run tests',
+          selectedDisabled: selectedTargetIds.length > 0 && !hasSelectedActionableRobot,
           selectedTitle:
-            selectedTesting
-              ? 'Tests are already running for one or more target robots.'
+            selectedTargetIds.length > 0 && !hasSelectedActionableRobot
+              ? summarizeBlockedRobotActionTitle(selectedAvailabilities, getRunSelectedButtonIdleLabel())
               : getRunSelectedButtonIdleLabel(),
         };
       }
@@ -1660,6 +1792,7 @@ export function createFixTestsFeature(context, maybeEnv) {
     runOneRobotOnlineCheck,
     runRobotTestsForRobot,
     getRobotIdsForRun,
+    getRobotActionAvailability,
     getConfiguredDefaultTestIds,
     normalizeStepDebug,
     normalizeTestDebugResult,

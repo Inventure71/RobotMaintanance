@@ -639,6 +639,25 @@ export function createDetailFeature(context, maybeEnv) {
           }
           return;
         }
+
+        const actionableRunIds = [];
+        runIds.forEach((targetId) => {
+          const availability = runtime.getRobotActionAvailability(targetId, 'test');
+          if (availability?.allowed) {
+            actionableRunIds.push(targetId);
+            return;
+          }
+          const robot = getRobotById(targetId);
+          appendTerminalLine(
+            `Skipping tests for ${robot?.name || targetId}: ${availability?.title || 'Robot is busy with another active operation.'}`,
+            'warn',
+          );
+        });
+        if (!actionableRunIds.length) {
+          appendTerminalLine('No selected robots can run tests right now.', 'warn');
+          setRunningButtonState(false);
+          return;
+        }
   
         state.isTestRunInProgress = true;
         setRunningButtonState(true);
@@ -646,15 +665,15 @@ export function createDetailFeature(context, maybeEnv) {
         try {
           let successCount = 0;
           let failureCount = 0;
-          const workerCount = Math.max(1, Math.min(getFleetParallelism(), runIds.length));
+          const workerCount = Math.max(1, Math.min(getFleetParallelism(), actionableRunIds.length));
           if (terminal) {
             appendTerminalLine(
-              `Running selected tests with parallelism ${workerCount} (${runIds.length} robot${runIds.length === 1 ? '' : 's'}).`,
+              `Running selected tests with parallelism ${workerCount} (${actionableRunIds.length} robot${actionableRunIds.length === 1 ? '' : 's'}).`,
               'warn',
             );
           }
   
-          const queue = [...runIds];
+          const queue = [...actionableRunIds];
           const processOneRobot = async (robotIdValue) => {
             const robot = getRobotById(robotIdValue);
             const normalizedRobotId = robotId(robotIdValue);
@@ -790,7 +809,7 @@ export function createDetailFeature(context, maybeEnv) {
   
           if (terminal) {
             if (failureCount === 0) {
-              appendTerminalLine(`Test run complete (${successCount}/${runIds.length} robots).`, 'ok');
+              appendTerminalLine(`Test run complete (${successCount}/${actionableRunIds.length} robots).`, 'ok');
             } else {
               appendTerminalLine(`Test run complete (${successCount} succeeded, ${failureCount} failed).`, 'warn');
             }

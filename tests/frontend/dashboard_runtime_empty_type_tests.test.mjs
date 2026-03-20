@@ -124,6 +124,13 @@ function makeEnv(overrides = {}) {
     buildApiUrl: (route) => `http://localhost${route}`,
     state: {
       pageSessionId: 'test-session',
+      robots: [],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
     },
   };
   return new Proxy({ ...base, ...overrides }, {
@@ -231,7 +238,7 @@ test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include 
   );
 });
 
-test('setRunningButtonState disables the detail Run tests button while the active robot is auto testing', async () => {
+test('setRunningButtonState disables the detail Run tests button while the active robot is doing non-interruptible fix work', async () => {
   const runButton = makeButton('Run tests');
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
@@ -252,17 +259,30 @@ test('setRunningButtonState disables the detail Run tests button while the activ
     state: {
       pageSessionId: 'test-session',
       detailRobotId: 'robot-1',
+      robots: [{ id: 'robot-1', activity: { testing: true, phase: 'fixing' } }],
       selectedRobotIds: new Set(),
       testingRobotIds: new Set(),
       autoTestingRobotIds: new Set(['robot-1']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
     },
   });
   const runtime = makeRuntime({
     getSelectedRobotIds: () => [],
     getReachableRobotIds: () => [],
     getRunSelectedButtonIdleLabel: () => 'Run selected (default online)',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
     isRobotTesting: (robotId) =>
       env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
     robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
   });
   const api = createFixTestsFeature(runtime, env);
@@ -271,10 +291,119 @@ test('setRunningButtonState disables the detail Run tests button while the activ
 
   assert.equal(runButton.disabled, true);
   assert.equal(runButton.textContent, 'Run tests');
-  assert.equal(runButton.title, 'Tests are already running for this robot.');
+  assert.equal(runButton.title, 'Fix is already running for this robot.');
 });
 
-test('setRunningButtonState disables Run selected while one of the target robots is already testing', async () => {
+test('setRunningButtonState keeps the detail Run tests button enabled during connection retry auto testing', async () => {
+  const runButton = makeButton('Run tests');
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runRobotTests' ? runButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{ id: 'robot-1', activity: { testing: true, phase: 'connection_retry' } }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => [],
+    getReachableRobotIds: () => [],
+    getRunSelectedButtonIdleLabel: () => 'Run selected (default online)',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    isRobotTesting: (robotId) =>
+      env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runButton.disabled, false);
+  assert.equal(runButton.textContent, 'Run tests');
+  assert.equal(runButton.title, 'Stops automatic recovery tests and runs tests.');
+});
+
+test('setRunningButtonState keeps the detail Run tests button enabled during full test after recovery', async () => {
+  const runButton = makeButton('Run tests');
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runRobotTests' ? runButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{ id: 'robot-1', activity: { testing: true, phase: 'full_test_after_recovery' } }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => [],
+    getReachableRobotIds: () => [],
+    getRunSelectedButtonIdleLabel: () => 'Run selected (default online)',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runButton.disabled, false);
+  assert.equal(runButton.title, 'Stops automatic recovery tests and runs tests.');
+});
+
+test('setRunningButtonState keeps Run selected enabled while one of the target robots is auto testing', async () => {
   const runSelectedButton = makeButton('Run selected');
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
@@ -295,17 +424,84 @@ test('setRunningButtonState disables Run selected while one of the target robots
     state: {
       pageSessionId: 'test-session',
       detailRobotId: '',
+      robots: [{ id: 'robot-2', activity: { testing: true, phase: 'full_test_after_recovery' } }],
       selectedRobotIds: new Set(['robot-1', 'robot-2']),
       testingRobotIds: new Set(),
       autoTestingRobotIds: new Set(['robot-2']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
     },
   });
   const runtime = makeRuntime({
     getSelectedRobotIds: () => Array.from(env.state.selectedRobotIds),
     getReachableRobotIds: () => ['robot-1', 'robot-2'],
     getRunSelectedButtonIdleLabel: () => 'Run selected',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
     isRobotTesting: (robotId) =>
       env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runSelectedButton.disabled, false);
+  assert.equal(runSelectedButton.textContent, 'Run selected');
+  assert.equal(runSelectedButton.title, 'Run selected');
+});
+
+test('setRunningButtonState disables Run selected when all selected robots are in non-interruptible fix work', async () => {
+  const runSelectedButton = makeButton('Run selected');
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runSelectedRobotTests' ? runSelectedButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: '',
+      robots: [{ id: 'robot-1', activity: { testing: true, phase: 'fixing' } }],
+      selectedRobotIds: new Set(['robot-1']),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => Array.from(env.state.selectedRobotIds),
+    getReachableRobotIds: () => ['robot-1'],
+    getRunSelectedButtonIdleLabel: () => 'Run selected',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
     robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
   });
   const api = createFixTestsFeature(runtime, env);
@@ -313,8 +509,93 @@ test('setRunningButtonState disables Run selected while one of the target robots
   api.setRunningButtonState(false);
 
   assert.equal(runSelectedButton.disabled, true);
-  assert.equal(runSelectedButton.textContent, 'Run selected');
-  assert.equal(runSelectedButton.title, 'Tests are already running for one or more target robots.');
+  assert.equal(runSelectedButton.title, 'Fix is already running for this robot.');
+});
+
+test('getRobotActionAvailability treats auto recovery as preemptable for fixes and active fix phase as blocked', async () => {
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [
+        { id: 'robot-1', activity: { testing: true, phase: 'full_test_after_recovery' } },
+        { id: 'robot-2', activity: { testing: true, phase: 'fixing' } },
+      ],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1', 'robot-2']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  const autoRecovery = api.getRobotActionAvailability('robot-1', 'fix');
+  const fixing = api.getRobotActionAvailability('robot-2', 'fix');
+
+  assert.equal(autoRecovery.allowed, true);
+  assert.equal(autoRecovery.preemptableAuto, true);
+  assert.equal(autoRecovery.title, 'Stops automatic recovery tests and runs fix.');
+  assert.equal(fixing.allowed, false);
+  assert.equal(fixing.title, 'Fix is already running for this robot.');
+});
+
+test('getRobotActionAvailability treats connection retry as preemptable for online checks', async () => {
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [
+        { id: 'robot-1', activity: { testing: true, phase: 'connection_retry' } },
+      ],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(['robot-1']),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  const onlineAvailability = api.getRobotActionAvailability('robot-1', 'online');
+
+  assert.equal(onlineAvailability.allowed, true);
+  assert.equal(onlineAvailability.preemptableAuto, true);
+  assert.equal(onlineAvailability.title, 'Stops automatic recovery tests and runs online check.');
 });
 
 test('setRobotTypeDefinitions preserves robot type test refs and battery command metadata', async () => {

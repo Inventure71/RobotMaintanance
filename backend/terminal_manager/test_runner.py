@@ -65,15 +65,19 @@ class TestRunnerMixin:
         robot_id: str,
         test_ids: list[str],
         source: str = "auto-monitor",
+        phase: str | None = None,
+        manage_runtime_activity: bool = True,
         should_commit: Any = None,
     ) -> list[dict[str, Any]]:
         started_at = time.time()
-        self._set_runtime_activity(
-            robot_id,
-            searching=False,
-            testing=True,
-            phase=self.ACTIVITY_PHASE_CONNECTION_RETRY,
-        )
+        activity_phase = normalize_text(phase, "") or self.ACTIVITY_PHASE_CONNECTION_RETRY
+        if manage_runtime_activity:
+            self._set_runtime_activity(
+                robot_id,
+                searching=False,
+                testing=True,
+                phase=activity_phase,
+            )
 
         try:
             if not test_ids:
@@ -111,7 +115,53 @@ class TestRunnerMixin:
             min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))
             if elapsed < min_visible_sec:
                 time.sleep(min_visible_sec - elapsed)
-            self._set_runtime_activity(robot_id, testing=False)
+            if manage_runtime_activity:
+                self._set_runtime_activity(robot_id, testing=False)
+
+    def _is_auto_recovery_cancel_requested(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+        with self._lock:
+            return normalized_robot_id in getattr(self, "_auto_recovery_cancel_requested", set())
+
+    def cancel_auto_recovery_for_manual_takeover(
+        self,
+        robot_id: str,
+        *,
+        wait_timeout_sec: float | None = None,
+    ) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+
+        with self._lock:
+            inflight = normalized_robot_id in self._auto_recovery_test_inflight
+        if not inflight:
+            with self._lock:
+                self._auto_recovery_cancel_requested.discard(normalized_robot_id)
+            return True
+        with self._lock:
+            self._auto_recovery_cancel_requested.add(normalized_robot_id)
+
+        self.close_session(
+            page_session_id=self.AUTO_MONITOR_TEST_PAGE_SESSION_ID,
+            robot_id=normalized_robot_id,
+        )
+        timeout_sec = wait_timeout_sec
+        if timeout_sec is None:
+            timeout_sec = float(getattr(self, "CONNECTION_RETRY_MANUAL_TAKEOVER_WAIT_SEC", 2.0))
+        deadline = time.time() + max(0.0, float(timeout_sec))
+        while True:
+            with self._lock:
+                still_inflight = normalized_robot_id in self._auto_recovery_test_inflight
+            if not still_inflight:
+                with self._lock:
+                    self._auto_recovery_cancel_requested.discard(normalized_robot_id)
+                return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(0.01)
 
     def _runtime_non_online_test_ids(self, robot_id: str) -> list[str]:
         configured_non_online = [test_id for test_id in self._configured_test_ids(robot_id) if test_id != "online"]
@@ -255,6 +305,7 @@ class TestRunnerMixin:
         with self._lock:
             if robot_id in self._auto_recovery_test_inflight:
                 return
+            self._auto_recovery_cancel_requested.discard(robot_id)
             self._auto_recovery_test_inflight.add(robot_id)
 
         def _runner() -> None:
@@ -262,16 +313,21 @@ class TestRunnerMixin:
                 test_ids = self._auto_recovery_test_ids(robot_id)
                 if not test_ids:
                     return
+                if self._is_auto_recovery_cancel_requested(robot_id):
+                    return
                 self._run_connection_retry_attempt(
                     robot_id=robot_id,
                     test_ids=test_ids,
                     source=source,
+                    phase=self.ACTIVITY_PHASE_FULL_TEST_AFTER_RECOVERY,
+                    should_commit=lambda: not self._is_auto_recovery_cancel_requested(robot_id),
                 )
             except Exception:
                 pass
             finally:
                 with self._lock:
                     self._auto_recovery_test_inflight.discard(robot_id)
+                    self._auto_recovery_cancel_requested.discard(robot_id)
 
         threading.Thread(target=_runner, daemon=True).start()
 
