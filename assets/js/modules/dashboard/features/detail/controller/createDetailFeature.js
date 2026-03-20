@@ -517,7 +517,7 @@ export function createDetailFeature(context, maybeEnv) {
             .map(([id]) => `fault-${id}`)
             .join(' ')}`,
           isOffline,
-          'high',
+          'low',
         );
         const scanningMarkup = buildScanOverlayMarkup({
           isSearching,

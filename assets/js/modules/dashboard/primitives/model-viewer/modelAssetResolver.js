@@ -154,19 +154,35 @@ export function createModelAssetResolver(options = {}) {
     const normalizedBaseUrl = normalizeText(baseUrl, '');
     const normalizedQuality = normalizeText(requestedQuality, qualityLevels[0].id).toLowerCase();
     const requestToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const expectedProfile = `${normalizedBaseUrl}::${normalizedQuality}`;
     modelViewer.dataset.modelResolutionToken = requestToken;
     modelViewer.dataset.modelResolutionQuality = normalizedQuality;
     modelViewer.dataset.modelResolutionBaseUrl = normalizedBaseUrl;
+    modelViewer.dataset.modelResolutionProfile = expectedProfile;
 
     const initialUrl = getInitialModelUrl(normalizedBaseUrl, normalizedQuality);
+    const hasResolved = modelViewer.dataset.modelResolutionResolved === expectedProfile;
+    const isPending = modelViewer.dataset.modelResolutionPending === expectedProfile;
+    if (isPending || hasResolved) {
+      return;
+    }
+
     if (initialUrl && modelViewer.getAttribute('src') !== initialUrl) {
       modelViewer.setAttribute('src', initialUrl);
     }
 
-    if (!fetchImpl) return;
+    modelViewer.dataset.modelResolutionPending = expectedProfile;
+    if (!fetchImpl) {
+      modelViewer.dataset.modelResolutionResolved = expectedProfile;
+      modelViewer.dataset.modelResolutionPending = '';
+      return;
+    }
+
     resolveModelUrl(normalizedBaseUrl, normalizedQuality).then((resolvedUrl) => {
       if (modelViewer.dataset.modelResolutionToken !== requestToken) return;
       const nextUrl = normalizeText(resolvedUrl, '');
+      modelViewer.dataset.modelResolutionPending = '';
+      modelViewer.dataset.modelResolutionResolved = expectedProfile;
       if (!nextUrl) return;
       if (modelViewer.getAttribute('src') !== nextUrl) {
         modelViewer.setAttribute('src', nextUrl);
