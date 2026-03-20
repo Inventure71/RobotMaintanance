@@ -246,6 +246,7 @@ export function createFixTestsFeature(context, maybeEnv) {
   const getRobotById = (...args) => runtime.getRobotById(...args);
   const getRobotDefinitionsForType = (...args) => runtime.getRobotDefinitionsForType(...args);
   const getRobotTypeConfig = (...args) => runtime.getRobotTypeConfig(...args);
+  const hasMixedRobotTypesForIds = (...args) => runtime.hasMixedRobotTypesForIds(...args);
   const getRunSelectedButtonIdleLabel = (...args) => runtime.getRunSelectedButtonIdleLabel(...args);
   const getSelectedMappingTypeIds = (...args) => runtime.getSelectedMappingTypeIds(...args);
   const getSelectedRecorderTypeIds = (...args) => runtime.getSelectedRecorderTypeIds(...args);
@@ -773,6 +774,13 @@ export function createFixTestsFeature(context, maybeEnv) {
 
   function getDashboardFixCandidates() {
         const selectedRobots = state.robots.filter((robot) => state.selectedRobotIds.has(robotId(robot)));
+        if (hasMixedRobotTypesForIds(selectedRobots.map((robot) => robotId(robot)))) {
+          return {
+            selectedCount: selectedRobots.length,
+            candidates: [],
+            mixedTypes: true,
+          };
+        }
         const byKey = new Map();
         selectedRobots.forEach((robot) => {
           const typeLabel = normalizeText(robot.type, normalizeText(robot.typeId, 'Unknown type'));
@@ -799,6 +807,7 @@ export function createFixTestsFeature(context, maybeEnv) {
             if (byLabel !== 0) return byLabel;
             return a.typeLabel.localeCompare(b.typeLabel);
           }),
+          mixedTypes: false,
         };
       }
 
@@ -1111,6 +1120,14 @@ export function createFixTestsFeature(context, maybeEnv) {
           const empty = document.createElement('span');
           empty.className = 'fix-mode-empty';
           empty.textContent = 'No selected robots.';
+          elements.actions.appendChild(empty);
+          return;
+        }
+        if (payload.mixedTypes) {
+          elements.summary.textContent = 'Fix mode requires selecting robots of the same type.';
+          const empty = document.createElement('span');
+          empty.className = 'fix-mode-empty';
+          empty.textContent = 'Mixed robot types cannot run fixes together.';
           elements.actions.appendChild(empty);
           return;
         }
@@ -1427,7 +1444,7 @@ export function createFixTestsFeature(context, maybeEnv) {
   function getRobotIdsForRun(options = {}, runtimeOptions = {}) {
         const persistSelection = runtimeOptions.persistSelection !== false;
         const selectedIds = getSelectedRobotIds().filter((id) => robotId(id));
-  
+
         if (selectedIds.length) return selectedIds;
   
         if (options.autoSelectOnlineWhenEmpty) {
@@ -1435,6 +1452,7 @@ export function createFixTestsFeature(context, maybeEnv) {
           if (reachableIds.length) {
             if (persistSelection) {
               selectRobotIds(reachableIds);
+              return getSelectedRobotIds().filter((id) => robotId(id));
             }
             return reachableIds;
           }
@@ -1552,15 +1570,18 @@ export function createFixTestsFeature(context, maybeEnv) {
         const detailAvailability = detailTargetIds.length
           ? getRobotActionAvailability(detailTargetIds[0], 'test')
           : null;
+        const hasMixedSelectedTypes = hasMixedRobotTypesForIds(selectedTargetIds);
         const selectedAvailabilities = selectedTargetIds.map((id) => getRobotActionAvailability(id, 'test'));
         const hasSelectedActionableRobot = selectedAvailabilities.some((entry) => entry.allowed);
 
         return {
           detailDisabled: Boolean(detailAvailability) && !detailAvailability.allowed,
           detailTitle: detailAvailability?.title || 'Run tests',
-          selectedDisabled: selectedTargetIds.length > 0 && !hasSelectedActionableRobot,
+          selectedDisabled: hasMixedSelectedTypes || (selectedTargetIds.length > 0 && !hasSelectedActionableRobot),
           selectedTitle:
-            selectedTargetIds.length > 0 && !hasSelectedActionableRobot
+            hasMixedSelectedTypes
+              ? 'Selected robots must all share the same type.'
+              : selectedTargetIds.length > 0 && !hasSelectedActionableRobot
               ? summarizeBlockedRobotActionTitle(selectedAvailabilities, getRunSelectedButtonIdleLabel())
               : getRunSelectedButtonIdleLabel(),
         };

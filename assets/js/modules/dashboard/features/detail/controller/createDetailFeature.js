@@ -331,6 +331,7 @@ export function createDetailFeature(context, maybeEnv) {
   const getTestingCountdownText = (...args) => runtime.getTestingCountdownText(...args);
   const getVisibleOfflineRobotIds = (...args) => runtime.getVisibleOfflineRobotIds(...args);
   const getVisibleOnlineRobotIds = (...args) => runtime.getVisibleOnlineRobotIds(...args);
+  const hasMixedRobotTypesForIds = (...args) => runtime.hasMixedRobotTypesForIds(...args);
   const haveRuntimeTestsChanged = (...args) => runtime.haveRuntimeTestsChanged(...args);
   const initDashboardController = (...args) => runtime.initDashboardController(...args);
   const initFleetParallelism = (...args) => runtime.initFleetParallelism(...args);
@@ -637,6 +638,11 @@ export function createDetailFeature(context, maybeEnv) {
           } else {
             appendTerminalLine('No robot selected for tests. Select at least one robot first.', 'warn');
           }
+          return;
+        }
+        if (hasMixedRobotTypesForIds(runIds)) {
+          appendTerminalLine('Selected robots must all share the same type before running tests.', 'warn');
+          setRunningButtonState(false);
           return;
         }
 

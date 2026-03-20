@@ -1146,13 +1146,95 @@ export function createFleetFeature(context, maybeEnv) {
         }
       }
 
+  function getRobotTypeKey(robotIdValue) {
+        const robot = getRobotById(robotIdValue);
+        return normalizeTypeId(normalizeText(robot?.typeId, normalizeText(robot?.type, '')));
+      }
+
+  function getSingleRobotTypeKeyForIds(list) {
+        const ids = (Array.isArray(list) ? list : []).map((id) => robotId(id)).filter(Boolean);
+        let lockedTypeKey = '';
+        ids.forEach((id) => {
+          const typeKey = getRobotTypeKey(id);
+          if (!typeKey || lockedTypeKey) return;
+          lockedTypeKey = typeKey;
+        });
+        return lockedTypeKey;
+      }
+
+  function hasMixedRobotTypesForIds(list) {
+        const ids = (Array.isArray(list) ? list : []).map((id) => robotId(id)).filter(Boolean);
+        let lockedTypeKey = '';
+        return ids.some((id) => {
+          const typeKey = getRobotTypeKey(id);
+          if (!typeKey) return false;
+          if (!lockedTypeKey) {
+            lockedTypeKey = typeKey;
+            return false;
+          }
+          return typeKey !== lockedTypeKey;
+        });
+      }
+
+  function filterRobotIdsToSingleType(list, options = {}) {
+        const ids = Array.from(new Set(
+          (Array.isArray(list) ? list : [])
+            .map((id) => robotId(id))
+            .filter(Boolean),
+        ));
+        if (!ids.length) {
+          return {
+            robotIds: [],
+            typeKey: '',
+            limited: false,
+          };
+        }
+
+        const preferredTypeKey = normalizeTypeId(options.lockTypeKey || '');
+        const selectionTypeKey = getSingleRobotTypeKeyForIds(Array.from(state.selectedRobotIds));
+        const lockedTypeKey = preferredTypeKey || selectionTypeKey || getSingleRobotTypeKeyForIds(ids);
+        if (!lockedTypeKey) {
+          return {
+            robotIds: ids,
+            typeKey: '',
+            limited: false,
+          };
+        }
+
+        const filteredIds = ids.filter((id) => getRobotTypeKey(id) === lockedTypeKey);
+        return {
+          robotIds: filteredIds,
+          typeKey: lockedTypeKey,
+          limited: filteredIds.length !== ids.length,
+        };
+      }
+
+  function setSelectionConstraintMessage(limited) {
+        state.selectionConstraintMessage = limited ? 'Selection limited to a single robot type.' : '';
+      }
+
   function setRobotSelection(robotIdValue, selected) {
         const id = robotId(robotIdValue);
         if (!id) return;
         if (selected) {
-          state.selectedRobotIds.add(id);
+          const currentTypeKey = getSingleRobotTypeKeyForIds(Array.from(state.selectedRobotIds));
+          const nextTypeKey = getRobotTypeKey(id);
+          if (state.selectedRobotIds.size && currentTypeKey && nextTypeKey && currentTypeKey !== nextTypeKey) {
+            state.selectedRobotIds = new Set([id]);
+            setSelectionConstraintMessage(true);
+          } else {
+            const nextSelection = filterRobotIdsToSingleType(
+              [...Array.from(state.selectedRobotIds), id],
+              { lockTypeKey: currentTypeKey || nextTypeKey },
+            );
+            state.selectedRobotIds = new Set(nextSelection.robotIds);
+            setSelectionConstraintMessage(nextSelection.limited);
+          }
         } else {
           state.selectedRobotIds.delete(id);
+          if (!state.selectedRobotIds.size) {
+            setSelectionConstraintMessage(false);
+          }
         }
         updateSelectionSummary();
         syncSelectionUi();
@@ -1173,19 +1255,45 @@ export function createFleetFeature(context, maybeEnv) {
             }
           });
         }
-  
-        state.selectedRobotIds = targetIds;
+
+        if (!targetIds.size) {
+          state.selectedRobotIds = targetIds;
+          setSelectionConstraintMessage(false);
+          updateSelectionSummary();
+          syncSelectionUi();
+          return;
+        }
+
+        const nextSelection = filterRobotIdsToSingleType(Array.from(targetIds));
+        state.selectedRobotIds = new Set(nextSelection.robotIds);
+        setSelectionConstraintMessage(nextSelection.limited);
         updateSelectionSummary();
         syncSelectionUi();
       }
 
   function addRobotIdsToSelection(list) {
-        const next = new Set(state.selectedRobotIds);
-        (Array.isArray(list) ? list : [])
+        const candidateIds = (Array.isArray(list) ? list : [])
           .map((id) => robotId(id))
-          .filter(Boolean)
-          .forEach((id) => next.add(id));
-        state.selectedRobotIds = next;
+          .filter(Boolean);
+        if (!candidateIds.length) return;
+
+        const currentTypeKey = getSingleRobotTypeKeyForIds(Array.from(state.selectedRobotIds));
+        if (state.selectedRobotIds.size && candidateIds.length === 1) {
+          const candidateTypeKey = getRobotTypeKey(candidateIds[0]);
+          if (currentTypeKey && candidateTypeKey && currentTypeKey !== candidateTypeKey) {
+            state.selectedRobotIds = new Set([candidateIds[0]]);
+            setSelectionConstraintMessage(true);
+            updateSelectionSummary();
+            syncSelectionUi();
+            return;
+          }
+        }
+
+        const next = new Set(state.selectedRobotIds);
+        candidateIds.forEach((id) => next.add(id));
+        const nextSelection = filterRobotIdsToSingleType(Array.from(next), { lockTypeKey: currentTypeKey });
+        state.selectedRobotIds = new Set(nextSelection.robotIds);
+        setSelectionConstraintMessage(nextSelection.limited);
         updateSelectionSummary();
         syncSelectionUi();
       }
@@ -1212,7 +1320,9 @@ export function createFleetFeature(context, maybeEnv) {
   function updateSelectionSummary() {
         const summary = $('#selectionSummary');
         if (!summary) return;
-        summary.textContent = `${state.selectedRobotIds.size} robot(s) selected`;
+        const baseSummary = `${state.selectedRobotIds.size} robot(s) selected`;
+        const constraintMessage = normalizeText(state.selectionConstraintMessage, '');
+        summary.textContent = constraintMessage ? `${baseSummary} - ${constraintMessage}` : baseSummary;
         syncRunSelectedButtonLabel();
         syncGlobalSelectionButton();
         if (state.fixModeOpen.dashboard) {
@@ -1904,6 +2014,10 @@ export function createFleetFeature(context, maybeEnv) {
     stopTestingCountdowns,
     setRobotSearchingBulk,
     syncAutomatedRobotActivityFromState,
+    getRobotTypeKey,
+    getSingleRobotTypeKeyForIds,
+    hasMixedRobotTypesForIds,
+    filterRobotIdsToSingleType,
     setRobotSelection,
     selectRobotIds,
     addRobotIdsToSelection,
