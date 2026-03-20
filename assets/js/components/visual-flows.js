@@ -5,6 +5,14 @@ import {
   createFlowEmptyState,
 } from './flow-block-presets.js';
 
+const DEFAULT_STEP_TIMEOUT_SEC = 20;
+
+function normalizeExpectedTimeout(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return Math.max(DEFAULT_STEP_TIMEOUT_SEC, Math.floor(numeric));
+}
+
 export function initVisualFlows() {
   const tExecInput = document.getElementById('manageTestExecuteJson');
   const tChecksInput = document.getElementById('manageTestChecksJson');
@@ -73,11 +81,12 @@ export function initVisualFlows() {
 
 function createFlowBlock(isWrite, data, onRemove, onSave) {
     const usesSudo = isWrite && commandUsesSudo(data.command);
+    const timeoutSec = normalizeExpectedTimeout(data.timeoutSec) || DEFAULT_STEP_TIMEOUT_SEC;
     const title = isWrite ? `WRITE ${data.command || '???'}` : `READ ${data.id || '???'}`;
     const description = isWrite
       ? usesSudo
-        ? `Saves as: ${data.saveAs || data.id} · Risk: executes with sudo privileges`
-        : `Saves as: ${data.saveAs || data.id}`
+        ? `Saves as: ${data.saveAs || data.id} · Timeout: ${timeoutSec}s · Risk: executes with sudo privileges`
+        : `Saves as: ${data.saveAs || data.id} · Timeout: ${timeoutSec}s`
       : `${data.read?.kind || 'unknown'} from ${data.read?.inputRef || 'unknown'}`;
 
     return createFlowBlockPreset({
@@ -91,6 +100,10 @@ function createFlowBlock(isWrite, data, onRemove, onSave) {
       onRemove,
       renderEditor: (editor) => {
         if (isWrite) {
+          const timeoutValue = Number(data.timeoutSec);
+          const timeoutDisplay = Number.isFinite(timeoutValue) && timeoutValue >= DEFAULT_STEP_TIMEOUT_SEC
+            ? String(Math.floor(timeoutValue))
+            : '';
           editor.innerHTML = `
             <label class="form-field">Command
               <input type="text" class="form-input cmd-input" value="${data.command || ''}">
@@ -98,6 +111,10 @@ function createFlowBlock(isWrite, data, onRemove, onSave) {
             <label class="form-field">Save As
               <input type="text" class="form-input save-input" value="${data.saveAs || ''}">
             </label>
+            <label class="form-field">Expected timeout (sec)
+              <input type="number" min="${DEFAULT_STEP_TIMEOUT_SEC}" step="1" class="form-input timeout-input" value="${timeoutDisplay}" placeholder="${DEFAULT_STEP_TIMEOUT_SEC}">
+            </label>
+            <p class="muted-copy">Default is ${DEFAULT_STEP_TIMEOUT_SEC} seconds. Only set this when you are sure the command needs longer, and never lower than ${DEFAULT_STEP_TIMEOUT_SEC}s.</p>
             <div style="display:flex; justify-content:flex-end;">
               <button type="button" class="button save-btn">Save Block</button>
             </div>
@@ -107,7 +124,14 @@ function createFlowBlock(isWrite, data, onRemove, onSave) {
             e.stopPropagation();
             const newCmd = editor.querySelector('.cmd-input').value.trim();
             const newSave = editor.querySelector('.save-input').value.trim();
-            onSave({ ...data, command: newCmd, saveAs: newSave });
+            const timeoutSec = normalizeExpectedTimeout(editor.querySelector('.timeout-input').value);
+            const nextBlock = { ...data, command: newCmd, saveAs: newSave };
+            if (timeoutSec && timeoutSec > DEFAULT_STEP_TIMEOUT_SEC) {
+              nextBlock.timeoutSec = timeoutSec;
+            } else {
+              delete nextBlock.timeoutSec;
+            }
+            onSave(nextBlock);
           });
           return;
         }

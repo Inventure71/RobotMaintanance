@@ -12,9 +12,8 @@
     {
       "id": "flash",
       "command": "$flash_firmware$",
-      "timeoutSec": {
-        "ref": "flashTimeoutSec"
-      }
+      "timeoutSec": 60,
+      "saveAs": ""
     },
     {
       "id": "docker_up",

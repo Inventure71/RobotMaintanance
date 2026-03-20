@@ -56,6 +56,17 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function normalizeTimeoutSec(value, fallback = null) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+  return Math.max(20, Math.floor(numeric));
+}
+
+function serializeTimeoutSec(value) {
+  const normalized = normalizeTimeoutSec(value);
+  return normalized && normalized > 20 ? normalized : null;
+}
+
 const START_DRAFT_FIRST_MESSAGE = 'Complete Definition ID and Label, then click "Start creation of new test".';
 
 export class WorkflowRecorderComponent {
@@ -238,6 +249,7 @@ export class WorkflowRecorderComponent {
       type: 'write',
       command: normalizeText(step?.command, ''),
       saveAs: normalizeToken(step?.saveAs, `out_${index + 1}`),
+      timeoutSec: normalizeTimeoutSec(step?.timeoutSec),
       outputText: '',
     }));
     this._writeCount = this.blocks.length;
@@ -407,10 +419,11 @@ export class WorkflowRecorderComponent {
     this.render();
   }
 
-  updateWriteBlock(blockId, { command, saveAs }) {
+  updateWriteBlock(blockId, { command, saveAs, timeoutSec }) {
     const normalizedBlockId = normalizeText(blockId, '');
     const normalizedCommand = normalizeText(command, '');
     const normalizedSaveAs = normalizeToken(saveAs, '');
+    const normalizedTimeoutSec = normalizeTimeoutSec(timeoutSec);
     if (!normalizedCommand) {
       throw new Error('Command is required.');
     }
@@ -432,6 +445,7 @@ export class WorkflowRecorderComponent {
       ...this.blocks[index],
       command: normalizedCommand,
       saveAs: normalizedSaveAs,
+      timeoutSec: normalizedTimeoutSec,
     };
     if (previousSaveAs && previousSaveAs !== normalizedSaveAs) {
       this.blocks = this.blocks.map((block) => {
@@ -458,6 +472,7 @@ export class WorkflowRecorderComponent {
     this.updateWriteBlock(blockId, {
       command: normalizeText(existing.command, ''),
       saveAs,
+      timeoutSec: existing.timeoutSec,
     });
   }
 
@@ -509,6 +524,7 @@ export class WorkflowRecorderComponent {
       type: 'write',
       command: commandText,
       saveAs: this._nextSaveAs(),
+      timeoutSec: null,
       outputText,
     };
     this.blocks.push(block);
@@ -647,6 +663,7 @@ export class WorkflowRecorderComponent {
         id: block.id,
         command: normalizeText(block.command, ''),
         saveAs: normalizeText(block.saveAs, ''),
+        timeoutSec: serializeTimeoutSec(block.timeoutSec),
       })),
       checks: this.outputs.map((output, index) => ({
         outputKey: output.key,
@@ -673,6 +690,7 @@ export class WorkflowRecorderComponent {
       id: `step_${index + 1}`,
       command: block.command,
       saveAs: block.saveAs,
+      ...(serializeTimeoutSec(block.timeoutSec) ? { timeoutSec: serializeTimeoutSec(block.timeoutSec) } : {}),
     }));
 
     const checks = this.outputs.map((output) => {
@@ -848,6 +866,7 @@ export class WorkflowRecorderComponent {
   }
 
   _renderWriteEditor(editor, block) {
+    const timeoutDisplay = normalizeTimeoutSec(block.timeoutSec);
     editor.innerHTML = `
       <label class="form-field">Command
         <input type="text" class="form-input cmd-input" value="${block.command || ''}">
@@ -855,6 +874,10 @@ export class WorkflowRecorderComponent {
       <label class="form-field">Save As
         <input type="text" class="form-input save-input" value="${block.saveAs || ''}">
       </label>
+      <label class="form-field">Expected timeout (sec)
+        <input type="number" min="20" step="1" class="form-input timeout-input" value="${timeoutDisplay ? String(timeoutDisplay) : ''}" placeholder="20">
+      </label>
+      <p class="muted-copy">Default is 20 seconds. Only set this when you are sure the command needs longer, and never lower than 20s.</p>
       <div style="display:flex; justify-content:flex-end;">
         <button type="button" class="button save-btn">Save Block</button>
       </div>
@@ -864,10 +887,12 @@ export class WorkflowRecorderComponent {
       event.stopPropagation();
       const nextCommand = editor.querySelector('.cmd-input').value.trim();
       const nextSaveAs = editor.querySelector('.save-input').value.trim();
+      const nextTimeoutSec = editor.querySelector('.timeout-input').value;
       try {
         this.updateWriteBlock(block.id, {
           command: nextCommand,
           saveAs: nextSaveAs,
+          timeoutSec: nextTimeoutSec,
         });
         this.setStatus(`Updated ${block.id}.`, 'ok');
       } catch (error) {
@@ -985,8 +1010,8 @@ export class WorkflowRecorderComponent {
         icon: '✍️',
         title: `STEP ${writeIndex + 1} · WRITE ${block.command}`,
         description: usesSudo
-          ? `Saves as: ${block.saveAs} · Risk: executes with sudo privileges`
-          : `Saves as: ${block.saveAs}`,
+          ? `Saves as: ${block.saveAs} · Timeout: ${normalizeTimeoutSec(block.timeoutSec, 20)}s · Risk: executes with sudo privileges`
+          : `Saves as: ${block.saveAs} · Timeout: ${normalizeTimeoutSec(block.timeoutSec, 20)}s`,
         actionLayout: 'two-column',
         riskLevel: usesSudo ? 'sudo' : '',
         riskLabel: 'sudo risk',

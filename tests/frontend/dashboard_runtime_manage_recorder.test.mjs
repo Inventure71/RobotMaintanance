@@ -218,6 +218,9 @@ async function loadApi() {
         'AUTHORING RULES',
         '- Do not invent robot-specific paths, workspace overlays, topic names, command names, or package names unless they are explicitly supported by the context.',
         '- Avoid hard-coded machine-specific absolute paths unless the transcript proves they are required and present on the target robot.',
+        '- The default execute-step timeout is 20 seconds when timeoutSec is omitted.',
+        '- Only include an explicit timeoutSec when you are confident a command needs longer than 20 seconds.',
+        '- If you include timeoutSec, never set it below 20.',
         '',
         'API CONTRACT',
         '- mode must be "orchestrate".',
@@ -887,6 +890,8 @@ test('getRecorderLlmPromptBuildResult emits stable prompt bundle content in reco
   assert.ok(result.promptText.indexOf('"userSystemDetails"') < result.promptText.indexOf('"userTestRequest"'));
   assert.match(result.promptText, /^SYSTEM PROMPT SECTION \(recorder-llm-system\.v1\)/);
   assert.match(result.promptText, /Any non-zero exit code or command timeout aborts the whole definition/i);
+  assert.match(result.promptText, /default execute-step timeout is 20 seconds/i);
+  assert.match(result.promptText, /never set it below 20/i);
   assert.match(result.promptText, /Prefer one stable capture command plus multiple read checks/i);
   assert.match(result.promptText, /Do not invent robot-specific paths/i);
   assert.match(result.promptText, /Avoid hard-coded machine-specific absolute paths/i);

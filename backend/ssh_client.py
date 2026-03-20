@@ -308,6 +308,13 @@ class InteractiveShell:
         ]
         return "\n".join(filtered).strip("\n")
 
+    @classmethod
+    def _strip_trailing_scaffold_lines(cls, text: str, scaffold_lines: list[str]) -> str:
+        lines = str(text or "").replace("\r", "").split("\n")
+        while lines and cls._is_scaffold_line(lines[-1], scaffold_lines):
+            lines.pop()
+        return "\n".join(lines).strip("\n")
+
     def _reset_sudo_timestamp(self) -> None:
         if not self.chan:
             return
@@ -353,6 +360,28 @@ class InteractiveShell:
     @staticmethod
     def _inject_noninteractive_sudo(command: str) -> str:
         return InteractiveShell._replace_sudo_prefix(command, "sudo -n")
+
+    @classmethod
+    def _build_automation_command_wrapper(
+        cls,
+        command: str,
+        *,
+        exit_marker: str,
+        done_marker: str,
+    ) -> tuple[str, list[str]]:
+        command_text = str(command or "").rstrip("\n")
+        command_lines = command_text.split("\n") if command_text else [""]
+        exit_line = f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\""
+        done_line = f"printf '\\n{done_marker}\\n'"
+        wrapper_lines = [
+            "{",
+            *command_lines,
+            cls.AUTOMATION_STATUS_LINE,
+            exit_line,
+            done_line,
+            "}",
+        ]
+        return "\n".join(wrapper_lines) + "\n", wrapper_lines
 
     @staticmethod
     def _sudo_prompt_visible(text: str, prompt_marker: str) -> bool:
@@ -440,11 +469,10 @@ class InteractiveShell:
         done_marker = self._build_marker(self.AUTOMATION_DONE_PREFIX)
         done_pattern = self._marker_pattern(done_marker)
         exit_pattern = re.compile(rf"{re.escape(exit_marker)}(?P<exit>-?\d+)")
-        wrapped_command = (
-            f"{command_to_run}\n"
-            "__CODEX_AUTOMATION_STATUS=$?\n"
-            f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\"\n"
-            f"printf '\\n{done_marker}\\n'\n"
+        wrapped_command, scaffold_lines = self._build_automation_command_wrapper(
+            command_to_run,
+            exit_marker=exit_marker,
+            done_marker=done_marker,
         )
         self.send(wrapped_command)
 
@@ -482,9 +510,9 @@ class InteractiveShell:
             strip_terminal_control_sequences(buf).replace("\r", ""),
             [exit_marker, done_marker],
         )
-        scaffold_lines = [line for line in str(command_to_run or "").replace("\r", "").split("\n") if line]
-        scaffold_lines.append(self.AUTOMATION_STATUS_LINE)
         output = self._strip_leading_scaffold_lines(output, scaffold_lines)
+        output = self._strip_trailing_prompt_lines(output)
+        output = self._strip_trailing_scaffold_lines(output, scaffold_lines)
         output = self._strip_trailing_prompt_lines(output)
 
         if used_sudo:

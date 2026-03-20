@@ -19,7 +19,9 @@ const AUTHORING_RULE_LINES = [
   'If the provided evidence is incomplete, produce the narrowest valid test grounded only in what is actually shown. Do not guess broader coverage.',
   'Avoid hard-coded machine-specific absolute paths unless the transcript proves they are required and present on the target robot.',
   'Prefer commands that terminate deterministically, such as topic list or a single bounded snapshot command.',
-  'For commands that may block, include an explicit timeoutSec only when it materially reduces hang risk and is justified by the command behavior.',
+  'The default execute-step timeout is 20 seconds when timeoutSec is omitted.',
+  'Only include an explicit timeoutSec when you are confident a command needs longer than 20 seconds.',
+  'If you include timeoutSec, never set it below 20.',
   'Only reference inputRef values that are created by execute[].saveAs or otherwise clearly present in the request payload.',
 ];
 

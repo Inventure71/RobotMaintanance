@@ -89,6 +89,12 @@ def _sent_auth_prompt_marker(sent_payload: str) -> str:
     return sent_payload.split("sudo -S -p '", 1)[1].split("'", 1)[0]
 
 
+def _sent_automation_markers(sent_payload: str) -> tuple[str, str]:
+    exit_marker = sent_payload.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
+    done_marker = sent_payload.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+    return exit_marker, done_marker
+
+
 def test_connect_calls_paramiko_like_client_methods():
     fake_client = FakeClient()
     shell = InteractiveShell(
@@ -256,6 +262,128 @@ def test_run_command_times_out_and_returns_partial_output():
     assert output == "still running"
 
 
+def test_run_automation_command_wraps_markers_inside_single_shell_block():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] == 1:
+            exit_marker, done_marker = _sent_automation_markers(fake_channel.sent[0])
+            shell._out_queue.put(f"ok\n{exit_marker}0\n{done_marker}\n$ ")
+
+    shell._sleep = fake_sleep
+
+    result = shell.run_automation_command("echo ok", timeout=1.0)
+
+    assert fake_channel.sent[0].startswith("{\necho ok\n__CODEX_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[0].endswith("}\n")
+    assert result.output == "ok"
+    assert result.exit_code == 0
+
+
+def test_run_automation_command_supports_multiline_command_wrapper():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] == 1:
+            exit_marker, done_marker = _sent_automation_markers(fake_channel.sent[0])
+            shell._out_queue.put(f"line1\nline2\n{exit_marker}0\n{done_marker}\n$ ")
+
+    shell._sleep = fake_sleep
+
+    result = shell.run_automation_command("printf 'line1\\n'\nprintf 'line2\\n'", timeout=1.0)
+
+    assert "{\nprintf 'line1\\n'\nprintf 'line2\\n'\n__CODEX_AUTOMATION_STATUS=$?\n" in fake_channel.sent[0]
+    assert result.output == "line1\nline2"
+    assert result.exit_code == 0
+
+
+def test_run_automation_command_handles_flash_style_transcript():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] == 1:
+            wrapped = fake_channel.sent[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
+            shell._out_queue.put(
+                "[1/3]\n"
+                "Initiating firmware flash on the ROSbot's STM32F4 microcontroller.\n"
+                "done\n\n"
+                "[2/3]\n"
+                "Stop rosbot Docker container if it is running\n"
+                "rosbot\n\n"
+                "[3/3]\n"
+                "Flashing the firmware...\n"
+                "System architecture: x86_64\n\n"
+                "Write-unprotecting flash\n"
+                "Done.\n\n"
+                "Read-UnProtecting flash\n"
+                "Done.\n\n"
+                "Write to memory\n"
+                "Erasing memory\n"
+                "Wrote and verified address 0x08023b1c (100.00%) Done.\n\n"
+                "Done.\n"
+                "done\n"
+                f"{exit_marker}0\n"
+                f"{done_marker}\n$ "
+            )
+
+    shell._sleep = fake_sleep
+
+    result = shell.run_automation_command("./flash_firmware.sh", timeout=2.0)
+
+    assert result.exit_code == 0
+    assert result.output.endswith("done")
+    assert "__CODEX_AUTO_DONE__" not in result.output
+
+
 def test_run_command_waits_for_prompt_at_end_not_echoed_prompt():
     fake_channel = FakeChannel()
     fake_client = FakeClient()
@@ -351,8 +479,7 @@ def test_run_automation_command_returns_exit_code_and_strips_markers():
         sleep_calls["count"] += 1
         if sleep_calls["count"] == 1:
             wrapped = fake_channel.sent[0]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"hello\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -394,8 +521,7 @@ def test_run_automation_command_authenticates_sudo_once():
             shell._out_queue.put("$ ")
         elif sleep_calls["count"] == 3:
             wrapped = fake_channel.sent[2]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"flashed\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -406,8 +532,8 @@ def test_run_automation_command_authenticates_sudo_once():
     assert fake_channel.sent[0].endswith("' -v\n")
     assert "printf" not in fake_channel.sent[0]
     assert fake_channel.sent[1] == "pw\n"
-    assert fake_channel.sent[2].startswith("sudo -n ")
-    assert "rosbot.flash" in fake_channel.sent[2]
+    assert fake_channel.sent[2].startswith("{\nsudo -n rosbot.flash\n")
+    assert fake_channel.sent[2].endswith("}\n")
     assert result.output == "flashed"
     assert result.exit_code == 0
     assert result.used_sudo is True
@@ -445,8 +571,7 @@ def test_run_automation_command_ignores_sudo_marker_in_echoed_command():
             shell._out_queue.put("$ ")
         elif sleep_calls["count"] == 4:
             wrapped = fake_channel.sent[2]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"done\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -454,7 +579,7 @@ def test_run_automation_command_ignores_sudo_marker_in_echoed_command():
     result = shell.run_automation_command("sudo rosbot.flash", timeout=2.0, sudo_password="pw")
 
     assert fake_channel.sent.count("pw\n") == 1
-    assert fake_channel.sent[2].startswith("sudo -n ")
+    assert fake_channel.sent[2].startswith("{\nsudo -n rosbot.flash\n")
     assert result.output == "done"
     assert result.exit_code == 0
     assert result.used_sudo is True
@@ -492,8 +617,7 @@ def test_run_automation_command_waits_for_complete_sudo_prompt_line():
             shell._out_queue.put("$ ")
         elif sleep_calls["count"] == 3:
             wrapped = fake_channel.sent[2]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"done\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -501,7 +625,7 @@ def test_run_automation_command_waits_for_complete_sudo_prompt_line():
     result = shell.run_automation_command("sudo rosbot.flash", timeout=2.0, sudo_password="pw")
 
     assert fake_channel.sent[1] == "pw\n"
-    assert fake_channel.sent[2].startswith("sudo -n ")
+    assert fake_channel.sent[2].startswith("{\nsudo -n rosbot.flash\n")
     assert result.output == "done"
     assert result.exit_code == 0
     assert result.used_sudo is True
@@ -541,8 +665,7 @@ def test_run_automation_command_waits_for_standalone_sudo_prompt_after_split_ech
             shell._out_queue.put("$ ")
         elif sleep_calls["count"] == 5:
             wrapped = fake_channel.sent[2]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"done\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -587,8 +710,7 @@ def test_run_automation_command_ignores_stale_shell_prompt_before_sudo_prompt():
             shell._out_queue.put("$ ")
         elif len(fake_channel.sent) >= 3:
             wrapped = fake_channel.sent[2]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(f"done\n{exit_marker}0\n{done_marker}\n$ ")
 
     shell._sleep = fake_sleep
@@ -624,16 +746,18 @@ def test_run_automation_command_preserves_output_after_scaffold_echo():
         sleep_calls["count"] += 1
         if sleep_calls["count"] == 1:
             wrapped = fake_channel.sent[0]
-            exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-            done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+            exit_marker, done_marker = _sent_automation_markers(wrapped)
             shell._out_queue.put(
+                "{\n"
                 "timeout 12s rostopic list\n"
                 "/scan\n"
                 "/odom\n"
-                "robot@host:~$ __CODEX_AUTOMATION_STATUS=$?\n"
+                "__CODEX_AUTOMATION_STATUS=$?\n"
+                f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\"\n"
+                f"printf '\\n{done_marker}\\n'\n"
+                "}\n"
                 f"{exit_marker}0\n"
-                f"{done_marker}\n"
-                "robot@host:~$ "
+                f"{done_marker}\n$ "
             )
 
     shell._sleep = fake_sleep
@@ -666,8 +790,7 @@ def test_run_automation_command_preserves_shell_state_across_calls():
     def fake_sleep(_: float) -> None:
         sleep_calls["count"] += 1
         wrapped = fake_channel.sent[-1]
-        exit_marker = wrapped.split("printf '\\n", 1)[1].split("%s\\n'", 1)[0]
-        done_marker = wrapped.rsplit("printf '\\n", 1)[1].split("\\n'", 1)[0]
+        exit_marker, done_marker = _sent_automation_markers(wrapped)
         if sleep_calls["count"] == 1:
             shell._out_queue.put(f"{exit_marker}0\n{done_marker}\n$ ")
         elif sleep_calls["count"] == 2:
@@ -678,8 +801,8 @@ def test_run_automation_command_preserves_shell_state_across_calls():
     first = shell.run_automation_command("cd /tmp/project", timeout=1.0)
     second = shell.run_automation_command("pwd", timeout=1.0)
 
-    assert fake_channel.sent[0].startswith("cd /tmp/project\n__CODEX_AUTOMATION_STATUS=$?\n")
-    assert fake_channel.sent[1].startswith("pwd\n__CODEX_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[0].startswith("{\ncd /tmp/project\n__CODEX_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[1].startswith("{\npwd\n__CODEX_AUTOMATION_STATUS=$?\n")
     assert first.exit_code == 0
     assert second.output == "/tmp/project"
     assert second.exit_code == 0

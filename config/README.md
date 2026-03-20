@@ -79,6 +79,9 @@ Contract:
 Behavior:
 - one test definition can emit many independent check results.
 - orchestrator executes `execute[]` once and fans out flat results per check id.
+- if `execute[].timeoutSec` is omitted, runtime uses the default 20-second command timeout.
+- the UI labels this as `Expected timeout (sec)` but still saves it as `timeoutSec`.
+- only set `timeoutSec` when a command truly needs more than 20 seconds; never set it below 20.
 
 ## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/fixes/`
 
@@ -93,6 +96,9 @@ Contract:
 Behavior:
 - fixes run via async fix-job endpoints.
 - post-tests run once after execute steps complete.
+- if `execute[].timeoutSec` is omitted, runtime uses the default 20-second command timeout.
+- the UI labels this as `Expected timeout (sec)` but still saves it as `timeoutSec`.
+- only set `timeoutSec` when a command truly needs more than 20 seconds; never set it below 20.
 
 ## File: `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json`
 

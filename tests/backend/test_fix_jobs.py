@@ -118,6 +118,50 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     assert payload["testRun"]["count"] == 1
 
 
+def test_fix_job_runs_follow_up_step_after_flash_like_command(monkeypatch):
+    manager = _manager()
+    manager.robot_types_by_id["rosbot-2-pro"]["autoFixes"][0]["execute"] = [
+        {"id": "flash", "command": "./flash_firmware.sh"},
+        {"id": "docker_up", "command": "docker compose up -d"},
+    ]
+    observed = {"commands": []}
+
+    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
+        _ = (page_session_id, robot_id, timeout_sec, sudo_password, source)
+        observed["commands"].append(command)
+        output = "flash done" if command == "./flash_firmware.sh" else "stack up"
+        return AutomationCommandResult(
+            output=output,
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
+
+    def fake_run_tests(*, robot_id, page_session_id, test_ids=None, dry_run=False):
+        _ = (robot_id, page_session_id, dry_run)
+        selected_ids = test_ids or ["general"]
+        return [
+            {
+                "id": selected_ids[0],
+                "status": "ok",
+                "value": "all_present",
+                "details": "ok",
+                "ms": 1,
+                "steps": [],
+            }
+        ]
+
+    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+    monkeypatch.setattr(manager, "run_tests", fake_run_tests)
+
+    started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
+    payload = _wait_for_terminal_status(manager, started["runId"])
+
+    assert payload["status"] == "succeeded"
+    assert observed["commands"] == ["./flash_firmware.sh", "docker compose up -d"]
+
+
 def test_fix_job_failure_still_finishes_fix_run(monkeypatch):
     manager = _manager()
 
