@@ -197,6 +197,48 @@ def test_fleet_runtime_endpoint_uses_versioned_snapshot_provider():
     assert payload["robots"][0]["tests"]["online"]["status"] == "ok"
 
 
+def test_robot_types_endpoint_keeps_owner_and_platform_tags_for_tests_and_fixes():
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id={},
+            robot_types_by_id={
+                "rosbot-2-pro": {
+                    "typeId": "rosbot-2-pro",
+                    "label": "Rosbot 2 Pro",
+                    "topics": [],
+                    "tests": [
+                        {
+                            "id": "online",
+                            "label": "Online",
+                            "ownerTags": ["global", "alice"],
+                            "platformTags": ["ros2"],
+                        }
+                    ],
+                    "autoFixes": [
+                        {
+                            "id": "quick_fix",
+                            "label": "Quick fix",
+                            "ownerTags": ["alice"],
+                            "platformTags": ["ros2", "interbotix"],
+                        }
+                    ],
+                }
+            },
+            robots_config_path=Path("/tmp/robots.config.json"),
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/robot-types")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["tests"][0]["ownerTags"] == ["global", "alice"]
+    assert payload[0]["tests"][0]["platformTags"] == ["ros2"]
+    assert payload[0]["autoFixes"][0]["ownerTags"] == ["alice"]
+    assert payload[0]["autoFixes"][0]["platformTags"] == ["ros2", "interbotix"]
+
+
 def test_update_and_delete_robot_persists_config(tmp_path):
     robots_config_path = tmp_path / "robots.config.json"
     robot_models_root = tmp_path / "assets" / "models"

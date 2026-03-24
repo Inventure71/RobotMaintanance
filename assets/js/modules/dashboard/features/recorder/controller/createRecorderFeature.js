@@ -7,6 +7,7 @@ export function createRecorderFeature(context, maybeEnv) {
   const {
     $,
     $$,
+    ACTIVE_OWNER_PROFILE_STORAGE_KEY,
     CAN_USE_MODEL_VIEWER,
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
@@ -98,6 +99,9 @@ export function createRecorderFeature(context, maybeEnv) {
     detailTerminalShell,
     emptyState,
     filterError,
+    filterActiveOwner,
+    filterOwnerTags,
+    filterPlatformTags,
     filterType,
     hydrateActionButtons,
     initThemeSwitcher,
@@ -112,6 +116,8 @@ export function createRecorderFeature(context, maybeEnv) {
     manageFixExecuteJsonInput,
     manageFixIdInput,
     manageFixLabelInput,
+    manageFixOwnerTagsInput,
+    manageFixPlatformTagsInput,
     manageFixRunAtConnectionInput,
     manageFixRobotTypeTargets,
     manageFixesList,
@@ -144,6 +150,8 @@ export function createRecorderFeature(context, maybeEnv) {
     manageTestIdInput,
     manageTestLabelInput,
     manageTestRunAtConnectionInput,
+    manageTestOwnerTagsInput,
+    manageTestPlatformTagsInput,
     manageTestRobotTypeTargets,
     manageTestsList,
     monitorApplyButton,
@@ -207,7 +215,9 @@ export function createRecorderFeature(context, maybeEnv) {
     recorderOutputKeyInput,
     recorderOutputLabelInput,
     recorderOutputPassDetailsInput,
+    recorderOwnerTagsInput,
     recorderOutputs,
+    recorderPlatformTagsInput,
     recorderPublishStatus,
     recorderPublishTestButton,
     recorderReadInputRefSelect,
@@ -520,11 +530,19 @@ export function createRecorderFeature(context, maybeEnv) {
 
   function normalizeDefinitionsSummary(payload) {
         const safe = payload && typeof payload === 'object' ? payload : {};
+        const normalizeDefinitionWithTags = (definition, ownerDefault = true) => {
+          const entry = definition && typeof definition === 'object' ? definition : {};
+          return {
+            ...entry,
+            ownerTags: normalizeTagList(entry.ownerTags, { ownerDefault }),
+            platformTags: normalizeTagList(entry.platformTags),
+          };
+        };
         return {
           commandPrimitives: Array.isArray(safe.commandPrimitives) ? safe.commandPrimitives : [],
-          tests: Array.isArray(safe.tests) ? safe.tests : [],
+          tests: Array.isArray(safe.tests) ? safe.tests.map((test) => normalizeDefinitionWithTags(test, true)) : [],
           checks: Array.isArray(safe.checks) ? safe.checks : [],
-          fixes: Array.isArray(safe.fixes) ? safe.fixes : [],
+          fixes: Array.isArray(safe.fixes) ? safe.fixes.map((fix) => normalizeDefinitionWithTags(fix, true)) : [],
           robotTypes: Array.isArray(safe.robotTypes) ? safe.robotTypes : [],
         };
       }
@@ -540,6 +558,43 @@ export function createRecorderFeature(context, maybeEnv) {
           out.push(normalized);
         });
       return out;
+      }
+
+  function normalizeTagList(values, options = {}) {
+        const ownerDefault = options.ownerDefault === true;
+        const list = Array.isArray(values)
+          ? values
+          : typeof values === 'string'
+            ? values.split(/[\n,]+/g)
+            : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((item) => {
+          const normalized = normalizeText(item, '').toLowerCase();
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          out.push(normalized);
+        });
+        if (ownerDefault && !out.length) {
+          return ['global'];
+        }
+        return out;
+      }
+
+  function parseTagInput(inputElement, options = {}) {
+        if (!inputElement) {
+          return options.ownerDefault ? ['global'] : [];
+        }
+        return normalizeTagList(inputElement.value, options);
+      }
+
+  function formatTagInputValue(tags, options = {}) {
+        const hideGlobalDefault = options.hideGlobalDefault !== false;
+        const normalized = normalizeTagList(tags, { ownerDefault: options.ownerDefault === true });
+        if (hideGlobalDefault && normalized.length === 1 && normalized[0] === 'global') {
+          return '';
+        }
+        return normalized.join(', ');
       }
 
   function resolveCheckRunAtConnection(check, fallback = true) {
@@ -940,6 +995,12 @@ export function createRecorderFeature(context, maybeEnv) {
         if (recorderRunAtConnectionInput) {
           recorderRunAtConnectionInput.checked = true;
         }
+        if (recorderOwnerTagsInput) {
+          recorderOwnerTagsInput.value = '';
+        }
+        if (recorderPlatformTagsInput) {
+          recorderPlatformTagsInput.value = '';
+        }
         clearRecorderOutputForm();
         clearRecorderReadForm();
         clearCheckedMappings(recorderRobotTypeTargets);
@@ -1027,6 +1088,40 @@ export function createRecorderFeature(context, maybeEnv) {
   function toggleRecorderJsonHelp() {
         const expanded = recorderJsonHelpButton?.getAttribute('aria-expanded') === 'true';
         setRecorderJsonHelpExpanded(!expanded);
+      }
+
+  function setAssignmentHelpExpanded(button, panel, expanded) {
+        if (!button || !panel) return;
+        const open = Boolean(expanded);
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        panel.classList.toggle('hidden', !open);
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+
+  function initAssignmentHelpButtons() {
+        if (typeof document === 'undefined' || !document?.querySelectorAll) return;
+        const buttons = Array.from(document.querySelectorAll('.assignment-help-button[data-help-target]'));
+        const pairs = buttons.map((button) => {
+          const targetId = normalizeText(button?.dataset?.helpTarget, '');
+          const panel = targetId && document.getElementById ? document.getElementById(targetId) : null;
+          if (!panel) return null;
+          setAssignmentHelpExpanded(button, panel, false);
+          return { button, panel };
+        }).filter(Boolean);
+
+        pairs.forEach(({ button, panel }) => {
+          if (button.dataset.assignmentHelpBound === 'true') return;
+          button.dataset.assignmentHelpBound = 'true';
+          button.addEventListener('click', () => {
+            const isOpen = button.getAttribute('aria-expanded') === 'true';
+            pairs.forEach((pair) => {
+              if (pair.button !== button) {
+                setAssignmentHelpExpanded(pair.button, pair.panel, false);
+              }
+            });
+            setAssignmentHelpExpanded(button, panel, !isOpen);
+          });
+        });
       }
 
   function buildRecorderLlmRobotContext() {
@@ -1452,6 +1547,19 @@ export function createRecorderFeature(context, maybeEnv) {
         return `${checkCount} check(s)`;
       }
 
+  function buildManageDefinitionTagChips(definition = {}) {
+        const ownerTags = normalizeTagList(definition?.ownerTags, { ownerDefault: true });
+        const platformTags = normalizeTagList(definition?.platformTags);
+        const chips = [];
+        ownerTags.forEach((tag) => {
+          chips.push({ tone: 'owner', label: `owner:${tag}` });
+        });
+        platformTags.forEach((tag) => {
+          chips.push({ tone: 'platform', label: `platform:${tag}` });
+        });
+        return chips;
+      }
+
   function renderManageDefinitionRow(item) {
         const definition = item?.definition || {};
         const id = normalizeText(definition?.id, '');
@@ -1482,6 +1590,18 @@ export function createRecorderFeature(context, maybeEnv) {
         meta.textContent = `${id} • ${buildManageDefinitionMeta({ kind, definition })}`;
 
         summary.append(titleRow, meta);
+        const tagChips = buildManageDefinitionTagChips(definition);
+        if (tagChips.length) {
+          const tagsNode = document.createElement('div');
+          tagsNode.className = 'manage-definition-tags';
+          tagChips.forEach((tagChip) => {
+            const chip = document.createElement('span');
+            chip.className = `tag-chip ${tagChip.tone}`;
+            chip.textContent = tagChip.label;
+            tagsNode.appendChild(chip);
+          });
+          summary.appendChild(tagsNode);
+        }
 
         const actions = document.createElement('div');
         actions.className = 'manage-definition-actions';
@@ -1724,6 +1844,8 @@ export function createRecorderFeature(context, maybeEnv) {
             description: normalizeText(existingTestDefinition?.description, ''),
             mode: 'orchestrate',
             enabled: true,
+            ownerTags: parseTagInput(manageTestOwnerTagsInput || recorderOwnerTagsInput),
+            platformTags: parseTagInput(manageTestPlatformTagsInput || recorderPlatformTagsInput),
             execute,
             checks,
           };
@@ -1792,6 +1914,8 @@ export function createRecorderFeature(context, maybeEnv) {
             if (recorderDefinitionIdInput) recorderDefinitionIdInput.value = '';
             if (recorderDefinitionLabelInput) recorderDefinitionLabelInput.value = '';
             if (recorderDefinitionDescriptionInput) recorderDefinitionDescriptionInput.value = '';
+            if (recorderOwnerTagsInput) recorderOwnerTagsInput.value = '';
+            if (recorderPlatformTagsInput) recorderPlatformTagsInput.value = '';
             renderRecorderRobotTypeTargets();
           }
           if (manageTestIdInput && normalizeText(manageTestIdInput.value, '') === testId) manageTestIdInput.value = '';
@@ -1799,6 +1923,8 @@ export function createRecorderFeature(context, maybeEnv) {
           if (manageTestExecuteJsonInput) manageTestExecuteJsonInput.value = '';
           if (manageTestChecksJsonInput) manageTestChecksJsonInput.value = '';
           if (manageTestRunAtConnectionInput) manageTestRunAtConnectionInput.checked = true;
+          if (manageTestOwnerTagsInput) manageTestOwnerTagsInput.value = '';
+          if (manageTestPlatformTagsInput) manageTestPlatformTagsInput.value = '';
           if (manageTestRobotTypeTargets) manageTestRobotTypeTargets.replaceChildren();
           if (manageDeleteTestButton) manageDeleteTestButton.style.display = 'none';
           setManageEditorStatus(manageTestEditorStatus, `Deleted test definition '${testId}'.`, 'ok');
@@ -1863,6 +1989,8 @@ export function createRecorderFeature(context, maybeEnv) {
             description: normalizeText(manageFixDescriptionInput?.value, ''),
             enabled: true,
             runAtConnection: Boolean(manageFixRunAtConnectionInput?.checked),
+            ownerTags: parseTagInput(manageFixOwnerTagsInput),
+            platformTags: parseTagInput(manageFixPlatformTagsInput),
             execute,
           };
           const response = await fetch(buildApiUrl('/api/definitions/fixes'), {
@@ -1929,6 +2057,8 @@ export function createRecorderFeature(context, maybeEnv) {
           if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
           if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
           if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
+          if (manageFixOwnerTagsInput) manageFixOwnerTagsInput.value = '';
+          if (manageFixPlatformTagsInput) manageFixPlatformTagsInput.value = '';
           if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
           if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
           setManageEditorStatus(manageFixEditorStatus, `Deleted fix definition '${fixId}'.`, 'ok');
@@ -2016,6 +2146,8 @@ export function createRecorderFeature(context, maybeEnv) {
         if (manageFixDescriptionInput) manageFixDescriptionInput.value = '';
         if (manageFixExecuteJsonInput) manageFixExecuteJsonInput.value = '';
         if (manageFixRunAtConnectionInput) manageFixRunAtConnectionInput.checked = false;
+        if (manageFixOwnerTagsInput) manageFixOwnerTagsInput.value = '';
+        if (manageFixPlatformTagsInput) manageFixPlatformTagsInput.value = '';
         if (manageFixRobotTypeTargets) manageFixRobotTypeTargets.replaceChildren();
         if (manageDeleteFixButton) manageDeleteFixButton.style.display = 'none';
         setManageEditorStatus(manageFixEditorStatus, '', '');
@@ -2116,6 +2248,15 @@ export function createRecorderFeature(context, maybeEnv) {
           const uniform = inferUniformRunAtConnection(Array.isArray(testDefinition?.checks) ? testDefinition.checks : [], true);
           recorderRunAtConnectionInput.checked = uniform !== null ? uniform : true;
         }
+        if (recorderOwnerTagsInput) {
+          recorderOwnerTagsInput.value = formatTagInputValue(testDefinition?.ownerTags, {
+            ownerDefault: true,
+            hideGlobalDefault: true,
+          });
+        }
+        if (recorderPlatformTagsInput) {
+          recorderPlatformTagsInput.value = formatTagInputValue(testDefinition?.platformTags);
+        }
         renderRecorderRobotTypeTargets();
         setActiveManageTab('recorder', { syncHash: true, persist: true });
         if (normalizeRecorderMode(state.recorderMode) === 'simple') {
@@ -2154,6 +2295,15 @@ export function createRecorderFeature(context, maybeEnv) {
         }
         if (manageFixRunAtConnectionInput) {
           manageFixRunAtConnectionInput.checked = Boolean(fixDefinition?.runAtConnection);
+        }
+        if (manageFixOwnerTagsInput) {
+          manageFixOwnerTagsInput.value = formatTagInputValue(fixDefinition?.ownerTags, {
+            ownerDefault: true,
+            hideGlobalDefault: true,
+          });
+        }
+        if (manageFixPlatformTagsInput) {
+          manageFixPlatformTagsInput.value = formatTagInputValue(fixDefinition?.platformTags);
         }
         renderFixRobotTypeTargets(nextId);
         if (duplicate) {
@@ -2617,6 +2767,8 @@ export function createRecorderFeature(context, maybeEnv) {
             definition.checks,
             getRecorderRunAtConnectionDefault(),
           );
+          definition.ownerTags = parseTagInput(recorderOwnerTagsInput);
+          definition.platformTags = parseTagInput(recorderPlatformTagsInput);
   
           const response = await fetch(buildApiUrl('/api/definitions/tests'), {
             method: 'POST',
@@ -3001,6 +3153,7 @@ export function createRecorderFeature(context, maybeEnv) {
         clearRecorderReadForm();
         setRecorderLlmHelpExpanded(false);
         setRecorderJsonHelpExpanded(false);
+        initAssignmentHelpButtons();
         resetRecorderLlmImportState({ clearInput: true });
         if (recorderLlmPromptPreview) recorderLlmPromptPreview.value = '';
         setRecorderLlmStatus(recorderLlmPromptStatus, '', '');
@@ -3014,7 +3167,31 @@ export function createRecorderFeature(context, maybeEnv) {
         state.filter.name = $('#searchName').value;
         state.filter.type = filterType.value;
         state.filter.error = filterError.value;
+        const activeOwnerProfile = normalizeText(filterActiveOwner?.value, '').toLowerCase();
+        const selectedOwnerTags = filterOwnerTags
+          ? Array.from(filterOwnerTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
+          : [];
+        state.filter.ownerTags = selectedOwnerTags.length
+          ? selectedOwnerTags
+          : (activeOwnerProfile ? [activeOwnerProfile] : []);
+        state.filter.platformTags = filterPlatformTags
+          ? Array.from(filterPlatformTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
+          : [];
+        state.filter.activeOwnerProfile = activeOwnerProfile;
+        try {
+          if (ACTIVE_OWNER_PROFILE_STORAGE_KEY) {
+            window?.localStorage?.setItem(ACTIVE_OWNER_PROFILE_STORAGE_KEY, state.filter.activeOwnerProfile);
+          }
+        } catch (_error) {
+          // Ignore localStorage write failures and keep runtime state in-memory.
+        }
         renderDashboard();
+        if (detail?.classList?.contains?.('active') && state.detailRobotId) {
+          const activeRobot = getRobotById(state.detailRobotId);
+          if (activeRobot) {
+            renderDetail(activeRobot);
+          }
+        }
       }
 
   return {

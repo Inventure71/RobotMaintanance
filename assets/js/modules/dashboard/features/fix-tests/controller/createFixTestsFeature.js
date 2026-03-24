@@ -246,6 +246,7 @@ export function createFixTestsFeature(context, maybeEnv) {
   const getRobotById = (...args) => runtime.getRobotById(...args);
   const getRobotDefinitionsForType = (...args) => runtime.getRobotDefinitionsForType(...args);
   const getRobotTypeConfig = (...args) => runtime.getRobotTypeConfig(...args);
+  const getDefinitionTagMeta = (...args) => runtime.getDefinitionTagMeta(...args);
   const hasMixedRobotTypesForIds = (...args) => runtime.hasMixedRobotTypesForIds(...args);
   const getRunSelectedButtonIdleLabel = (...args) => runtime.getRunSelectedButtonIdleLabel(...args);
   const getSelectedMappingTypeIds = (...args) => runtime.getSelectedMappingTypeIds(...args);
@@ -291,6 +292,8 @@ export function createFixTestsFeature(context, maybeEnv) {
   const normalizeCountdownMs = (...args) => runtime.normalizeCountdownMs(...args);
   const normalizeDefinitionsSummary = (...args) => runtime.normalizeDefinitionsSummary(...args);
   const normalizeIdList = (...args) => runtime.normalizeIdList(...args);
+  const normalizeOwnerTags = (...args) => runtime.normalizeOwnerTags(...args);
+  const normalizePlatformTags = (...args) => runtime.normalizePlatformTags(...args);
   const normalizeManageTab = (...args) => runtime.normalizeManageTab(...args);
   const normalizePossibleResult = (...args) => runtime.normalizePossibleResult(...args);
   const normalizeRobotActivity = (...args) => runtime.normalizeRobotActivity(...args);
@@ -398,6 +401,7 @@ export function createFixTestsFeature(context, maybeEnv) {
   const updateOnlineCheckEstimateFromResults = (...args) => runtime.updateOnlineCheckEstimateFromResults(...args);
   const updateSelectionSummary = (...args) => runtime.updateSelectionSummary(...args);
   const updateTestMappings = (...args) => runtime.updateTestMappings(...args);
+  const matchesDefinitionFilters = (...args) => runtime.matchesDefinitionFilters(...args);
 
   function setModelContainerFaultClasses(modelContainer, robot, isOffline, includeDetailClass = false) {
         if (!modelContainer) return;
@@ -786,6 +790,8 @@ export function createFixTestsFeature(context, maybeEnv) {
           const typeLabel = normalizeText(robot.type, normalizeText(robot.typeId, 'Unknown type'));
           const typeKey = normalizeTypeId(robot.typeId || typeLabel || '');
           getAutoFixesForType(robot.typeId).forEach((fix) => {
+            if (!fixMatchesDefinitionFilters(fix, fix)) return;
+            const tagMeta = getDefinitionTagMeta(fix, fix);
             const key = `${typeKey}:${fix.id}`;
             if (!byKey.has(key)) {
               byKey.set(key, {
@@ -793,6 +799,8 @@ export function createFixTestsFeature(context, maybeEnv) {
                   id: fix.id,
                   label: fix.label,
                   description: fix.description,
+                ownerTags: getFixOwnerTags(tagMeta?.ownerTags),
+                platformTags: getFixPlatformTags(tagMeta?.platformTags),
                 typeLabel,
                 robotIds: [],
               });
@@ -816,14 +824,21 @@ export function createFixTestsFeature(context, maybeEnv) {
         if (!robot) {
           return { robot: null, candidates: [] };
         }
-        const candidates = getAutoFixesForType(robot.typeId).map((fix) => ({
-          key: `${normalizeTypeId(robot.typeId)}:${fix.id}`,
-          id: fix.id,
-          label: fix.label,
-          description: fix.description,
-          typeLabel: robot.type,
-          robotIds: [robotId(robot)],
-        }));
+        const candidates = getAutoFixesForType(robot.typeId)
+          .filter((fix) => fixMatchesDefinitionFilters(fix, fix))
+          .map((fix) => {
+            const tagMeta = getDefinitionTagMeta(fix, fix);
+            return {
+              key: `${normalizeTypeId(robot.typeId)}:${fix.id}`,
+              id: fix.id,
+              label: fix.label,
+              description: fix.description,
+              ownerTags: getFixOwnerTags(tagMeta?.ownerTags),
+              platformTags: getFixPlatformTags(tagMeta?.platformTags),
+              typeLabel: robot.type,
+              robotIds: [robotId(robot)],
+            };
+          });
         return { robot, candidates };
       }
 
@@ -847,6 +862,49 @@ export function createFixTestsFeature(context, maybeEnv) {
           return `${candidate.label}${countLabel}`;
         }
         return `${candidate.label} • ${candidate.typeLabel}${countLabel}`;
+      }
+
+  function fixMatchesDefinitionFilters(definition, fallback = {}) {
+        const match = matchesDefinitionFilters(definition, fallback);
+        if (typeof match === 'boolean') return match;
+        return true;
+      }
+
+  function getFixOwnerTags(rawTags) {
+        const normalized = normalizeOwnerTags(rawTags);
+        if (Array.isArray(normalized) && normalized.length) return normalized;
+        return ['global'];
+      }
+
+  function getFixPlatformTags(rawTags) {
+        const normalized = normalizePlatformTags(rawTags);
+        if (Array.isArray(normalized)) return normalized;
+        return [];
+      }
+
+  function buildFixCandidateTagChips(candidate) {
+        const chips = [];
+        getFixOwnerTags(candidate?.ownerTags).forEach((tag) => {
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip owner';
+          chip.textContent = `owner:${tag}`;
+          chips.push(chip);
+        });
+        return chips;
+      }
+
+  function buildFixCandidateActionNode(candidate, actionButton) {
+        const entry = document.createElement('div');
+        entry.className = 'fix-candidate-entry';
+        entry.appendChild(actionButton);
+        const chips = buildFixCandidateTagChips(candidate);
+        if (chips.length) {
+          const chipsWrap = document.createElement('div');
+          chipsWrap.className = 'fix-candidate-tag-chips';
+          chips.forEach((chip) => chipsWrap.appendChild(chip));
+          entry.appendChild(chipsWrap);
+        }
+        return entry;
       }
 
   async function runAutoFixForRobot(robot, candidate) {
@@ -1108,7 +1166,7 @@ export function createFixTestsFeature(context, maybeEnv) {
             button.addEventListener('click', () => {
               runAutoFixCandidate(context, candidate);
             });
-            elements.actions.appendChild(button);
+            elements.actions.appendChild(buildFixCandidateActionNode(candidate, button));
           });
           return;
         }
@@ -1161,7 +1219,7 @@ export function createFixTestsFeature(context, maybeEnv) {
           button.addEventListener('click', () => {
             runAutoFixCandidate(context, candidate);
           });
-          elements.actions.appendChild(button);
+          elements.actions.appendChild(buildFixCandidateActionNode(candidate, button));
         });
       }
 

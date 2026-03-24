@@ -391,20 +391,204 @@ export function createFleetFeature(context, maybeEnv) {
         return Object.entries(robot?.tests || {}).filter(([testId]) => normalizeText(testId, '').toLowerCase() !== 'battery');
       }
 
+  function normalizeTagList(raw) {
+        const list = Array.isArray(raw) ? raw : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((item) => {
+          const normalized = normalizeText(item, '').toLowerCase();
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          out.push(normalized);
+        });
+        return out;
+      }
+
+  function normalizeOwnerTags(raw) {
+        const tags = normalizeTagList(raw);
+        return tags.length ? tags : ['global'];
+      }
+
+  function normalizePlatformTags(raw) {
+        return normalizeTagList(raw);
+      }
+
+  function getActiveOwnerProfile() {
+        return normalizeText(state?.filter?.activeOwnerProfile, '').toLowerCase();
+      }
+
+  function getTestDefinitionForRobot(robot, testId) {
+        const normalizedId = normalizeText(testId, '');
+        const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
+        return definitions.find((definition) => normalizeText(definition?.id, '') === normalizedId) || null;
+      }
+
+  function getDefinitionTagMeta(definition = {}, fallback = {}) {
+        return {
+          ownerTags: normalizeOwnerTags(definition?.ownerTags ?? fallback?.ownerTags),
+          platformTags: normalizePlatformTags(definition?.platformTags ?? fallback?.platformTags),
+        };
+      }
+
+  function hasTagIntersection(candidateTags, selectedTags) {
+        if (!Array.isArray(selectedTags) || !selectedTags.length) return true;
+        const set = new Set(normalizeTagList(candidateTags));
+        return selectedTags.some((tag) => set.has(normalizeText(tag, '').toLowerCase()));
+      }
+
+  function matchesDefinitionFilters(definition = {}, fallback = {}) {
+        const { ownerTags, platformTags } = getDefinitionTagMeta(definition, fallback);
+        const selectedOwnerTags = normalizeTagList(state?.filter?.ownerTags);
+        const selectedPlatformTags = normalizeTagList(state?.filter?.platformTags);
+        const ownerSelection = selectedOwnerTags.length
+          ? Array.from(new Set([...selectedOwnerTags, 'global']))
+          : selectedOwnerTags;
+        const matchesOwner = hasTagIntersection(ownerTags, ownerSelection);
+        const matchesPlatform = hasTagIntersection(platformTags, selectedPlatformTags);
+        return matchesOwner && matchesPlatform;
+      }
+
+  function isUnknownResult(testResult) {
+        const source = normalizeText(testResult?.source, '');
+        const checkedAt = Number(testResult?.checkedAt);
+        const hasTimestamp = Number.isFinite(checkedAt) && checkedAt > 0;
+        const value = normalizeText(testResult?.value, '').toLowerCase();
+        const details = normalizeText(testResult?.details, '').toLowerCase();
+        const isDefaultDetail =
+          !details
+          || details === 'not checked yet'
+          || details === 'awaiting check result'
+          || details === 'backend populated test';
+        if (!value) return true;
+        if (value === 'unknown' && (isDefaultDetail || (!hasTimestamp && !source))) return true;
+        if (isDefaultDetail && (!hasTimestamp || !source)) return true;
+        return false;
+      }
+
+  function getScopedTestEntries(robot, options = {}) {
+        const scope = normalizeText(options.scope, 'all');
+        const activeOwner = normalizeText(options.activeOwner, getActiveOwnerProfile()).toLowerCase();
+        const entries = nonBatteryTestEntries(robot).map(([testId, testResult]) => {
+          const definition = getTestDefinitionForRobot(robot, testId);
+          const tags = getDefinitionTagMeta(definition, testResult);
+          return {
+            id: normalizeText(testId, ''),
+            result: testResult && typeof testResult === 'object' ? testResult : {},
+            definition,
+            ownerTags: tags.ownerTags,
+            platformTags: tags.platformTags,
+          };
+        });
+
+        return entries.filter((entry) => {
+          if (scope === 'global' && !entry.ownerTags.includes('global')) return false;
+          if (scope === 'active-user') {
+            if (!activeOwner) return false;
+            if (!entry.ownerTags.includes(activeOwner) && !entry.ownerTags.includes('global')) return false;
+          }
+          return matchesDefinitionFilters(
+            {
+              ownerTags: entry.ownerTags,
+              platformTags: entry.platformTags,
+            },
+            entry.result,
+          );
+        });
+      }
+
+  function computeAggregateState(entries) {
+        const scopedEntries = Array.isArray(entries) ? entries : [];
+        if (!scopedEntries.length) {
+          return {
+            state: 'unknown',
+            hasChecks: false,
+            passCount: 0,
+            failCount: 0,
+            unknownCount: 0,
+          };
+        }
+
+        const passCount = scopedEntries.reduce(
+          (total, entry) => (normalizeStatus(entry?.result?.status) === 'ok' ? total + 1 : total),
+          0,
+        );
+        const failCount = scopedEntries.length - passCount;
+        const unknownCount = scopedEntries.reduce(
+          (total, entry) => (isUnknownResult(entry?.result) ? total + 1 : total),
+          0,
+        );
+        if (unknownCount > 0) {
+          return {
+            state: 'unknown',
+            hasChecks: true,
+            passCount,
+            failCount,
+            unknownCount,
+          };
+        }
+        if (passCount === 0 && failCount > 0) {
+          return {
+            state: 'critical',
+            hasChecks: true,
+            passCount,
+            failCount,
+            unknownCount,
+          };
+        }
+        if (passCount > 0 && failCount > 0) {
+          return {
+            state: 'warning',
+            hasChecks: true,
+            passCount,
+            failCount,
+            unknownCount,
+          };
+        }
+        return {
+          state: 'ok',
+          hasChecks: true,
+          passCount,
+          failCount,
+          unknownCount,
+        };
+      }
+
+  function getRobotAggregate(robot, options = {}) {
+        const scopedEntries = getScopedTestEntries(robot, options);
+        const aggregate = computeAggregateState(scopedEntries);
+        return {
+          ...aggregate,
+          entries: scopedEntries,
+        };
+      }
+
+  function getGlobalAggregate(robot) {
+        return getRobotAggregate(robot, { scope: 'global' });
+      }
+
+  function getActiveUserAggregate(robot) {
+        const activeOwner = getActiveOwnerProfile();
+        const aggregate = getRobotAggregate(robot, {
+          scope: 'active-user',
+          activeOwner,
+        });
+        return {
+          ...aggregate,
+          activeOwner,
+          hasChecks: aggregate.hasChecks && !!activeOwner,
+        };
+      }
+
   function statusFromScore(robot) {
-        const statuses = nonBatteryTestEntries(robot).map(([, test]) => test.status);
-        const critical = statuses.some((x) => x === 'error');
-        const warning = statuses.some((x) => x === 'warning');
-        if (critical) return 'critical';
-        if (warning) return 'warning';
-        return 'ok';
+        return getGlobalAggregate(robot).state;
       }
 
   function statusSortRank(robot) {
         const status = statusFromScore(robot);
         if (status === 'critical') return 0;
         if (status === 'warning') return 1;
-        return 2;
+        if (status === 'unknown') return 2;
+        return 3;
       }
 
   function onlineRobotComparator(a, b) {
@@ -1381,6 +1565,8 @@ export function createFleetFeature(context, maybeEnv) {
         const roleAttr = role ? ` data-role="${role}"` : '';
         if (status === 'critical') return `<span class="status-chip err"${roleAttr}>Critical</span>`;
         if (status === 'warning') return `<span class="status-chip warn"${roleAttr}>Warning</span>`;
+        if (status === 'unknown') return `<span class="status-chip neutral"${roleAttr}>Unknown</span>`;
+        if (status === 'na') return `<span class="status-chip neutral"${roleAttr}>N/A</span>`;
         return `<span class="status-chip ok"${roleAttr}>Healthy</span>`;
       }
 
@@ -1443,12 +1629,13 @@ export function createFleetFeature(context, maybeEnv) {
           : `<div class="robot-3d ${failureClasses} ${isOffline ? 'offline' : ''}" data-role="robot-model-container">${modelMarkup}</div>`;
       }
 
-  function issueSummary(robot) {
-        const testDefinitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
-        return nonBatteryTestEntries(robot)
-          .filter(([, test]) => test.status !== 'ok')
+  function issueSummary(robot, options = {}) {
+        return getScopedTestEntries(robot, options)
+          .filter((entry) => normalizeStatus(entry?.result?.status) !== 'ok' && !isUnknownResult(entry?.result))
           .slice(0, 3)
-          .map(([id]) => getDefinitionLabel(testDefinitions, id));
+          .map((entry) =>
+            getDefinitionLabel(Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [], entry.id),
+          );
       }
 
   function groupRobotsByType(list = []) {
@@ -1516,7 +1703,11 @@ export function createFleetFeature(context, maybeEnv) {
       }
 
   function describeRobotCard(robot) {
-        const stateKey = statusFromScore(robot);
+        const globalAggregate = getGlobalAggregate(robot);
+        const activeUserAggregate = getActiveUserAggregate(robot);
+        const stateKey = globalAggregate.state;
+        const outerStateKey = activeUserAggregate.hasChecks ? activeUserAggregate.state : 'na';
+        const innerStateKey = globalAggregate.state;
         const isCritical = stateKey === 'critical';
         const normalizedRobotId = robotId(robot);
         const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
@@ -1534,15 +1725,24 @@ export function createFleetFeature(context, maybeEnv) {
           isFixing,
           compactAutoSearch,
         });
-        const issues = issueSummary(robot);
+        const issues = issueSummary(robot, { scope: 'global' });
         const badgeMarkup = issues.map((issue) => `<span class="error-badge">${issue}</span>`).join('');
-        const failureClasses = nonBatteryTestEntries(robot)
-          .filter(([, test]) => test.status !== 'ok')
-          .map(([id]) => `fault-${id}`)
+        const failureClasses = globalAggregate.entries
+          .filter((entry) => normalizeStatus(entry?.result?.status) !== 'ok' && !isUnknownResult(entry?.result))
+          .map((entry) => `fault-${entry.id}`)
           .join(' ');
+        const activeOwnerProfile = normalizeText(activeUserAggregate.activeOwner, '');
+        const userScopeLabel = activeOwnerProfile
+          ? `User(${activeOwnerProfile}): ${getStatusChipTone(outerStateKey).text}`
+          : 'User: N/A';
 
         return {
           stateKey,
+          outerStateKey,
+          innerStateKey,
+          outerStateClass: `outer-state-${outerStateKey}`,
+          outerVisibilityClass: activeOwnerProfile ? '' : 'outer-scope-hidden',
+          innerStateClass: `inner-state-${innerStateKey}`,
           isCritical,
           normalizedRobotId,
           isOffline,
@@ -1560,6 +1760,7 @@ export function createFleetFeature(context, maybeEnv) {
           title: robot.name,
           subtitle: robot.type,
           issueSummaryText: issues.join(', ') || 'No active errors',
+          userScopeLabel,
           batteryState: getRobotBatteryState(robot),
           lastFullTestLabel: buildLastFullTestPillLabel(robot),
         };
@@ -1694,6 +1895,9 @@ export function createFleetFeature(context, maybeEnv) {
           'robot-card',
           descriptor.isCritical ? 'error' : '',
           descriptor.stateClass,
+          descriptor.outerStateClass,
+          descriptor.outerVisibilityClass,
+          descriptor.innerStateClass,
           descriptor.selected ? 'selected' : '',
           descriptor.isTesting || descriptor.isSearching || descriptor.isFixing ? 'testing' : '',
           descriptor.isOffline ? 'offline' : '',
@@ -1723,6 +1927,11 @@ export function createFleetFeature(context, maybeEnv) {
         const issuesPill = card.querySelector('[data-role="issues-pill"]');
         if (issuesPill) {
           issuesPill.textContent = `Issue cluster: ${descriptor.issueSummaryText}`;
+        }
+
+        const userScopePill = card.querySelector('[data-role="user-scope-pill"]');
+        if (userScopePill) {
+          userScopePill.textContent = descriptor.userScopeLabel;
         }
 
         const movementPill = card.querySelector('[data-role="movement-pill"]');
@@ -1798,12 +2007,23 @@ export function createFleetFeature(context, maybeEnv) {
   function renderCard(robot) {
         const descriptor = describeRobotCard(robot);
         const card = document.createElement('article');
-        card.className = ['robot-card', descriptor.isCritical ? 'error' : '', descriptor.stateClass, descriptor.selected ? 'selected' : '', descriptor.isTesting || descriptor.isSearching || descriptor.isFixing ? 'testing' : '', descriptor.isOffline ? 'offline' : '']
+        card.className = [
+          'robot-card',
+          descriptor.isCritical ? 'error' : '',
+          descriptor.stateClass,
+          descriptor.outerStateClass,
+          descriptor.outerVisibilityClass,
+          descriptor.innerStateClass,
+          descriptor.selected ? 'selected' : '',
+          descriptor.isTesting || descriptor.isSearching || descriptor.isFixing ? 'testing' : '',
+          descriptor.isOffline ? 'offline' : '',
+        ]
           .filter(Boolean)
           .join(' ');
         card.setAttribute('data-robot-id', descriptor.normalizedRobotId);
   
         card.innerHTML = `
+          <div class="robot-card-inner-border" aria-hidden="true"></div>
           <div class="glow-bar"></div>
           <div class="robot-card-header">
             <div>
@@ -1833,6 +2053,7 @@ export function createFleetFeature(context, maybeEnv) {
           </div>
           <div class="summary">
             <span class="pill" data-role="issues-pill">Issue cluster: ${descriptor.issueSummaryText}</span>
+            <span class="pill" data-role="user-scope-pill">${descriptor.userScopeLabel}</span>
             <span class="pill" data-role="movement-pill">Movement: ${robot.tests.movement?.value || 'n/a'}</span>
             <span class="pill" data-role="last-full-test-pill">${descriptor.lastFullTestLabel}</span>
             <span data-role="summary-battery-pill">${renderBatteryPill({
@@ -1874,15 +2095,22 @@ export function createFleetFeature(context, maybeEnv) {
             matchesError = stateKey === 'warning';
           } else if (state.filter.error === 'critical') {
             matchesError = stateKey === 'critical';
+          } else if (state.filter.error === 'unknown') {
+            matchesError = stateKey === 'unknown';
           } else if (state.filter.error === 'error') {
             matchesError = stateKey !== 'ok';
           } else if (state.filter.error !== 'all') {
-            const def = state.filter.error;
-            matchesError = Object.keys(robot.tests).some(
-              (k) => k === def && robot.tests[k].status !== 'ok',
-            );
+            const definitionId = normalizeText(state.filter.error, '');
+            const scopedEntry = getScopedTestEntries(robot, { scope: 'all' })
+              .find((entry) => entry.id === definitionId);
+            if (!scopedEntry) {
+              matchesError = false;
+            } else {
+              matchesError = isUnknownResult(scopedEntry.result)
+                || normalizeStatus(scopedEntry?.result?.status) !== 'ok';
+            }
           }
-  
+
           return matchesName && matchesType && matchesError;
         });
       }
@@ -1891,9 +2119,12 @@ export function createFleetFeature(context, maybeEnv) {
         const healthy = list.filter((r) => statusFromScore(r) === 'ok').length;
         const warning = list.filter((r) => statusFromScore(r) === 'warning').length;
         const critical = list.filter((r) => statusFromScore(r) === 'critical').length;
+        const unknown = list.filter((r) => statusFromScore(r) === 'unknown').length;
         $('#kpiHealthy').textContent = healthy;
         $('#kpiWarn').textContent = warning;
         $('#kpiCritical').textContent = critical;
+        const unknownNode = $('#kpiUnknown');
+        if (unknownNode) unknownNode.textContent = unknown;
       }
 
   function renderDashboard() {
@@ -1945,6 +2176,8 @@ export function createFleetFeature(context, maybeEnv) {
   function getStatusChipTone(statusKey) {
         if (statusKey === 'critical') return { css: 'err', text: 'Critical' };
         if (statusKey === 'warning') return { css: 'warn', text: 'Warning' };
+        if (statusKey === 'unknown') return { css: 'neutral', text: 'Unknown' };
+        if (statusKey === 'na') return { css: 'neutral', text: 'N/A' };
         return { css: 'ok', text: 'Healthy' };
       }
 
@@ -1963,6 +2196,20 @@ export function createFleetFeature(context, maybeEnv) {
     normalizeBatteryPercentForSort,
     getRobotBatteryState,
     nonBatteryTestEntries,
+    normalizeTagList,
+    normalizeOwnerTags,
+    normalizePlatformTags,
+    getActiveOwnerProfile,
+    getTestDefinitionForRobot,
+    getDefinitionTagMeta,
+    hasTagIntersection,
+    matchesDefinitionFilters,
+    isUnknownResult,
+    getScopedTestEntries,
+    computeAggregateState,
+    getRobotAggregate,
+    getGlobalAggregate,
+    getActiveUserAggregate,
     statusFromScore,
     statusSortRank,
     onlineRobotComparator,

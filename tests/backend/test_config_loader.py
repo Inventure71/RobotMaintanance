@@ -47,6 +47,8 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
         json.dumps(
             {
                 "id": "topics_snapshot",
+                "ownerTags": ["GLOBAL", "Alice", "alice"],
+                "platformTags": ["ROS2", "ros2", "Interbotix"],
                 "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
                 "checks": [
                     {
@@ -70,6 +72,8 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
         json.dumps(
             {
                 "id": "flash_fix",
+                "ownerTags": ["GLOBAL", "bob"],
+                "platformTags": ["ROS2", "interbotix"],
                 "execute": [{"id": "down", "command": "echo down"}],
             }
         ),
@@ -85,6 +89,12 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
     assert "topics_snapshot" in catalog.test_definitions_by_id
     assert "battery" in catalog.check_definitions_by_id
     assert "flash_fix" in catalog.fix_definitions_by_id
+    assert catalog.test_definitions_by_id["topics_snapshot"]["ownerTags"] == ["global", "alice"]
+    assert catalog.test_definitions_by_id["topics_snapshot"]["platformTags"] == ["ros2", "interbotix"]
+    assert catalog.check_definitions_by_id["battery"]["ownerTags"] == ["global", "alice"]
+    assert catalog.check_definitions_by_id["battery"]["platformTags"] == ["ros2", "interbotix"]
+    assert catalog.fix_definitions_by_id["flash_fix"]["ownerTags"] == ["global", "bob"]
+    assert catalog.fix_definitions_by_id["flash_fix"]["platformTags"] == ["ros2", "interbotix"]
     assert catalog.fix_definitions_by_id["flash_fix"]["runAtConnection"] is False
     assert "postTestIds" not in catalog.fix_definitions_by_id["flash_fix"]
 
@@ -96,11 +106,29 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
             "name": "Rosbot 2 Pro",
             "testRefs": ["online"],
             "fixRefs": ["flash_fix"],
-            "testOverrides": {"online": {"enabled": True}},
+            "testOverrides": {
+                "online": {
+                    "enabled": True,
+                    "ownerTags": ["Bob", "bob"],
+                    "platformTags": ["ROS1", "ros1"],
+                }
+            },
+            "fixOverrides": {
+                "flash_fix": {
+                    "ownerTags": ["", "Alice", "alice"],
+                    "platformTags": ["INTERBOTIX", "interbotix"],
+                }
+            },
         }
     ]
     test_definitions = {
-        "online_probe": {"id": "online_probe", "mode": "online_probe", "checks": [{"id": "online"}]}
+        "online_probe": {
+            "id": "online_probe",
+            "mode": "online_probe",
+            "ownerTags": ["GLOBAL", "owner_default"],
+            "platformTags": ["ROS2"],
+            "checks": [{"id": "online"}],
+        }
     }
     check_definitions = {
         "online": {
@@ -122,6 +150,8 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
             "description": "desc",
             "enabled": True,
             "runAtConnection": True,
+            "ownerTags": [],
+            "platformTags": ["ROS2"],
             "execute": [{"id": "down", "command": "echo down"}],
             "params": {},
         }
@@ -131,7 +161,11 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
     assert "rosbot-2-pro" in normalized
     assert normalized["rosbot-2-pro"]["typeId"] == "ROSBOT-2-PRO"
     assert [item["id"] for item in normalized["rosbot-2-pro"]["tests"]] == ["online"]
+    assert normalized["rosbot-2-pro"]["tests"][0]["ownerTags"] == ["bob"]
+    assert normalized["rosbot-2-pro"]["tests"][0]["platformTags"] == ["ros1"]
     assert [item["id"] for item in normalized["rosbot-2-pro"]["autoFixes"]] == ["flash_fix"]
+    assert normalized["rosbot-2-pro"]["autoFixes"][0]["ownerTags"] == ["alice"]
+    assert normalized["rosbot-2-pro"]["autoFixes"][0]["platformTags"] == ["interbotix"]
     assert normalized["rosbot-2-pro"]["autoFixes"][0]["runAtConnection"] is True
     assert "postTestIds" not in normalized["rosbot-2-pro"]["autoFixes"][0]
 
@@ -164,6 +198,49 @@ def test_normalize_robot_types_keeps_auto_monitor_battery_command():
     }
     normalized = normalize_robot_types(raw_types, test_definitions, check_definitions, {})
     assert normalized["rosbot-2-pro"]["autoMonitor"]["batteryCommand"] == "custom battery command"
+
+
+def test_normalize_robot_types_defaults_empty_owner_tags_to_global():
+    raw_types = [
+        {
+            "id": "rosbot-2-pro",
+            "name": "Rosbot 2 Pro",
+            "testRefs": ["online"],
+            "fixRefs": ["flash_fix"],
+        }
+    ]
+    test_definitions = {
+        "online_probe": {"id": "online_probe", "mode": "online_probe", "ownerTags": [], "checks": [{"id": "online"}]}
+    }
+    check_definitions = {
+        "online": {
+            "id": "online",
+            "definitionId": "online_probe",
+            "label": "Online",
+            "defaultStatus": "warning",
+            "defaultValue": "unknown",
+            "defaultDetails": "Not checked yet",
+            "manualOnly": True,
+            "runAtConnection": True,
+            "enabled": True,
+        }
+    }
+    fix_definitions = {
+        "flash_fix": {
+            "id": "flash_fix",
+            "label": "Flash fix",
+            "description": "",
+            "enabled": True,
+            "runAtConnection": False,
+            "ownerTags": [],
+            "execute": [{"id": "noop", "command": "echo noop"}],
+            "params": {},
+        }
+    }
+
+    normalized = normalize_robot_types(raw_types, test_definitions, check_definitions, fix_definitions)
+    assert normalized["rosbot-2-pro"]["tests"][0]["ownerTags"] == ["global"]
+    assert normalized["rosbot-2-pro"]["autoFixes"][0]["ownerTags"] == ["global"]
 
 
 def test_normalize_robot_types_raises_on_unknown_references():

@@ -241,6 +241,77 @@ def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
     assert saved_fix["runAtConnection"] is True
 
 
+def test_definition_routes_normalize_owner_and_platform_tags(tmp_path: Path):
+    client, _ = _build_client(tmp_path)
+    test_response = client.post(
+        "/api/definitions/tests",
+        json={
+            "id": "tagged_snapshot",
+            "label": "Tagged Snapshot",
+            "description": "Tagged test definition",
+            "enabled": True,
+            "mode": "orchestrate",
+            "ownerTags": [" GLOBAL ", "Alice", "alice"],
+            "platformTags": [" ROS2 ", "Interbotix", "ros2"],
+            "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "tagged_camera",
+                    "label": "Camera",
+                    "icon": "📷",
+                    "manualOnly": True,
+                    "runAtConnection": True,
+                    "enabled": True,
+                    "defaultStatus": "warning",
+                    "defaultValue": "unknown",
+                    "defaultDetails": "Not checked yet",
+                    "read": {
+                        "kind": "contains_lines_unordered",
+                        "inputRef": "topics_raw",
+                        "lines": ["/camera"],
+                        "requireAll": True,
+                    },
+                    "pass": {"status": "ok", "value": "present", "details": "found"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    )
+    assert test_response.status_code == 200
+
+    fix_response = client.post(
+        "/api/definitions/fixes",
+        json={
+            "id": "tagged_fix",
+            "label": "Tagged Fix",
+            "description": "Tagged fix definition",
+            "enabled": True,
+            "ownerTags": [" GLOBAL ", "bob", "Bob"],
+            "platformTags": [" ROS1 ", "ros1"],
+            "runAtConnection": False,
+            "execute": [{"id": "repair", "command": "echo repair"}],
+        },
+    )
+    assert fix_response.status_code == 200
+
+    saved_test = json.loads((tmp_path / "tests" / "tagged_snapshot.test.json").read_text(encoding="utf-8"))
+    assert saved_test["ownerTags"] == ["global", "alice"]
+    assert saved_test["platformTags"] == ["ros2", "interbotix"]
+
+    saved_fix = json.loads((tmp_path / "fixes" / "tagged_fix.fix.json").read_text(encoding="utf-8"))
+    assert saved_fix["ownerTags"] == ["global", "bob"]
+    assert saved_fix["platformTags"] == ["ros1"]
+
+    summary_response = client.get("/api/definitions/summary")
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    summary_test = next(item for item in summary.get("tests", []) if item.get("id") == "tagged_snapshot")
+    assert summary_test["ownerTags"] == ["global", "alice"]
+    assert summary_test["platformTags"] == ["ros2", "interbotix"]
+    summary_fix = next(item for item in summary.get("fixes", []) if item.get("id") == "tagged_fix")
+    assert summary_fix["ownerTags"] == ["global", "bob"]
+    assert summary_fix["platformTags"] == ["ros1"]
+
 def test_create_test_definition_accepts_all_of_read_kind(tmp_path: Path):
     client, _ = _build_client(tmp_path)
     response = client.post(

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from backend.normalization import (
+    normalize_owner_tags,
+    normalize_platform_tags,
     normalize_status,
+    normalize_tag_list,
     normalize_text,
     normalize_type_key,
     safe_float,
@@ -26,6 +29,21 @@ def test_normalize_status_falls_back_to_warning():
 
 def test_normalize_type_key_lowercases():
     assert normalize_type_key(" ROSBOT-2-PRO ") == "rosbot-2-pro"
+
+
+def test_normalize_tag_list_dedupes_and_lowercases():
+    assert normalize_tag_list([" ROS2 ", "ros2", "", "Interbotix"]) == ["ros2", "interbotix"]
+
+
+def test_normalize_owner_tags_defaults_to_global():
+    assert normalize_owner_tags([]) == ["global"]
+    assert normalize_owner_tags(None) == ["global"]
+    assert normalize_owner_tags([" Alice ", "alice"]) == ["alice"]
+
+
+def test_normalize_platform_tags_allows_empty_list():
+    assert normalize_platform_tags([]) == []
+    assert normalize_platform_tags([" ROS2 ", "ros2", ""]) == ["ros2"]
 
 
 def test_safe_number_parsers_fallback():

@@ -24,6 +24,10 @@
   border-left: 0.3rem solid var(--state-err) !important;
 }
 
+.kpi.neutral {
+  border-left: 0.3rem solid var(--surface-border-strong) !important;
+}
+
 :where(
   .swiss-chip,
   .status-chip,
@@ -103,22 +107,43 @@
 
 .robot-card.state-ok {
   background: rgba(15, 123, 69, 0.08) !important;
-  border-color: rgba(15, 123, 69, 0.42) !important;
 }
 
 .robot-card.state-warning {
   background: rgba(161, 92, 0, 0.1) !important;
-  border-color: rgba(161, 92, 0, 0.44) !important;
 }
 
 .robot-card.state-critical {
   background: rgba(170, 19, 40, 0.1) !important;
-  border-color: rgba(170, 19, 40, 0.44) !important;
 }
 
 .robot-card.state-offline {
   background: rgba(83, 83, 83, 0.12) !important;
-  border-color: rgba(77, 77, 77, 0.4) !important;
+}
+
+.robot-card.outer-state-ok {
+  border-color: rgba(15, 123, 69, 0.72) !important;
+}
+
+.robot-card.outer-state-warning {
+  border-color: rgba(161, 92, 0, 0.74) !important;
+}
+
+.robot-card.outer-state-critical {
+  border-color: rgba(170, 19, 40, 0.74) !important;
+}
+
+.robot-card.outer-state-unknown {
+  border-color: rgba(112, 120, 133, 0.68) !important;
+  border-style: dashed !important;
+}
+
+.robot-card.outer-state-na {
+  border-color: rgba(112, 120, 133, 0.68) !important;
+}
+
+.robot-card.outer-scope-hidden {
+  border-color: transparent !important;
 }
 
 .robot-card.selected,

@@ -300,6 +300,7 @@ function makeEnv() {
       testingCountdowns: new Map(),
       searchingRobotIds: new Set(),
       fixingRobotIds: new Set(),
+      filter: { name: '', type: 'all', error: 'all', ownerTags: [], platformTags: [], activeOwnerProfile: '' },
       fixModeOpen: { dashboard: false, detail: false },
     },
   };
@@ -388,8 +389,8 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
         type: 'Carrier',
         typeId: 'carrier',
         tests: {
-          online: { status: 'ok', value: 'reachable', details: 'up' },
-          movement: { status: 'ok', value: 'clear' },
+          online: { status: 'ok', value: 'reachable', details: 'up', source: 'manual', checkedAt: 100 },
+          movement: { status: 'ok', value: 'clear', source: 'manual', checkedAt: 101 },
         },
         battery: { value: '42%', status: 'ok', reason: '' },
         activity: {},
@@ -400,8 +401,8 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
         type: 'Inspector',
         typeId: 'inspector',
         tests: {
-          online: { status: 'ok', value: 'reachable', details: 'up' },
-          movement: { status: 'warning', value: 'slow' },
+          online: { status: 'ok', value: 'reachable', details: 'up', source: 'manual', checkedAt: 110 },
+          movement: { status: 'warning', value: 'slow', source: 'manual', checkedAt: 111 },
         },
         battery: { value: '58%', status: 'ok', reason: '' },
         activity: {},
@@ -412,8 +413,8 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
         type: 'Inspector',
         typeId: 'inspector',
         tests: {
-          online: { status: 'error', value: 'unreachable', details: 'down' },
-          movement: { status: 'ok', value: 'clear' },
+          online: { status: 'error', value: 'unreachable', details: 'down', source: 'manual', checkedAt: 120 },
+          movement: { status: 'ok', value: 'clear', source: 'manual', checkedAt: 121 },
         },
         battery: { value: '18%', status: 'warning', reason: '' },
         activity: {},
@@ -424,8 +425,8 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
         type: 'Carrier',
         typeId: 'carrier',
         tests: {
-          online: { status: 'warning', value: 'unknown', details: 'checking' },
-          movement: { status: 'ok', value: 'clear' },
+          online: { status: 'warning', value: 'unknown', details: 'checking', source: 'manual', checkedAt: 130 },
+          movement: { status: 'ok', value: 'clear', source: 'manual', checkedAt: 131 },
         },
         battery: { value: '21%', status: 'warning', reason: '' },
         activity: {},
@@ -440,24 +441,176 @@ test('renderDashboard inserts robot-type dividers in both online and offline fle
     assert.equal(env.onlineSectionTitle.textContent, 'Online (2)');
     assert.equal(env.offlineSectionTitle.textContent, 'Offline (2)');
 
-    assert.deepEqual(
-      env.onlineGrid.children.map((child) => normalizeClassName(child.className)),
-      ['robot-type-divider', 'robot-card state-ok', 'robot-type-divider', 'robot-card state-warning'],
-    );
+    assert.equal(normalizeClassName(env.onlineGrid.children[0].className), 'robot-type-divider');
+    assert.equal(normalizeClassName(env.onlineGrid.children[2].className), 'robot-type-divider');
+    assert.match(normalizeClassName(env.onlineGrid.children[1].className), /\brobot-card\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[1].className), /\bstate-ok\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[1].className), /\bouter-state-na\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[1].className), /\bouter-scope-hidden\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[1].className), /\binner-state-ok\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[3].className), /\brobot-card\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[3].className), /\bstate-warning\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[3].className), /\bouter-state-na\b/);
+    assert.match(normalizeClassName(env.onlineGrid.children[3].className), /\binner-state-warning\b/);
     assert.equal(env.onlineGrid.children[0].children[0].textContent, 'Carrier');
     assert.equal(env.onlineGrid.children[2].children[0].textContent, 'Inspector');
     assert.equal(env.onlineGrid.children[1].getAttribute('data-robot-id'), 'robot-online-b');
     assert.equal(env.onlineGrid.children[3].getAttribute('data-robot-id'), 'robot-online-a');
 
-    assert.deepEqual(
-      env.offlineGrid.children.map((child) => normalizeClassName(child.className)),
-      ['robot-type-divider', 'robot-card state-offline offline', 'robot-type-divider', 'robot-card error state-offline offline'],
-    );
+    assert.equal(normalizeClassName(env.offlineGrid.children[0].className), 'robot-type-divider');
+    assert.equal(normalizeClassName(env.offlineGrid.children[2].className), 'robot-type-divider');
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\brobot-card\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\bstate-offline\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\boffline\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\bouter-state-na\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\bouter-scope-hidden\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[1].className), /\binner-state-warning\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[3].className), /\brobot-card\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[3].className), /\bstate-offline\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[3].className), /\boffline\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[3].className), /\bouter-state-na\b/);
+    assert.match(normalizeClassName(env.offlineGrid.children[3].className), /\binner-state-warning\b/);
     assert.equal(env.offlineGrid.children[0].children[0].textContent, 'Carrier');
     assert.equal(env.offlineGrid.children[2].children[0].textContent, 'Inspector');
     assert.equal(env.offlineGrid.children[1].getAttribute('data-robot-id'), 'robot-offline-a');
     assert.equal(env.offlineGrid.children[3].getAttribute('data-robot-id'), 'robot-offline-b');
   });
+});
+
+test('statusFromScore applies unknown > critical > warning > healthy priority', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  env.normalizeStatus = (value) => normalizeText(value, 'warning').toLowerCase();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  const makeRobot = (tests) => ({
+    id: `robot-${Math.random()}`,
+    tests,
+    testDefinitions: Object.keys(tests)
+      .filter((id) => id !== 'battery')
+      .map((id) => ({ id, label: id, ownerTags: ['global'], platformTags: ['ros2'] })),
+  });
+
+  const unknownRobot = makeRobot({
+    online: { status: 'ok', value: 'reachable', details: 'connected', source: 'manual', checkedAt: 10 },
+    movement: { status: 'warning', value: 'unknown', details: 'Not checked yet', source: '', checkedAt: 0 },
+  });
+  const criticalRobot = makeRobot({
+    online: { status: 'error', value: 'down', details: 'down', source: 'manual', checkedAt: 10 },
+    movement: { status: 'warning', value: 'stuck', details: 'stuck', source: 'manual', checkedAt: 11 },
+  });
+  const warningRobot = makeRobot({
+    online: { status: 'ok', value: 'up', details: 'ok', source: 'manual', checkedAt: 10 },
+    movement: { status: 'warning', value: 'slow', details: 'slow', source: 'manual', checkedAt: 11 },
+  });
+  const healthyRobot = makeRobot({
+    online: { status: 'ok', value: 'up', details: 'ok', source: 'manual', checkedAt: 10 },
+    movement: { status: 'ok', value: 'clear', details: 'clear', source: 'manual', checkedAt: 11 },
+  });
+
+  assert.equal(api.statusFromScore(unknownRobot), 'unknown');
+  assert.equal(api.statusFromScore(criticalRobot), 'critical');
+  assert.equal(api.statusFromScore(warningRobot), 'warning');
+  assert.equal(api.statusFromScore(healthyRobot), 'ok');
+});
+
+test('applyFilters keeps robots visible when only active owner profile is selected', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.activeOwnerProfile = 'alice';
+  api.setRobots([
+    {
+      id: 'r1',
+      name: 'Alpha',
+      type: 'Rosbot',
+      typeId: 'rosbot',
+      tests: {
+        online: { status: 'ok', value: 'up', details: 'ok', source: 'manual', checkedAt: 10 },
+      },
+      testDefinitions: [{ id: 'online', label: 'Online', ownerTags: ['global'], platformTags: ['ros2'] }],
+    },
+    {
+      id: 'r2',
+      name: 'Beta',
+      type: 'Rosbot',
+      typeId: 'rosbot',
+      tests: {
+        online: { status: 'warning', value: 'slow', details: 'slow', source: 'manual', checkedAt: 11 },
+      },
+      testDefinitions: [{ id: 'online', label: 'Online', ownerTags: ['global'], platformTags: ['ros2'] }],
+    },
+  ]);
+
+  const visible = api.applyFilters();
+  assert.equal(visible.length, 2);
+});
+
+test('matchesDefinitionFilters uses OR within fields and AND across owner/platform', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.ownerTags = ['alice', 'bob'];
+  env.state.filter.platformTags = ['ros2'];
+
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['alice'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['bob'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['charlie'], platformTags: ['ros2'] },
+      {},
+    ),
+    false,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['alice'], platformTags: ['ros1'] },
+      {},
+    ),
+    false,
+  );
+});
+
+test('matchesDefinitionFilters includes global definitions when a specific owner is selected', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.ownerTags = ['alice'];
+  env.state.filter.platformTags = [];
+
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['global'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['bob'], platformTags: ['ros2'] },
+      {},
+    ),
+    false,
+  );
 });
 
 test('renderDashboard reuses existing robot card nodes on repeated runtime renders', async () => {

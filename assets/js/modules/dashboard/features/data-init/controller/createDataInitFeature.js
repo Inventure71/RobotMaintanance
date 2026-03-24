@@ -101,6 +101,9 @@ export function createDataInitFeature(context, maybeEnv) {
     detailTerminalShell,
     emptyState,
     filterError,
+    filterActiveOwner,
+    filterOwnerTags,
+    filterPlatformTags,
     filterType,
     hydrateActionButtons,
     initThemeSwitcher,
@@ -837,6 +840,9 @@ export function createDataInitFeature(context, maybeEnv) {
         $('#searchName').addEventListener('input', onFilterChange);
         filterType.addEventListener('change', onFilterChange);
         filterError.addEventListener('change', onFilterChange);
+        filterOwnerTags?.addEventListener('change', onFilterChange);
+        filterPlatformTags?.addEventListener('change', onFilterChange);
+        filterActiveOwner?.addEventListener('change', onFilterChange);
         syncOnlineSortButton();
         cycleOnlineSortButton?.addEventListener('click', () => {
           cycleOnlineSortMode();

@@ -739,7 +739,13 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
   const createRecorderFeature = await loadApi();
   const env = makeEnv();
   env.state.definitionsSummary.tests = [
-    { id: 'battery_health', label: 'Battery health', checks: [{ id: 'battery_health__battery' }] },
+    {
+      id: 'battery_health',
+      label: 'Battery health',
+      checks: [{ id: 'battery_health__battery' }],
+      ownerTags: ['global'],
+      platformTags: ['ros2'],
+    },
   ];
   env.state.definitionsSummary.fixes = [
     {
@@ -748,6 +754,8 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
       description: 'Reflash firmware',
       execute: [{ id: 'fix_step_1', command: 'flash' }],
       runAtConnection: true,
+      ownerTags: ['alice'],
+      platformTags: ['interbotix'],
     },
   ];
   const runtime = makeRuntime(env.state);
@@ -760,6 +768,11 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
   assert.equal(env.manageDefinitionsList.children.length, 1);
 
   const fixRow = env.manageDefinitionsList.children[0];
+  const fixSummary = fixRow.children[0];
+  const fixTagRow = fixSummary.children[2];
+  assert.equal(fixTagRow.className, 'manage-definition-tags');
+  assert.equal(fixTagRow.children[0].textContent, 'owner:alice');
+  assert.equal(fixTagRow.children[1].textContent, 'platform:interbotix');
   const actionButtons = fixRow.children[1].children;
   assert.equal(actionButtons.length, 3);
   assert.equal(actionButtons[0].textContent, 'Edit/View');

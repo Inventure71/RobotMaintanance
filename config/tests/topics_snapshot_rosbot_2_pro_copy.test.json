@@ -1,10 +1,10 @@
 {
-  "id": "topics_snapshot_rosbot_2_pro",
-  "label": "Topics Snapshot Rosbot 2 Pro",
+  "id": "topics_snapshot_rosbot_2_pro_copy",
+  "label": "Topics Snapshot Rosbot 2 Pro Copy",
   "description": "Capture the ROS topic list once and validate the required robot interfaces are present.",
   "enabled": true,
   "ownerTags": [
-    "global"
+    "inventure71"
   ],
   "platformTags": [
     "ros1"
@@ -24,7 +24,7 @@
   ],
   "checks": [
     {
-      "id": "topics_snapshot_rosbot_2_pro__battery",
+      "id": "topics_snapshot_rosbot_2_pro_copy__battery",
       "metadata": {
         "label": "Battery",
         "icon": "\ud83d\udd0b",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "id": "topics_snapshot_rosbot_2_pro__camera",
+      "id": "topics_snapshot_rosbot_2_pro_copy__camera",
       "metadata": {
         "label": "Camera",
         "icon": "\ud83d\udcf7",
@@ -95,7 +95,7 @@
       }
     },
     {
-      "id": "topics_snapshot_rosbot_2_pro__general",
+      "id": "topics_snapshot_rosbot_2_pro_copy__general",
       "metadata": {
         "label": "General Topics",
         "icon": "\ud83d\udce1",
@@ -134,7 +134,7 @@
       }
     },
     {
-      "id": "topics_snapshot_rosbot_2_pro__lidar",
+      "id": "topics_snapshot_rosbot_2_pro_copy__lidar",
       "metadata": {
         "label": "Lidar",
         "icon": "\ud83c\udf10",
@@ -165,7 +165,7 @@
       }
     },
     {
-      "id": "topics_snapshot_rosbot_2_pro__movement",
+      "id": "topics_snapshot_rosbot_2_pro_copy__movement",
       "metadata": {
         "label": "Movement",
         "icon": "\ud83d\ude97",
@@ -201,7 +201,7 @@
       }
     },
     {
-      "id": "topics_snapshot_rosbot_2_pro__proximity",
+      "id": "topics_snapshot_rosbot_2_pro_copy__proximity",
       "metadata": {
         "label": "Proximity Sensors",
         "icon": "\ud83d\udc41\ufe0f",

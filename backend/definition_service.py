@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from .config_loader import RobotCatalog, load_json_file
-from .normalization import normalize_text, normalize_type_key
+from .normalization import normalize_owner_tags, normalize_platform_tags, normalize_text, normalize_type_key
 
 
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -249,6 +249,8 @@ class DefinitionService:
                     "label": normalize_text(test_definition.get("label"), definition_id),
                     "description": normalize_text(test_definition.get("description"), ""),
                     "enabled": bool(test_definition.get("enabled", True)),
+                    "ownerTags": normalize_owner_tags(test_definition.get("ownerTags")),
+                    "platformTags": normalize_platform_tags(test_definition.get("platformTags")),
                     "mode": normalize_text(test_definition.get("mode"), "orchestrate"),
                     "params": test_definition.get("params") if isinstance(test_definition.get("params"), dict) else {},
                     "execute": test_definition.get("execute") if isinstance(test_definition.get("execute"), list) else [],
@@ -270,6 +272,8 @@ class DefinitionService:
                     "label": normalize_text(fix_definition.get("label"), fix_id),
                     "description": normalize_text(fix_definition.get("description"), ""),
                     "enabled": bool(fix_definition.get("enabled", True)),
+                    "ownerTags": normalize_owner_tags(fix_definition.get("ownerTags")),
+                    "platformTags": normalize_platform_tags(fix_definition.get("platformTags")),
                     "runAtConnection": bool(fix_definition.get("runAtConnection", False)),
                     "params": fix_definition.get("params") if isinstance(fix_definition.get("params"), dict) else {},
                     "execute": fix_definition.get("execute") if isinstance(fix_definition.get("execute"), list) else [],
@@ -470,6 +474,8 @@ class DefinitionService:
             "label": normalize_text(payload.get("label"), definition_id),
             "description": normalize_text(payload.get("description"), ""),
             "enabled": bool(payload.get("enabled", True)),
+            "ownerTags": normalize_owner_tags(payload.get("ownerTags")),
+            "platformTags": normalize_platform_tags(payload.get("platformTags")),
             "mode": mode,
             "execute": execute,
             "checks": normalized_checks,
@@ -538,6 +544,8 @@ class DefinitionService:
             "label": normalize_text(payload.get("label"), fix_id),
             "enabled": bool(payload.get("enabled", True)),
             "description": normalize_text(payload.get("description"), ""),
+            "ownerTags": normalize_owner_tags(payload.get("ownerTags")),
+            "platformTags": normalize_platform_tags(payload.get("platformTags")),
             "runAtConnection": bool(payload.get("runAtConnection", False)),
             "execute": execute,
             "params": payload.get("params") if isinstance(payload.get("params"), dict) else {},

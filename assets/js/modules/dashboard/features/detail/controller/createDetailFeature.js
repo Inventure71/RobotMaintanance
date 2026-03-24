@@ -174,6 +174,9 @@ export function createDetailFeature(context, maybeEnv) {
     detailTerminalShell,
     emptyState,
     filterError,
+    filterActiveOwner,
+    filterOwnerTags,
+    filterPlatformTags,
     filterType,
     hydrateActionButtons,
     initThemeSwitcher,
@@ -365,6 +368,9 @@ export function createDetailFeature(context, maybeEnv) {
   const normalizeCountdownMs = (...args) => runtime.normalizeCountdownMs(...args);
   const normalizeDefinitionsSummary = (...args) => runtime.normalizeDefinitionsSummary(...args);
   const normalizeIdList = (...args) => runtime.normalizeIdList(...args);
+  const normalizeOwnerTags = (...args) => runtime.normalizeOwnerTags(...args);
+  const normalizePlatformTags = (...args) => runtime.normalizePlatformTags(...args);
+  const normalizeTagList = (...args) => runtime.normalizeTagList(...args);
   const normalizePossibleResult = (...args) => runtime.normalizePossibleResult(...args);
   const normalizeRobotActivity = (...args) => runtime.normalizeRobotActivity(...args);
   const normalizeRobotData = (...args) => runtime.normalizeRobotData(...args);
@@ -408,6 +414,9 @@ export function createDetailFeature(context, maybeEnv) {
   const runOnlineCheckForAllRobots = (...args) => runtime.runOnlineCheckForAllRobots(...args);
   const runRecorderCommandAndCapture = (...args) => runtime.runRecorderCommandAndCapture(...args);
   const runRobotTestsForRobot = (...args) => runtime.runRobotTestsForRobot(...args);
+  const getDefinitionTagMeta = (...args) => runtime.getDefinitionTagMeta(...args);
+  const matchesDefinitionFilters = (...args) => runtime.matchesDefinitionFilters(...args);
+  const getScopedTestEntries = (...args) => runtime.getScopedTestEntries(...args);
   const runtimeActivityHasSignal = (...args) => runtime.runtimeActivityHasSignal(...args);
   const saveManageFixDefinition = (...args) => runtime.saveManageFixDefinition(...args);
   const saveManageTestDefinition = (...args) => runtime.saveManageTestDefinition(...args);
@@ -472,6 +481,48 @@ export function createDetailFeature(context, maybeEnv) {
   const updateSelectionSummary = (...args) => runtime.updateSelectionSummary(...args);
   const updateTestMappings = (...args) => runtime.updateTestMappings(...args);
 
+  function escapeHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+  function renderDefinitionOwnerInline(definition, fallback = {}) {
+        const tagMeta = getDefinitionTagMeta(definition, fallback) || {};
+        const ownerTags = getOwnerTags(tagMeta?.ownerTags);
+        const firstOwnerTag = ownerTags.find((tag) => normalizeText(tag, '').toLowerCase() !== 'global') || '';
+        if (!firstOwnerTag) return '';
+        return `<span class="detail-owner-inline" data-role="detail-owner-inline"><span class="tag-chip owner">${escapeHtml(firstOwnerTag)}</span></span>`;
+      }
+
+  function getTagList(value) {
+        const normalized = normalizeTagList(value);
+        if (Array.isArray(normalized)) return normalized;
+        return [];
+      }
+
+  function getOwnerTags(value) {
+        const normalized = normalizeOwnerTags(value);
+        if (Array.isArray(normalized) && normalized.length) return normalized;
+        const fallback = getTagList(value);
+        return fallback.length ? fallback : ['global'];
+      }
+
+  function getPlatformTags(value) {
+        const normalized = normalizePlatformTags(value);
+        if (Array.isArray(normalized)) return normalized;
+        return getTagList(value);
+      }
+
+  function detailMatchesDefinitionFilters(definition, fallback = {}) {
+        const match = matchesDefinitionFilters(definition, fallback);
+        if (typeof match === 'boolean') return match;
+        return true;
+      }
+
   function renderDetail(robot) {
         const model = $('#detailModel');
         const testList = $('#testList');
@@ -482,7 +533,11 @@ export function createDetailFeature(context, maybeEnv) {
   
         const stateKey = statusFromScore(robot);
         const normalizedRobotId = robotId(robot);
-        const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => t.status !== 'ok').length;
+        const scopedEntries = getScopedTestEntries(robot, { scope: 'all' });
+        const safeScopedEntries = Array.isArray(scopedEntries)
+          ? scopedEntries
+          : nonBatteryTestEntries(robot).map(([id, result]) => ({ id, result }));
+        const errorCount = safeScopedEntries.filter((entry) => normalizeStatus(entry?.result?.status) !== 'ok').length;
         const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
         const isTesting = isRobotTesting(normalizedRobotId);
         const isSearching = isRobotSearching(normalizedRobotId);
@@ -535,10 +590,14 @@ export function createDetailFeature(context, maybeEnv) {
   
         testList.replaceChildren();
         const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
-        definitions.forEach((def) => {
-          const result = robot.tests[def.id];
+        const filteredDefinitions = definitions.filter((def) => detailMatchesDefinitionFilters(def, robot?.tests?.[def?.id]));
+        filteredDefinitions.forEach((def) => {
+          const result = robot.tests[def.id] && typeof robot.tests[def.id] === 'object'
+            ? robot.tests[def.id]
+            : { status: 'warning', value: 'unknown', details: 'Not checked yet' };
           const icon = getTestIconPresentation(def.id, def.icon);
           const previewText = buildTestPreviewTextForResult(def.id, result);
+          const ownerInline = renderDefinitionOwnerInline(def, result);
           const row = document.createElement('div');
           row.className = 'test-row';
           row.setAttribute('data-test-id', def.id);
@@ -547,11 +606,11 @@ export function createDetailFeature(context, maybeEnv) {
               <span class="test-title">
                 <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
                 <span class="test-title-label">${def.label}</span>
-                <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
               </span>
               <span class="test-value" data-role="detail-test-value">${previewText}</span>
             </div>
               <div class="test-actions">
+              ${ownerInline}
               <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${def.id}" title="Show detailed output">Info</button>
               <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
             </div>`.trim().replace(/>\s+</g, '><');
@@ -574,9 +633,11 @@ export function createDetailFeature(context, maybeEnv) {
           // Extra tests added by backend but not in the current UI catalog.
           Object.entries(robot.tests)
             .filter(([id]) => !definitions.find((test) => test.id === id))
+            .filter(([id, result]) => detailMatchesDefinitionFilters({ id }, result))
             .forEach(([id, result]) => {
               const icon = getTestIconPresentation(id, '⚙️');
               const previewText = buildTestPreviewTextForResult(id, result);
+              const ownerInline = renderDefinitionOwnerInline({}, result);
               const row = document.createElement('div');
               row.className = 'test-row';
               row.setAttribute('data-test-id', id);
@@ -585,11 +646,11 @@ export function createDetailFeature(context, maybeEnv) {
                   <span class="test-title">
                     <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
                     <span class="test-title-label">${id}</span>
-                    <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
                   </span>
                   <span class="test-value" data-role="detail-test-value">${previewText}</span>
                 </div>
                 <div class="test-actions">
+                ${ownerInline}
                 <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
                 <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
               </div>`.trim().replace(/>\s+</g, '><');
@@ -607,6 +668,13 @@ export function createDetailFeature(context, maybeEnv) {
               }
               testList.appendChild(row);
             });
+        }
+
+        if (!testList.children.length) {
+          const empty = document.createElement('div');
+          empty.className = 'manage-list-empty';
+          empty.textContent = 'No tests match the selected ownership filter.';
+          testList.appendChild(empty);
         }
   
         const detailId = robotId(robot);
@@ -1929,16 +1997,48 @@ export function createDetailFeature(context, maybeEnv) {
       }
 
   function populateFilters() {
+        if (!filterType || !filterError) return;
         const typeOptions = Array.from(new Set(state.robots.map((r) => r.type)));
         const knownTestDefinitions = new Map();
+        const ownerTagUniverse = new Set();
+        const platformTagUniverse = new Set();
+        const ownerProfiles = new Set();
         state.robots.forEach((robot) => {
           const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
           definitions.forEach((test) => {
             if (!knownTestDefinitions.has(test.id)) {
               knownTestDefinitions.set(test.id, test);
             }
+            getOwnerTags(test?.ownerTags).forEach((tag) => {
+              ownerTagUniverse.add(tag);
+              if (tag !== 'global') ownerProfiles.add(tag);
+            });
+            getPlatformTags(test?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
           });
         });
+
+        const summaryTests = Array.isArray(state?.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
+        summaryTests.forEach((test) => {
+          getOwnerTags(test?.ownerTags).forEach((tag) => {
+            ownerTagUniverse.add(tag);
+            if (tag !== 'global') ownerProfiles.add(tag);
+          });
+          getPlatformTags(test?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
+        });
+        const summaryFixes = Array.isArray(state?.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
+        summaryFixes.forEach((fix) => {
+          getOwnerTags(fix?.ownerTags).forEach((tag) => {
+            ownerTagUniverse.add(tag);
+            if (tag !== 'global') ownerProfiles.add(tag);
+          });
+          getPlatformTags(fix?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
+        });
+
+        const previousType = normalizeText(state?.filter?.type, 'all');
+        const previousError = normalizeText(state?.filter?.error, 'all');
+        const previousOwnerTags = getTagList(state?.filter?.ownerTags);
+        const previousPlatformTags = getTagList(state?.filter?.platformTags);
+        const previousActiveOwner = normalizeText(state?.filter?.activeOwnerProfile, '').toLowerCase();
   
         filterType.innerHTML = `<option value="all">All Types</option>`;
         typeOptions.forEach((type) => {
@@ -1953,6 +2053,7 @@ export function createDetailFeature(context, maybeEnv) {
           <option value="healthy">Healthy</option>
           <option value="warning">Warnings</option>
           <option value="critical">Critical</option>
+          <option value="unknown">Unknown</option>
           <option value="error">Any error</option>
         `.trim().replace(/>\s+</g, '><');
   
@@ -1962,6 +2063,70 @@ export function createDetailFeature(context, maybeEnv) {
           option.textContent = `${test.label} errors`;
           filterError.appendChild(option);
         });
+
+        if (Array.from(filterType.options || []).some((option) => normalizeText(option?.value, '') === previousType)) {
+          filterType.value = previousType;
+        } else {
+          filterType.value = 'all';
+        }
+        if (Array.from(filterError.options || []).some((option) => normalizeText(option?.value, '') === previousError)) {
+          filterError.value = previousError;
+        } else {
+          filterError.value = 'all';
+        }
+
+        if (filterOwnerTags) {
+          const ownerOptions = Array.from(ownerTagUniverse).sort((left, right) => left.localeCompare(right));
+          filterOwnerTags.innerHTML = '';
+          ownerOptions.forEach((tag) => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            option.selected = previousOwnerTags.includes(tag);
+            filterOwnerTags.appendChild(option);
+          });
+        }
+
+        if (filterPlatformTags) {
+          const platformOptions = Array.from(platformTagUniverse).sort((left, right) => left.localeCompare(right));
+          filterPlatformTags.innerHTML = '';
+          platformOptions.forEach((tag) => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            option.selected = previousPlatformTags.includes(tag);
+            filterPlatformTags.appendChild(option);
+          });
+        }
+
+        if (filterActiveOwner) {
+          const activeOwnerOptions = Array.from(ownerProfiles).sort((left, right) => left.localeCompare(right));
+          filterActiveOwner.innerHTML = `<option value="">All</option>`;
+          activeOwnerOptions.forEach((tag) => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            filterActiveOwner.appendChild(option);
+          });
+          filterActiveOwner.value = activeOwnerOptions.includes(previousActiveOwner) ? previousActiveOwner : '';
+        }
+
+        const filterState = state.filter && typeof state.filter === 'object'
+          ? state.filter
+          : (state.filter = {});
+        filterState.type = normalizeText(filterType?.value, normalizeText(filterState.type, 'all'));
+        filterState.error = normalizeText(filterError?.value, normalizeText(filterState.error, 'all'));
+        const activeOwnerProfile = normalizeText(filterActiveOwner?.value, '').toLowerCase();
+        const selectedOwnerTags = filterOwnerTags
+          ? Array.from(filterOwnerTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
+          : [];
+        filterState.ownerTags = selectedOwnerTags.length
+          ? selectedOwnerTags
+          : (activeOwnerProfile ? [activeOwnerProfile] : []);
+        filterState.platformTags = filterPlatformTags
+          ? Array.from(filterPlatformTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
+          : [];
+        filterState.activeOwnerProfile = activeOwnerProfile;
       }
 
   function setMessageNode(node, message, style = '') {

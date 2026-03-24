@@ -690,6 +690,28 @@ export function createMonitorConfigFeature(context, maybeEnv) {
         };
       }
 
+  function normalizeTagList(value) {
+        const list = Array.isArray(value) ? value : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((item) => {
+          const normalized = normalizeText(item, '').toLowerCase();
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          out.push(normalized);
+        });
+        return out;
+      }
+
+  function normalizeOwnerTags(value) {
+        const tags = normalizeTagList(value);
+        return tags.length ? tags : ['global'];
+      }
+
+  function normalizePlatformTags(value) {
+        return normalizeTagList(value);
+      }
+
   function normalizeTestDefinition(raw) {
         if (!raw || typeof raw !== 'object') return null;
         const id = normalizeText(raw.id, '');
@@ -713,6 +735,8 @@ export function createMonitorConfigFeature(context, maybeEnv) {
           defaultStatus: normalizeStatus(raw.defaultStatus),
           defaultValue: normalizeText(raw.defaultValue, fallback.value),
           defaultDetails: normalizeText(raw.defaultDetails, fallback.details),
+          ownerTags: normalizeOwnerTags(raw.ownerTags),
+          platformTags: normalizePlatformTags(raw.platformTags),
         };
       }
 
@@ -724,6 +748,8 @@ export function createMonitorConfigFeature(context, maybeEnv) {
           id,
           label: normalizeText(raw.label, id),
           description: normalizeText(raw.description, ''),
+          ownerTags: normalizeOwnerTags(raw.ownerTags),
+          platformTags: normalizePlatformTags(raw.platformTags),
         };
       }
 
@@ -870,11 +896,13 @@ export function createMonitorConfigFeature(context, maybeEnv) {
 
   function formatTestValue(rawTests, id, def) {
         const result = rawTests && typeof rawTests[id] === 'object' ? rawTests[id] : null;
-        return {
+      return {
           status: result ? normalizeStatus(result.status) : normalizeStatus(def.defaultStatus),
           value: normalizeText(result ? result.value : def.defaultValue, def.defaultValue),
           details: normalizeText(result ? result.details : def.defaultDetails, def.defaultDetails),
           reason: normalizeText(result?.reason, ''),
+          source: normalizeText(result?.source, ''),
+          checkedAt: Number.isFinite(Number(result?.checkedAt)) ? Number(result.checkedAt) : 0,
         };
       }
 
@@ -894,6 +922,8 @@ export function createMonitorConfigFeature(context, maybeEnv) {
               value: normalizeText(raw.value, 'n/a'),
               details: normalizeText(raw.details, 'Backend populated test'),
               reason: normalizeText(raw.reason, ''),
+              source: normalizeText(raw.source, ''),
+              checkedAt: Number.isFinite(Number(raw?.checkedAt)) ? Number(raw.checkedAt) : 0,
             };
           }
         });

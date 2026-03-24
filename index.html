@@ -52,6 +52,7 @@
                 <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
                 <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
                 <div class="kpi err"><span>Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
+                <div class="kpi neutral"><span>Unknown</span><span class="kpi-value" id="kpiUnknown">0</span></div>
               </div>
             </section>
 
@@ -81,6 +82,10 @@
                   <input id="searchName" class="filter-item" type="search" placeholder="Search by name (e.g. rosbot-a1)" />
                   <select id="filterType" class="filter-item"></select>
                   <select id="filterError" class="filter-item"></select>
+                  <label class="filter-label" for="filterActiveOwner">Ownership scope</label>
+                  <select id="filterActiveOwner" class="filter-item">
+                    <option value="">All</option>
+                  </select>
                 </div>
               </div>
             </details>
@@ -1030,15 +1035,59 @@
                 <section id="recorderAssignmentPanel" class="panel definition-assignment hidden" aria-label="Assignment">
                   <div class="definition-assignment-header">
                     <h3>Assignment</h3>
-                    <p class="muted-copy">Set connection behavior for generated checks and map robot types.</p>
+                    <p class="muted-copy">Configure when this definition runs, who owns it, which platform it targets, and where it is mapped.</p>
                   </div>
                   <div class="definition-assignment-grid">
-                    <label class="recorder-primitive-toggle">
-                      <input id="recorderRunAtConnectionInput" type="checkbox" checked />
-                      Run test at connection
+                    <div class="assignment-toggle-row">
+                      <label class="recorder-primitive-toggle">
+                        <input id="recorderRunAtConnectionInput" type="checkbox" checked />
+                        Run test at connection
+                      </label>
+                      <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                        data-button-intent="utility"
+                        data-help-target="recorderAssignmentRunHelp"
+                        aria-controls="recorderAssignmentRunHelp"
+                        aria-expanded="false"
+                        aria-label="Explain Run test at connection">?</button>
+                    </div>
+                    <div id="recorderAssignmentRunHelp" class="assignment-help hidden">Enable this to run the test automatically after connection. Disable it for manual-only checks.</div>
+                    <label class="form-field assignment-field">
+                      <span class="assignment-field-header">
+                        <span class="assignment-field-label">Owner tags (comma separated)</span>
+                        <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                          data-button-intent="utility"
+                          data-help-target="recorderAssignmentOwnerHelp"
+                          aria-controls="recorderAssignmentOwnerHelp"
+                          aria-expanded="false"
+                          aria-label="Explain owner tags">?</button>
+                      </span>
+                      <input id="recorderOwnerTags" class="form-input" type="text" placeholder="global, your_username" />
                     </label>
+                    <div id="recorderAssignmentOwnerHelp" class="assignment-help hidden">Use <strong>global</strong> for checks shared by everyone. Add usernames for user-scoped checks.</div>
+                    <label class="form-field assignment-field">
+                      <span class="assignment-field-header">
+                        <span class="assignment-field-label">Platform tags (comma separated)</span>
+                        <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                          data-button-intent="utility"
+                          data-help-target="recorderAssignmentPlatformHelp"
+                          aria-controls="recorderAssignmentPlatformHelp"
+                          aria-expanded="false"
+                          aria-label="Explain platform tags">?</button>
+                      </span>
+                      <input id="recorderPlatformTags" class="form-input" type="text" placeholder="ros2, interbotix" />
+                    </label>
+                    <div id="recorderAssignmentPlatformHelp" class="assignment-help hidden">Tag the platform this definition targets (for example <strong>ros1</strong>, <strong>ros2</strong>, <strong>interbotix</strong>). Used for filtering and organization.</div>
                   </div>
-                  <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                  <div class="assignment-field-header">
+                    <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                    <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                      data-button-intent="utility"
+                      data-help-target="recorderAssignmentMappingHelp"
+                      aria-controls="recorderAssignmentMappingHelp"
+                      aria-expanded="false"
+                      aria-label="Explain robot type mapping">?</button>
+                  </div>
+                  <div id="recorderAssignmentMappingHelp" class="assignment-help hidden">Choose which robot types receive this definition. Only mapped types will see and run it.</div>
                   <div id="recorderRobotTypeTargets" class="recorder-type-targets"></div>
                   <div id="recorderPublishStatus" class="manage-editor-status" aria-live="polite"></div>
                 </section>
@@ -1090,14 +1139,58 @@
                   <section class="definition-assignment" aria-label="Assignment">
                     <div class="definition-assignment-header">
                       <h3>Assignment</h3>
-                      <p class="muted-copy">Map this definition to robot types and configure connection behavior. When a fix ends, the robot automatically reruns its assigned test suite.</p>
+                      <p class="muted-copy">Configure when this fix runs, who owns it, platform scope, and mapped robot types. After a fix ends, the robot reruns its assigned test suite.</p>
                     </div>
-                    <label class="recorder-primitive-toggle">
-                      <input id="manageFixRunAtConnectionInput" type="checkbox" />
-                      Run at connection
+                    <div class="assignment-toggle-row">
+                      <label class="recorder-primitive-toggle">
+                        <input id="manageFixRunAtConnectionInput" type="checkbox" />
+                        Run at connection
+                      </label>
+                      <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                        data-button-intent="utility"
+                        data-help-target="manageFixAssignmentRunHelp"
+                        aria-controls="manageFixAssignmentRunHelp"
+                        aria-expanded="false"
+                        aria-label="Explain run at connection">?</button>
+                    </div>
+                    <div id="manageFixAssignmentRunHelp" class="assignment-help hidden">Enable this to run the fix automatically after connection. Disable it for manual-only fixes.</div>
+                    <label class="form-field assignment-field">
+                      <span class="assignment-field-header">
+                        <span class="assignment-field-label">Owner tags (comma separated)</span>
+                        <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                          data-button-intent="utility"
+                          data-help-target="manageFixAssignmentOwnerHelp"
+                          aria-controls="manageFixAssignmentOwnerHelp"
+                          aria-expanded="false"
+                          aria-label="Explain owner tags">?</button>
+                      </span>
+                      <input id="manageFixOwnerTags" class="form-input" type="text" placeholder="global, your_username" />
                     </label>
+                    <div id="manageFixAssignmentOwnerHelp" class="assignment-help hidden">Use <strong>global</strong> for fixes shared by everyone. Add usernames for user-scoped fixes. You can also add both global <strong>and</strong> user-scoped tags.</div>
+                    <label class="form-field assignment-field">
+                      <span class="assignment-field-header">
+                        <span class="assignment-field-label">Platform tags (comma separated)</span>
+                        <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                          data-button-intent="utility"
+                          data-help-target="manageFixAssignmentPlatformHelp"
+                          aria-controls="manageFixAssignmentPlatformHelp"
+                          aria-expanded="false"
+                          aria-label="Explain platform tags">?</button>
+                      </span>
+                      <input id="manageFixPlatformTags" class="form-input" type="text" placeholder="ros2, interbotix" />
+                    </label>
+                    <div id="manageFixAssignmentPlatformHelp" class="assignment-help hidden">Tag the platform this fix targets (for example <strong>ros1</strong>, <strong>ros2</strong>, <strong>interbotix</strong>). Used for filtering and organization.</div>
                     <div class="form-field">
-                      <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                      <div class="assignment-field-header">
+                        <h4 class="definition-assignment-subtitle">Map to robot types</h4>
+                        <button class="button test-info-btn battery-command-info-button assignment-help-button" type="button"
+                          data-button-intent="utility"
+                          data-help-target="manageFixAssignmentMappingHelp"
+                          aria-controls="manageFixAssignmentMappingHelp"
+                          aria-expanded="false"
+                          aria-label="Explain robot type mapping">?</button>
+                      </div>
+                      <div id="manageFixAssignmentMappingHelp" class="assignment-help hidden">Choose which robot types receive this fix. Only mapped types will list and apply it.</div>
                       <div id="manageFixRobotTypeTargets" class="recorder-type-targets"></div>
                     </div>
                   </section>

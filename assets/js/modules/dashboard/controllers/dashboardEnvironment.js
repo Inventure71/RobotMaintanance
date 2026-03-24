@@ -30,6 +30,15 @@ import { buildApiUrl, createPageSessionId } from '../api/client.js';
 let TEST_DEFINITIONS = [...DEFAULT_TEST_DEFINITIONS];
 let ROBOT_TYPES = [];
 let ROBOT_TYPE_BY_ID = new Map();
+const ACTIVE_OWNER_PROFILE_STORAGE_KEY = 'dashboard.activeOwnerProfile';
+
+function loadPersistedActiveOwnerProfile() {
+  try {
+    return normalizeText(window?.localStorage?.getItem(ACTIVE_OWNER_PROFILE_STORAGE_KEY), '').toLowerCase();
+  } catch (_error) {
+    return '';
+  }
+}
 
     const CAN_USE_MODEL_VIEWER = (() => {
       try {
@@ -129,6 +138,9 @@ let ROBOT_TYPE_BY_ID = new Map();
         name: '',
         type: 'all',
         error: 'all',
+        ownerTags: [],
+        platformTags: [],
+        activeOwnerProfile: loadPersistedActiveOwnerProfile(),
       },
       onlineSortMode: ONLINE_SORT_BATTERY,
       testingRobotIds: new Set(),
@@ -224,6 +236,9 @@ let ROBOT_TYPE_BY_ID = new Map();
     const emptyState = $('#emptyState');
     const filterType = $('#filterType');
     const filterError = $('#filterError');
+    const filterOwnerTags = $('#filterOwnerTags');
+    const filterPlatformTags = $('#filterPlatformTags');
+    const filterActiveOwner = $('#filterActiveOwner');
     const cycleOnlineSortButton = $('#cycleOnlineSort');
     const terminal = $('#terminal');
     const detailTerminalShell = terminal?.closest('.terminal-shell') || null;
@@ -328,6 +343,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageTestExecuteJsonInput = $('#manageTestExecuteJson');
     const manageTestChecksJsonInput = $('#manageTestChecksJson');
     const manageTestRunAtConnectionInput = $('#manageTestRunAtConnectionInput');
+    const manageTestOwnerTagsInput = $('#manageTestOwnerTags');
+    const manageTestPlatformTagsInput = $('#manageTestPlatformTags');
     const manageTestEditorStatus = $('#manageTestEditorStatus');
     const manageFixEditorForm = $('#manageFixEditorForm');
     const manageFixIdInput = $('#manageFixId');
@@ -335,6 +352,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const manageFixDescriptionInput = $('#manageFixDescription');
     const manageFixExecuteJsonInput = $('#manageFixExecuteJson');
     const manageFixRunAtConnectionInput = $('#manageFixRunAtConnectionInput');
+    const manageFixOwnerTagsInput = $('#manageFixOwnerTags');
+    const manageFixPlatformTagsInput = $('#manageFixPlatformTags');
     const manageFixEditorStatus = $('#manageFixEditorStatus');
     const manageDeleteTestButton = $('#manageDeleteTestButton');
     const manageDeleteFixButton = $('#manageDeleteFixButton');
@@ -363,6 +382,8 @@ let ROBOT_TYPE_BY_ID = new Map();
     const recorderDefinitionLabelInput = $('#recorderDefinitionLabel');
     const recorderDefinitionDescriptionInput = $('#recorderDefinitionDescription');
     const recorderRunAtConnectionInput = $('#recorderRunAtConnectionInput');
+    const recorderOwnerTagsInput = $('#recorderOwnerTags');
+    const recorderPlatformTagsInput = $('#recorderPlatformTags');
     const recorderRobotTypeTargets = $('#recorderRobotTypeTargets');
     const recorderPublishTestButton = $('#recorderPublishTest');
     const recorderStatus = $('#recorderStatus');
@@ -491,6 +512,7 @@ const runtimeEnv = {
   FLEET_PARALLELISM_MAX,
   FLEET_PARALLELISM_MIN,
   FLEET_PARALLELISM_STORAGE_KEY,
+  ACTIVE_OWNER_PROFILE_STORAGE_KEY,
   FLEET_RUNTIME_ENDPOINT,
   FLEET_STATIC_ENDPOINT,
   FORCE_TEXT_TEST_ICONS,
@@ -645,6 +667,9 @@ const runtimeEnv = {
   detailTerminalShell,
   emptyState,
   filterError,
+  filterActiveOwner,
+  filterOwnerTags,
+  filterPlatformTags,
   filterType,
   hydrateActionButtons,
   initThemeSwitcher,
@@ -663,6 +688,8 @@ const runtimeEnv = {
   manageFixExecuteJsonInput,
   manageFixIdInput,
   manageFixLabelInput,
+  manageFixOwnerTagsInput,
+  manageFixPlatformTagsInput,
   manageFixRunAtConnectionInput,
   manageFixRobotTypeTargets,
   manageFixesList,
@@ -694,6 +721,8 @@ const runtimeEnv = {
   manageTestExecuteJsonInput,
   manageTestIdInput,
   manageTestLabelInput,
+  manageTestOwnerTagsInput,
+  manageTestPlatformTagsInput,
   manageTestRunAtConnectionInput,
   manageTestRobotTypeTargets,
   manageTestsList,
@@ -717,6 +746,8 @@ const runtimeEnv = {
   recorderDefinitionIdInput,
   recorderDefinitionLabelInput,
   recorderDefinitionDescriptionInput,
+  recorderOwnerTagsInput,
+  recorderPlatformTagsInput,
   recorderRunAtConnectionInput,
   recorderRobotTypeTargets,
   recorderFlowBlocks,

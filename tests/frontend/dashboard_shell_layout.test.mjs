@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const INDEX_PATH = path.resolve(__dirname, '../../index.html');
+const DETAIL_FEATURE_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/controller/createDetailFeature.js',
+);
 
 function collapseWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -35,6 +39,10 @@ test('dashboard shell organizes header, sidebar, and main fleet content', async 
     dashboardSection,
     /<aside class="dashboard-sidebar" aria-label="Fleet controls">[\s\S]*?Fleet health[\s\S]*?Control[\s\S]*?Search &amp; filter[\s\S]*?Expert Mode[\s\S]*?<\/aside>/,
   );
+  assert.match(dashboardSection, /for="filterActiveOwner">Ownership scope<\/label>/);
+  assert.match(dashboardSection, /<select id="filterActiveOwner" class="filter-item">[\s\S]*?<option value="">All<\/option>/);
+  assert.doesNotMatch(dashboardSection, /id="filterOwnerTags"/);
+  assert.doesNotMatch(dashboardSection, /id="filterPlatformTags"/);
   assert.match(
     dashboardSection,
     /Expert Mode[\s\S]*?Visual style:[\s\S]*?id="themeSelect"[\s\S]*?<option value="swiss">Swiss<\/option>[\s\S]*?<option value="classic">Classic<\/option>/,
@@ -123,4 +131,33 @@ test('recorder terminal step tells operators to run the generic info action befo
 
   assert.match(recorderTerminalSection, /Run generic info commands/);
   assert.match(recorderTerminalSection, /OS, ROS, processes, networking, services, and containers/i);
+});
+
+test('assignment sections expose inline help and live matrix keeps single status chip', async () => {
+  const html = await fs.readFile(INDEX_PATH, 'utf8');
+  const collapsedHtml = collapseWhitespace(html);
+
+  const assignmentHelpMatches = collapsedHtml.match(/assignment-help-button/g) || [];
+  assert.ok(assignmentHelpMatches.length >= 8, 'expected help buttons across test/fix assignment fields');
+  assert.match(collapsedHtml, /data-help-target="recorderAssignmentRunHelp"/);
+  assert.match(collapsedHtml, /data-help-target="recorderAssignmentOwnerHelp"/);
+  assert.match(collapsedHtml, /data-help-target="recorderAssignmentPlatformHelp"/);
+  assert.match(collapsedHtml, /data-help-target="recorderAssignmentMappingHelp"/);
+  assert.match(collapsedHtml, /data-help-target="manageFixAssignmentRunHelp"/);
+  assert.match(collapsedHtml, /data-help-target="manageFixAssignmentOwnerHelp"/);
+  assert.match(collapsedHtml, /data-help-target="manageFixAssignmentPlatformHelp"/);
+  assert.match(collapsedHtml, /data-help-target="manageFixAssignmentMappingHelp"/);
+  assert.match(collapsedHtml, /id="recorderAssignmentRunHelp" class="assignment-help hidden"/);
+  assert.match(collapsedHtml, /id="manageFixAssignmentRunHelp" class="assignment-help hidden"/);
+
+  const detailFeatureSource = await fs.readFile(DETAIL_FEATURE_PATH, 'utf8');
+  assert.doesNotMatch(detailFeatureSource, /data-role="detail-test-status-pill"/);
+  assert.doesNotMatch(detailFeatureSource, /owner:\$\{escapeHtml\(tag\)\}/);
+  assert.match(detailFeatureSource, /firstOwnerTag/);
+});
+
+test('owner scope options do not source robot ssh usernames', async () => {
+  const detailFeatureSource = await fs.readFile(DETAIL_FEATURE_PATH, 'utf8');
+  assert.doesNotMatch(detailFeatureSource, /ownerProfiles\.add\(username\)/);
+  assert.doesNotMatch(detailFeatureSource, /readRobotField\(robot,\s*'username'\)/);
 });

@@ -56,6 +56,10 @@ async function loadApi() {
 
 function makeEnv(state) {
   const env = {
+    FIX_MODE_CONTEXT_DASHBOARD: 'dashboard',
+    FIX_MODE_CONTEXT_DETAIL: 'detail',
+    normalizeText,
+    normalizeTypeId: (value) => normalizeText(value, '').toLowerCase(),
     state,
   };
   return new Proxy(env, {
@@ -67,8 +71,41 @@ function makeEnv(state) {
 }
 
 function makeRuntime(state) {
+  const normalizeTags = (raw, ownerDefault = false) => {
+    const list = Array.isArray(raw) ? raw : [];
+    const out = [];
+    const seen = new Set();
+    list.forEach((item) => {
+      const normalized = normalizeText(item, '').toLowerCase();
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      out.push(normalized);
+    });
+    if (ownerDefault && !out.length) return ['global'];
+    return out;
+  };
   const runtime = {
     getRobotById: (id) => state.robots.find((robot) => normalizeText(robot?.id, '') === normalizeText(id, '')) || null,
+    getAutoFixesForType: (typeId) => {
+      const key = normalizeText(typeId, '');
+      return Array.isArray(state.autoFixesByType?.[key]) ? state.autoFixesByType[key] : [];
+    },
+    getDefinitionTagMeta: (definition = {}, fallback = {}) => ({
+      ownerTags: normalizeTags(definition?.ownerTags ?? fallback?.ownerTags, true),
+      platformTags: normalizeTags(definition?.platformTags ?? fallback?.platformTags, false),
+    }),
+    matchesDefinitionFilters: (definition = {}, fallback = {}) => {
+      const ownerTags = normalizeTags(definition?.ownerTags ?? fallback?.ownerTags, true);
+      const platformTags = normalizeTags(definition?.platformTags ?? fallback?.platformTags, false);
+      const ownerFilter = normalizeTags(state?.filter?.ownerTags, false);
+      const platformFilter = normalizeTags(state?.filter?.platformTags, false);
+      const effectiveOwnerFilter = ownerFilter.length ? Array.from(new Set([...ownerFilter, 'global'])) : ownerFilter;
+      const ownerOk = effectiveOwnerFilter.length === 0 || effectiveOwnerFilter.some((tag) => ownerTags.includes(tag));
+      const platformOk = platformFilter.length === 0 || platformFilter.some((tag) => platformTags.includes(tag));
+      return ownerOk && platformOk;
+    },
+    normalizeOwnerTags: (raw) => normalizeTags(raw, true),
+    normalizePlatformTags: (raw) => normalizeTags(raw, false),
     renderDashboard: () => {
       state.renderDashboardCalls = (state.renderDashboardCalls || 0) + 1;
     },
@@ -115,4 +152,62 @@ test('applyRuntimeRobotPatches ignores empty runtime updates', async () => {
   api.applyRuntimeRobotPatches(new Set());
 
   assert.equal(state.renderDashboardCalls, 0);
+});
+
+test('getDashboardFixCandidates filters fixes by owner and platform tags', async () => {
+  const createFixTestsFeature = await loadApi();
+  const state = {
+    autoFixesByType: {
+      rosbot: [
+        { id: 'fix_1', label: 'Fix 1', description: '', ownerTags: ['alice'], platformTags: ['ros2'] },
+        { id: 'fix_2', label: 'Fix 2', description: '', ownerTags: ['bob'], platformTags: ['ros2'] },
+        { id: 'fix_3', label: 'Fix 3', description: '', ownerTags: ['alice'], platformTags: ['ros1'] },
+      ],
+    },
+    detailRobotId: '',
+    filter: {
+      ownerTags: ['alice'],
+      platformTags: ['ros2'],
+    },
+    robots: [{ id: 'r-1', type: 'Rosbot', typeId: 'rosbot' }],
+    selectedRobotIds: new Set(['r-1']),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(state);
+  const api = createFixTestsFeature(runtime, env);
+
+  const payload = api.getDashboardFixCandidates();
+
+  assert.equal(payload.selectedCount, 1);
+  assert.equal(payload.mixedTypes, false);
+  assert.equal(payload.candidates.length, 1);
+  assert.equal(payload.candidates[0].id, 'fix_1');
+});
+
+test('getDashboardFixCandidates keeps global fixes when filtering by a user owner tag', async () => {
+  const createFixTestsFeature = await loadApi();
+  const state = {
+    autoFixesByType: {
+      rosbot: [
+        { id: 'fix_global', label: 'Fix Global', description: '', ownerTags: ['global'], platformTags: ['ros2'] },
+        { id: 'fix_alice', label: 'Fix Alice', description: '', ownerTags: ['alice'], platformTags: ['ros2'] },
+        { id: 'fix_bob', label: 'Fix Bob', description: '', ownerTags: ['bob'], platformTags: ['ros2'] },
+      ],
+    },
+    detailRobotId: '',
+    filter: {
+      ownerTags: ['alice'],
+      platformTags: ['ros2'],
+    },
+    robots: [{ id: 'r-1', type: 'Rosbot', typeId: 'rosbot' }],
+    selectedRobotIds: new Set(['r-1']),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(state);
+  const api = createFixTestsFeature(runtime, env);
+
+  const payload = api.getDashboardFixCandidates();
+  const ids = payload.candidates.map((entry) => entry.id).sort().join(',');
+
+  assert.equal(ids, 'fix_alice,fix_global');
 });

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .normalization import normalize_status, normalize_text
+from .normalization import normalize_owner_tags, normalize_platform_tags, normalize_status, normalize_text
 
 
 TOKEN_PATTERN = re.compile(r"^\$([A-Za-z0-9_.-]+)\$$")
@@ -90,6 +90,8 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
     definition_id = normalize_text(raw.get("id"), "")
     if not definition_id:
         raise ValueError(f"Test definition in {raw.get('__file__', '<unknown>')} is missing id")
+    owner_tags = normalize_owner_tags(raw.get("ownerTags"))
+    platform_tags = normalize_platform_tags(raw.get("platformTags"))
 
     mode = normalize_text(raw.get("mode"), "orchestrate").lower()
     if mode not in {"orchestrate", "online_probe"}:
@@ -153,6 +155,8 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
             {
                 "id": check_id,
                 "definitionId": definition_id,
+                "ownerTags": owner_tags,
+                "platformTags": platform_tags,
                 "label": normalize_text(metadata.get("label"), normalize_text(raw_check.get("label"), check_id)),
                 "icon": normalize_text(metadata.get("icon"), normalize_text(raw_check.get("icon"), "⚙️")),
                 "manualOnly": bool(metadata.get("manualOnly", True)),
@@ -196,6 +200,8 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
         "label": normalize_text(raw.get("label"), definition_id),
         "description": normalize_text(raw.get("description"), ""),
         "enabled": bool(raw.get("enabled", True)),
+        "ownerTags": owner_tags,
+        "platformTags": platform_tags,
         "mode": mode,
         "execute": normalized_execute,
         "checks": normalized_checks,
@@ -207,6 +213,8 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
     fix_id = normalize_text(raw.get("id"), "")
     if not fix_id:
         raise ValueError(f"Fix definition in {raw.get('__file__', '<unknown>')} is missing id")
+    owner_tags = normalize_owner_tags(raw.get("ownerTags"))
+    platform_tags = normalize_platform_tags(raw.get("platformTags"))
 
     execute = raw.get("execute") if isinstance(raw.get("execute"), list) else []
     if not execute:
@@ -239,6 +247,8 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
         "label": normalize_text(raw.get("label"), fix_id),
         "description": normalize_text(raw.get("description"), ""),
         "enabled": bool(raw.get("enabled", True)),
+        "ownerTags": owner_tags,
+        "platformTags": platform_tags,
         "runAtConnection": run_at_connection,
         "execute": normalized_execute,
         "params": raw.get("params") if isinstance(raw.get("params"), dict) else {},

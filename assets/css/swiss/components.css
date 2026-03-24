@@ -154,10 +154,18 @@
 .robot-card {
   border-radius: 0 !important;
   background: var(--surface-card) !important;
-  border: 1px solid var(--surface-border) !important;
+  border-width: 8px !important;
+  border-style: solid !important;
+  border-color: var(--surface-border) !important;
   min-height: 332px;
   box-shadow: none !important;
   transition: border-color 120ms linear, background-color 120ms linear;
+}
+
+.robot-card.outer-scope-hidden {
+  border-width: 8px !important;
+  border-color: transparent !important;
+  background-clip: padding-box !important;
 }
 
 .robot-card::before {

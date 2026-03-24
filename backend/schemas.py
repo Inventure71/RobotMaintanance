@@ -164,6 +164,8 @@ class TestDefinitionUpsertRequest(BaseModel):
     execute: list[DefinitionExecuteStep] | None = None
     checks: list[DefinitionCheckSpec] = Field(min_length=1)
     params: dict[str, Any] | None = None
+    ownerTags: list[str] | None = None
+    platformTags: list[str] | None = None
 
 
 class FixDefinitionUpsertRequest(BaseModel):
@@ -175,6 +177,8 @@ class FixDefinitionUpsertRequest(BaseModel):
     runAtConnection: bool = False
     execute: list[DefinitionExecuteStep] = Field(min_length=1)
     params: dict[str, Any] | None = None
+    ownerTags: list[str] | None = None
+    platformTags: list[str] | None = None
 
 
 class PrimitiveUpsertRequest(BaseModel):

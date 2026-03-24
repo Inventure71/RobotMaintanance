@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from .definition_loader import load_definition_catalog
-from .normalization import normalize_status, normalize_text, normalize_type_key
+from .normalization import (
+    normalize_owner_tags,
+    normalize_platform_tags,
+    normalize_status,
+    normalize_text,
+    normalize_type_key,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROBOTS_CONFIG_PATH = PROJECT_ROOT / "config" / "robots.config.json"
@@ -241,6 +247,8 @@ def _resolve_test_entry(
             "defaultValue",
             "defaultDetails",
             "possibleResults",
+            "ownerTags",
+            "platformTags",
             "params",
         },
     )
@@ -256,6 +264,16 @@ def _resolve_test_entry(
     )
     if not isinstance(run_at_connection, bool):
         raise ValueError(f"Test '{test_id}' must define boolean runAtConnection")
+    owner_tags_source = (
+        override.get("ownerTags")
+        if "ownerTags" in override
+        else check_definition.get("ownerTags", test_definition.get("ownerTags"))
+    )
+    platform_tags_source = (
+        override.get("platformTags")
+        if "platformTags" in override
+        else check_definition.get("platformTags", test_definition.get("platformTags"))
+    )
 
     return {
         "id": test_id,
@@ -273,6 +291,8 @@ def _resolve_test_entry(
             normalize_text(check_definition.get("defaultDetails"), "Not checked yet"),
         ),
         "possibleResults": possible_results,
+        "ownerTags": normalize_owner_tags(owner_tags_source),
+        "platformTags": normalize_platform_tags(platform_tags_source),
         "params": params,
     }
 
@@ -286,7 +306,17 @@ def _resolve_fix_entry(
     params = _merged_params(
         source,
         override,
-        reserved_keys={"label", "description", "enabled", "runAtConnection", "params", "postTestIds", "execute"},
+        reserved_keys={
+            "label",
+            "description",
+            "enabled",
+            "runAtConnection",
+            "ownerTags",
+            "platformTags",
+            "params",
+            "postTestIds",
+            "execute",
+        },
     )
 
     execute_steps = override.get("execute") if isinstance(override.get("execute"), list) else None
@@ -300,6 +330,8 @@ def _resolve_fix_entry(
     )
     if not isinstance(run_at_connection, bool):
         raise ValueError(f"Fix '{fix_id}' must define boolean runAtConnection")
+    owner_tags_source = override.get("ownerTags") if "ownerTags" in override else source.get("ownerTags")
+    platform_tags_source = override.get("platformTags") if "platformTags" in override else source.get("platformTags")
 
     return {
         "id": fix_id,
@@ -308,6 +340,8 @@ def _resolve_fix_entry(
         "description": normalize_text(override.get("description"), normalize_text(source.get("description"), "")),
         "enabled": bool(override.get("enabled", source.get("enabled", True))),
         "runAtConnection": run_at_connection,
+        "ownerTags": normalize_owner_tags(owner_tags_source),
+        "platformTags": normalize_platform_tags(platform_tags_source),
         "params": params,
         "execute": execute_steps,
     }
