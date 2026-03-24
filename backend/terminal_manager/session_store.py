@@ -101,3 +101,9 @@ class SessionStoreMixin:
         with self._lock:
             for key in list(self._handles.keys()):
                 self._close_handle(key)
+        transport_pool = getattr(self, "_transport_pool", None)
+        if transport_pool is not None:
+            try:
+                transport_pool.close_all()
+            except Exception:
+                pass

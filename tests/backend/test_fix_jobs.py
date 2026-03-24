@@ -73,12 +73,42 @@ def _wait_for_terminal_status(manager: TerminalManager, run_id: str, timeout_sec
         time.sleep(0.01)
 
 
+def _mock_fix_run_context(
+    monkeypatch,
+    manager: TerminalManager,
+    *,
+    run_command,
+    run_id: str = "fix-run-1",
+):
+    class FakeRunContext:
+        def run_command(self, command: str, timeout_sec: float | None = None, sudo_password: str | None = None):
+            return run_command(command=command, timeout_sec=timeout_sec, sudo_password=sudo_password)
+
+        def close(self):
+            return None
+
+        def metadata_payload(self):
+            return {
+                "timing": {"queueMs": 0, "connectMs": 0, "executeMs": 0, "totalMs": 0},
+                "session": {
+                    "runId": run_id,
+                    "robotId": "r1",
+                    "pageSessionId": "page-1",
+                    "runKind": "fix",
+                    "transportReused": True,
+                    "resetPolicy": "run_scoped_shell",
+                },
+            }
+
+    monkeypatch.setattr(manager, "create_automation_run_context", lambda **_kwargs: FakeRunContext())
+
+
 def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
     manager = _manager()
     observed = {"commands": [], "test_runs": 0, "test_ids": []}
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
-        _ = (page_session_id, robot_id, timeout_sec, sudo_password, source)
+    def fake_run_command(*, command, timeout_sec=None, sudo_password=None):
+        _ = (timeout_sec, sudo_password)
         observed["commands"].append(command)
         return AutomationCommandResult(
             output="ok",
@@ -104,7 +134,7 @@ def test_fix_job_succeeds_and_runs_post_tests_once(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+    _mock_fix_run_context(monkeypatch, manager, run_command=fake_run_command)
     monkeypatch.setattr(manager, "run_tests", fake_run_tests)
 
     started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
@@ -126,8 +156,8 @@ def test_fix_job_runs_follow_up_step_after_flash_like_command(monkeypatch):
     ]
     observed = {"commands": []}
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
-        _ = (page_session_id, robot_id, timeout_sec, sudo_password, source)
+    def fake_run_command(*, command, timeout_sec=None, sudo_password=None):
+        _ = (timeout_sec, sudo_password)
         observed["commands"].append(command)
         output = "flash done" if command == "./flash_firmware.sh" else "stack up"
         return AutomationCommandResult(
@@ -152,7 +182,7 @@ def test_fix_job_runs_follow_up_step_after_flash_like_command(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+    _mock_fix_run_context(monkeypatch, manager, run_command=fake_run_command)
     monkeypatch.setattr(manager, "run_tests", fake_run_tests)
 
     started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
@@ -179,13 +209,13 @@ def test_fix_job_failure_still_finishes_fix_run(monkeypatch):
         finished.append(robot_id)
         return original_finish(robot_id)
 
-    def failing_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
-        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
+    def failing_run_command(*, command, timeout_sec=None, sudo_password=None):
+        _ = (command, timeout_sec, sudo_password)
         raise RuntimeError("boom")
 
     monkeypatch.setattr(manager, "start_fix_run", wrapped_start)
     monkeypatch.setattr(manager, "finish_fix_run", wrapped_finish)
-    monkeypatch.setattr(manager, "run_automation_command", failing_run_command)
+    _mock_fix_run_context(monkeypatch, manager, run_command=failing_run_command)
 
     run = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
     payload = _wait_for_terminal_status(manager, run["runId"])
@@ -199,8 +229,8 @@ def test_fix_job_failure_still_finishes_fix_run(monkeypatch):
 def test_fix_job_fails_when_command_exit_code_is_non_zero(monkeypatch):
     manager = _manager()
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
-        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
+    def fake_run_command(*, command, timeout_sec=None, sudo_password=None):
+        _ = (command, timeout_sec, sudo_password)
         return AutomationCommandResult(
             output="permission denied",
             exit_code=1,
@@ -209,7 +239,7 @@ def test_fix_job_fails_when_command_exit_code_is_non_zero(monkeypatch):
             sudo_authenticated=True,
         )
 
-    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+    _mock_fix_run_context(monkeypatch, manager, run_command=fake_run_command)
 
     run = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")
     payload = _wait_for_terminal_status(manager, run["runId"])
@@ -295,8 +325,8 @@ def test_fix_job_cancels_auto_recovery_before_start(monkeypatch):
 def test_fix_job_emits_post_test_events(monkeypatch):
     manager = _manager()
 
-    def fake_run_command(*, page_session_id, robot_id, command, timeout_sec=None, sudo_password=None, source=None):
-        _ = (page_session_id, robot_id, command, timeout_sec, sudo_password, source)
+    def fake_run_command(*, command, timeout_sec=None, sudo_password=None):
+        _ = (command, timeout_sec, sudo_password)
         return AutomationCommandResult(
             output="ok",
             exit_code=0,
@@ -319,7 +349,7 @@ def test_fix_job_emits_post_test_events(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(manager, "run_automation_command", fake_run_command)
+    _mock_fix_run_context(monkeypatch, manager, run_command=fake_run_command)
     monkeypatch.setattr(manager, "run_tests", fake_run_tests)
 
     started = manager.start_fix_job(robot_id="r1", fix_id="demo_fix")

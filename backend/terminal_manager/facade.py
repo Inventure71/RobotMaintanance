@@ -10,6 +10,7 @@ from ..connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from ..normalization import normalize_text, normalize_type_key
 from ..test_executor import TestExecutor
 from .activity_guard import ActivityGuardMixin
+from .automation_session import AutomationSessionMixin
 from .auto_monitor_worker import AutoMonitorWorkerMixin
 from .battery_parser import BatteryParserMixin
 from .command_runner import CommandRunnerMixin
@@ -21,12 +22,14 @@ from .runtime_state import RuntimeStateMixin
 from .session_store import SessionStoreMixin
 from .test_runner import TestRunnerMixin
 from .topics_parser import TopicsParserMixin
+from .transport_pool import SshTransportPool
 
 
 class TerminalManager(
     ActivityGuardMixin,
     ConnectionEventRunnerMixin,
     RuntimeStateMixin,
+    AutomationSessionMixin,
     SessionStoreMixin,
     CommandRunnerMixin,
     MonitorConfigMixin,
@@ -86,6 +89,17 @@ class TerminalManager(
     COMMAND_DEFAULT_TIMEOUT_SEC = 20.0
     COMMAND_MIN_TIMEOUT_SEC = 0.5
     COMMAND_MAX_TIMEOUT_SEC = 3600.0
+    AUTOMATION_QUEUE_TIMEOUT_SEC = 2.0
+    AUTOMATION_QUEUE_TIMEOUT_MIN_SEC = 0.0
+    AUTOMATION_QUEUE_TIMEOUT_MAX_SEC = 3600.0
+    AUTOMATION_CONNECT_TIMEOUT_SEC = 10.0
+    AUTOMATION_CONNECT_TIMEOUT_MIN_SEC = 0.1
+    AUTOMATION_CONNECT_TIMEOUT_MAX_SEC = 120.0
+    AUTOMATION_EXECUTE_TIMEOUT_SEC = 20.0
+    AUTOMATION_EXECUTE_TIMEOUT_MIN_SEC = 0.5
+    AUTOMATION_EXECUTE_TIMEOUT_MAX_SEC = 3600.0
+    TRANSPORT_POOL_IDLE_TTL_SEC = 300.0
+    TRANSPORT_POOL_MAX_FAILURES_BEFORE_RESET = 2
     ACTIVITY_PHASE_ONLINE_PROBE = "online_probe"
     ACTIVITY_PHASE_CONNECTION_RETRY = "connection_retry"
     ACTIVITY_PHASE_FULL_TEST_AFTER_RECOVERY = "full_test_after_recovery"
@@ -127,6 +141,7 @@ class TerminalManager(
         self._runtime_activity = {}
         self._runtime_version = 0
         self._runtime_robot_versions = {}
+        self._last_test_run_metadata: dict[tuple[str, str], dict[str, Any]] = {}
         self._monitor_mode = self.MONITOR_MODE_ONLINE_BATTERY
         self._topics_interval_sec = self.TOPICS_INTERVAL_DEFAULT_SEC
         self._online_interval_sec = self.ONLINE_INTERVAL_DEFAULT_SEC
@@ -163,6 +178,11 @@ class TerminalManager(
             write=self._write_connector,
         )
         self._lock = threading.Lock()
+        self._transport_pool = SshTransportPool(
+            idle_ttl_sec=self.TRANSPORT_POOL_IDLE_TTL_SEC,
+            default_connect_timeout_sec=self.AUTOMATION_CONNECT_TIMEOUT_SEC,
+            max_failures_before_reset=self.TRANSPORT_POOL_MAX_FAILURES_BEFORE_RESET,
+        )
         self._auto_monitor_enabled = bool(auto_monitor)
         self._auto_monitor_interval_sec = max(0.2, float(auto_monitor_interval_sec))
         self._auto_monitor_stop = threading.Event()
@@ -171,9 +191,8 @@ class TerminalManager(
             robot_types_by_id=robot_types_by_id,
             resolve_robot_type=self._resolve_robot_type,
             resolve_credentials=self._resolve_credentials,
-            get_or_connect=self.get_or_connect,
-            close_session=self.close_session,
             check_online=self.check_online,
+            create_automation_run_context=self.create_automation_run_context,
             test_definitions_by_id=self._test_definitions_by_id,
             check_definitions_by_id=self._check_definitions_by_id,
             orchestrate_connector=self._orchestrate_connector,
@@ -207,6 +226,7 @@ class TerminalManager(
         fix_definitions_by_id: dict[str, dict[str, Any]],
     ) -> dict[str, int]:
         with self._lock:
+            self._last_test_run_metadata.clear()
             if isinstance(robots_by_id, dict):
                 self.robots_by_id.clear()
                 self.robots_by_id.update(robots_by_id)
@@ -228,9 +248,8 @@ class TerminalManager(
                 robot_types_by_id=self.robot_types_by_id,
                 resolve_robot_type=self._resolve_robot_type,
                 resolve_credentials=self._resolve_credentials,
-                get_or_connect=self.get_or_connect,
-                close_session=self.close_session,
                 check_online=self.check_online,
+                create_automation_run_context=self.create_automation_run_context,
                 test_definitions_by_id=self._test_definitions_by_id,
                 check_definitions_by_id=self._check_definitions_by_id,
                 orchestrate_connector=self._orchestrate_connector,

@@ -59,9 +59,6 @@ class InteractiveShell:
     """
 
     READ_BLOCK_TIMEOUT_SEC = 0.2
-    STARTUP_DRAIN_MAX_SEC = 3.0
-    STARTUP_DRAIN_IDLE_SEC = 0.25
-    STARTUP_DRAIN_QUIET_WINDOWS = 2
     OUTPUT_QUEUE_MAX_CHUNKS = 1024
     SUDO_PROMPT_SETTLE_SEC = 0.05
     SUDO_RESET_TIMEOUT_SEC = 2.0
@@ -99,6 +96,8 @@ class InteractiveShell:
         sleep_fn: Callable[[float], None] = time.sleep,
         time_fn: Callable[[], float] = time.time,
         prompt_detector: Optional[Callable[[str], bool]] = None,
+        connected_client: ShellClient | None = None,
+        owns_client: bool = True,
     ):
         self.host = host
         self.username = username
@@ -113,6 +112,8 @@ class InteractiveShell:
         self._sleep = sleep_fn
         self._time = time_fn
         self._prompt_detector = prompt_detector
+        self._connected_client = connected_client
+        self._owns_client = bool(owns_client)
 
         self.client: Optional[ShellClient] = None
         self.chan: Optional[ShellChannel] = None
@@ -131,17 +132,28 @@ class InteractiveShell:
         return None
 
     def connect(self) -> None:
-        self.client = self._client_factory()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(
-            hostname=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-            timeout=self.connect_timeout,
-            allow_agent=False,
-            look_for_keys=False,
-        )
+        if self._connected_client is not None:
+            self.client = self._connected_client
+        else:
+            self.client = self._client_factory()
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            connect_kwargs = {
+                "hostname": self.host,
+                "port": self.port,
+                "username": self.username,
+                "password": self.password,
+                "timeout": self.connect_timeout,
+                "banner_timeout": self.connect_timeout,
+                "auth_timeout": self.connect_timeout,
+                "channel_timeout": self.connect_timeout,
+                "allow_agent": False,
+                "look_for_keys": False,
+            }
+            try:
+                self.client.connect(**connect_kwargs)
+            except TypeError:
+                connect_kwargs.pop("channel_timeout", None)
+                self.client.connect(**connect_kwargs)
 
         self.chan = self.client.invoke_shell(
             term=self.term,
@@ -154,8 +166,6 @@ class InteractiveShell:
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
 
-        self._drain_startup_output()
-
     def close(self) -> None:
         self._stop.set()
         if self.chan:
@@ -165,10 +175,11 @@ class InteractiveShell:
                 pass
             self.chan = None
         if self.client:
-            try:
-                self.client.close()
-            except Exception:
-                pass
+            if self._owns_client:
+                try:
+                    self.client.close()
+                except Exception:
+                    pass
             self.client = None
 
     def resize_pty(self, width: int, height: int) -> None:
@@ -205,30 +216,6 @@ class InteractiveShell:
                     self._out_queue.get_nowait()
                 except Empty:
                     continue
-
-    def _drain_startup_output(self) -> None:
-        max_wait = max(0.0, float(getattr(self, "STARTUP_DRAIN_MAX_SEC", 0.0)))
-        quiet_window = max(0.01, float(getattr(self, "STARTUP_DRAIN_IDLE_SEC", 0.15)))
-        quiet_windows = max(1, int(getattr(self, "STARTUP_DRAIN_QUIET_WINDOWS", 2)))
-        if max_wait <= 0:
-            return
-
-        deadline = self._time() + max_wait
-        saw_output = False
-        quiet_count = 0
-        while True:
-            remaining = max(0.0, deadline - self._time())
-            if remaining <= 0:
-                return
-            if self.read(wait_timeout=min(quiet_window, remaining)):
-                saw_output = True
-                quiet_count = 0
-                continue
-            if not saw_output:
-                return
-            quiet_count += 1
-            if quiet_count >= quiet_windows:
-                return
 
     def _is_prompt(self, buf: str) -> bool:
         if self._prompt_detector:

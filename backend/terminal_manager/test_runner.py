@@ -340,6 +340,9 @@ class TestRunnerMixin:
         page_session_id: str,
         test_ids: list[str] | None = None,
         dry_run: bool = False,
+        queue_timeout_sec: float | None = None,
+        connect_timeout_sec: float | None = None,
+        execute_timeout_sec: float | None = None,
     ) -> list[dict[str, Any]]:
         self._mark_manual_activity(robot_id=robot_id, page_session_id=page_session_id)
         results = self._executor.run_tests(
@@ -347,13 +350,27 @@ class TestRunnerMixin:
             page_session_id=page_session_id,
             test_ids=test_ids,
             dry_run=dry_run,
+            queue_timeout_sec=queue_timeout_sec,
+            connect_timeout_sec=connect_timeout_sec,
+            execute_timeout_sec=execute_timeout_sec,
         )
+        if hasattr(self._executor, "get_last_run_metadata"):
+            metadata = self._executor.get_last_run_metadata()
+            with self._lock:
+                self._last_test_run_metadata[(robot_id, page_session_id)] = metadata
         self._record_runtime_results_from_test_run(
             robot_id=robot_id,
             results=results if isinstance(results, list) else [],
             source="manual",
         )
         return results
+
+    def get_last_test_run_metadata(self, robot_id: str, page_session_id: str) -> dict[str, Any]:
+        with self._lock:
+            payload = self._last_test_run_metadata.get((robot_id, page_session_id))
+        if isinstance(payload, dict):
+            return dict(payload)
+        return {}
 
     def default_tests(self, robot_id: str) -> dict[str, dict[str, str]]:
         robot_type = self._resolve_robot_type(robot_id)

@@ -14,18 +14,6 @@ import backend.terminal_manager as tm_module
 def test_check_online_uses_cache_and_force_refresh(monkeypatch):
     connect_calls = {"count": 0}
 
-    class FakeShell:
-        def __init__(self, **_kwargs):
-            pass
-
-        def connect(self):
-            connect_calls["count"] += 1
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
-
     manager = TerminalManager(
         robots_by_id={
             "r1": {
@@ -37,6 +25,17 @@ def test_check_online_uses_cache_and_force_refresh(monkeypatch):
         },
         robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
     )
+
+    def fake_probe_transport(*, robot_id, connect_timeout_sec, queue_timeout_sec=None):
+        _ = (robot_id, connect_timeout_sec, queue_timeout_sec)
+        connect_calls["count"] += 1
+        return type(
+            "_Probe",
+            (),
+            {"reused": connect_calls["count"] > 1, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1},
+        )()
+
+    monkeypatch.setattr(manager, "probe_transport", fake_probe_transport)
 
     first = manager.check_online("r1")
     second = manager.check_online("r1")

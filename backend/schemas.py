@@ -58,11 +58,19 @@ class TestRunRequest(BaseModel):
     pageSessionId: str | None = None
     testIds: list[str] | None = None
     dryRun: bool = False
+    timeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
+    queueTimeoutSec: float | None = Field(default=None, ge=0.0, le=3600.0)
+    connectTimeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
+    executeTimeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
 
 
 class FixRunRequest(BaseModel):
     pageSessionId: str | None = None
     params: dict[str, Any] | None = None
+    timeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
+    queueTimeoutSec: float | None = Field(default=None, ge=0.0, le=3600.0)
+    connectTimeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
+    executeTimeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
 
 
 class OnlineBatchRequest(BaseModel):

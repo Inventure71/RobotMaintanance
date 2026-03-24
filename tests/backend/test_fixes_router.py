@@ -11,8 +11,27 @@ def test_fix_router_starts_job_and_polls_status():
         def __init__(self):
             self.started = []
 
-        def start_fix_job(self, robot_id, fix_id, page_session_id=None, params=None):
-            self.started.append((robot_id, fix_id, page_session_id, params))
+        def start_fix_job(
+            self,
+            robot_id,
+            fix_id,
+            page_session_id=None,
+            params=None,
+            queue_timeout_sec=None,
+            connect_timeout_sec=None,
+            execute_timeout_sec=None,
+        ):
+            self.started.append(
+                (
+                    robot_id,
+                    fix_id,
+                    page_session_id,
+                    params,
+                    queue_timeout_sec,
+                    connect_timeout_sec,
+                    execute_timeout_sec,
+                )
+            )
             return {
                 "ok": True,
                 "robotId": robot_id,
@@ -45,7 +64,7 @@ def test_fix_router_starts_job_and_polls_status():
     )
     assert start.status_code == 200
     assert start.json()["runId"] == "run-1"
-    assert manager.started == [("r1", "flash_fix", "page-1", {"postDelaySec": 5})]
+    assert manager.started == [("r1", "flash_fix", "page-1", {"postDelaySec": 5}, None, None, None)]
 
     poll = client.get("/api/robots/r1/fixes/runs/run-1")
     assert poll.status_code == 200

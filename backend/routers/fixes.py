@@ -21,6 +21,9 @@ def create_fixes_router(terminal_manager: TerminalManager) -> APIRouter:
             fix_id=fix_id,
             page_session_id=body.pageSessionId,
             params=body.params,
+            queue_timeout_sec=body.queueTimeoutSec,
+            connect_timeout_sec=body.connectTimeoutSec,
+            execute_timeout_sec=body.executeTimeoutSec or body.timeoutSec,
         )
 
     @router.get("/api/robots/{robot_id}/fixes/runs/{run_id}")

@@ -149,7 +149,7 @@ class AutoMonitorWorkerMixin:
                     time.sleep(min_visible_sec - elapsed)
                 self._set_runtime_activity(robot_id, searching=False)
             with self._lock:
-                self._online_next_check_at[robot_id] = now + online_interval_sec
+                self._online_next_check_at[robot_id] = time.time() + online_interval_sec
             debounced_probe = self._debounced_online_probe(robot_id, online_probe)
             if debounced_probe is not None:
                 online_update = self.apply_online_probe_to_runtime(
@@ -185,12 +185,12 @@ class AutoMonitorWorkerMixin:
         if now >= next_battery:
             self._refresh_battery_state(robot_id)
             with self._lock:
-                self._battery_next_check_at[robot_id] = now + battery_interval_sec
+                self._battery_next_check_at[robot_id] = time.time() + battery_interval_sec
 
         if self._topics_monitor_enabled() and now >= next_topics:
             self._refresh_topics_state(robot_id)
             with self._lock:
-                self._topics_next_check_at[robot_id] = now + topics_interval_sec
+                self._topics_next_check_at[robot_id] = time.time() + topics_interval_sec
 
         latest_online = bool(self.get_runtime_probe_state(robot_id).get("isOnline"))
         with self._lock:

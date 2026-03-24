@@ -78,6 +78,9 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                 page_session_id=page_session_id,
                 test_ids=normalized_test_ids,
                 dry_run=body.dryRun,
+                queue_timeout_sec=body.queueTimeoutSec,
+                connect_timeout_sec=body.connectTimeoutSec,
+                execute_timeout_sec=body.executeTimeoutSec or body.timeoutSec,
             )
         finally:
             if started_run and hasattr(terminal_manager, "finish_test_run"):
@@ -86,14 +89,27 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
                     page_session_id=page_session_id,
                 )
         finished_at = time.time()
-        return {
+        metadata: dict[str, Any] = {}
+        if hasattr(terminal_manager, "get_last_test_run_metadata"):
+            metadata = terminal_manager.get_last_test_run_metadata(robot_id=robot_id, page_session_id=page_session_id)
+        session_payload = metadata.get("session") if isinstance(metadata, dict) else {}
+        timing_payload = metadata.get("timing") if isinstance(metadata, dict) else {}
+        response = {
             "ok": True,
             "robotId": robot_id,
-            "runId": f"run-{int(started_at * 1000)}",
+            "runId": normalize_text(
+                session_payload.get("runId") if isinstance(session_payload, dict) else "",
+                f"run-{int(started_at * 1000)}",
+            ),
             "startedAt": started_at,
             "finishedAt": finished_at,
             "results": results,
         }
+        if isinstance(session_payload, dict) and session_payload:
+            response["session"] = session_payload
+        if isinstance(timing_payload, dict) and timing_payload:
+            response["timing"] = timing_payload
+        return response
 
     @router.post("/api/robots/online-check")
     def run_online_check_batch(body: OnlineBatchRequest) -> dict[str, Any]:

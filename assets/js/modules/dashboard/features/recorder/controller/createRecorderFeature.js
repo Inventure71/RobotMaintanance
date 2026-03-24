@@ -1572,9 +1572,10 @@ export function createRecorderFeature(context, maybeEnv) {
         state.robots.forEach((robot) => {
           const id = normalizeText(robot?.id, '');
           if (!id) return;
+          const typeLabel = normalizeText(robot?.type, normalizeText(robot?.typeId, 'n/a'));
           const option = document.createElement('option');
           option.value = id;
-          option.textContent = `${normalizeText(robot?.name, id)} (${id})`;
+          option.textContent = `${normalizeText(robot?.name, id)} (${typeLabel})`;
           recorderRobotSelect.appendChild(option);
         });
         if (previousValue) {

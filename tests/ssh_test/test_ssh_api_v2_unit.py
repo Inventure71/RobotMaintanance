@@ -120,7 +120,7 @@ def test_connect_calls_paramiko_like_client_methods():
         shell.close()
 
 
-def test_connect_drains_startup_banner_until_shell_goes_quiet():
+def test_connect_keeps_startup_banner_output_available():
     fake_channel = StreamingChannel(
         [
             "Last login: Wed Mar 18 09:44:42 2026 from 10.205.1.100\r\n",
@@ -136,13 +136,11 @@ def test_connect_drains_startup_banner_until_shell_goes_quiet():
         port=2222,
         client_factory=lambda: fake_client,
     )
-    shell.STARTUP_DRAIN_MAX_SEC = 0.1
-    shell.STARTUP_DRAIN_IDLE_SEC = 0.01
-    shell.STARTUP_DRAIN_QUIET_WINDOWS = 1
-
     try:
         shell.connect()
-        assert shell.read() == ""
+        banner = shell.read(wait_timeout=0.1)
+        assert "Last login:" in banner
+        assert "husarion@alexander:~$ " in banner
     finally:
         shell.close()
 

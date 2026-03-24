@@ -105,7 +105,7 @@ class WriteConnector:
                 execution = run_command(resolved_command, timeout_sec)
                 if execution.timed_out:
                     raise RuntimeError(
-                        f"Command timed out after {timeout_sec if timeout_sec is not None else 'default'} seconds"
+                        f"execute_timeout: command timed out after {timeout_sec if timeout_sec is not None else 'default'} seconds"
                     )
                 if execution.exit_code is None:
                     raise RuntimeError("Command completed without a readable exit code")

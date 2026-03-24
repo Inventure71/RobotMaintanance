@@ -4,6 +4,8 @@ import time
 from typing import Any
 
 from ..normalization import normalize_status, normalize_text
+
+
 class OnlineCheckerMixin:
     def _clamp_online_timeout(self, timeout_sec: float | None) -> float:
         timeout = float(timeout_sec) if timeout_sec is not None else self.ONLINE_DEFAULT_TIMEOUT_SEC
@@ -30,20 +32,17 @@ class OnlineCheckerMixin:
                 return cached_result
 
         start_ms = int(now * 1000)
-        host, username, password, port = self._resolve_credentials(robot_id)
-        from . import InteractiveShell
-
-        shell = InteractiveShell(
-            host=host,
-            username=username,
-            password=password,
-            port=port,
-            connect_timeout=timeout,
-            prompt_regex=r"[$#] ",
-        )
+        host, _username, _password, port = self._resolve_credentials(robot_id)
 
         try:
-            shell.connect()
+            probe = self.probe_transport(
+                robot_id=robot_id,
+                connect_timeout_sec=timeout,
+                queue_timeout_sec=0.0,
+            )
+            probe_ms = int(getattr(probe, "probe_ms", 0))
+            connect_ms = int(getattr(probe, "connect_ms", 0))
+            queue_ms = int(getattr(probe, "queue_ms", 0))
             result = {
                 "status": "ok",
                 "value": "reachable",
@@ -51,6 +50,14 @@ class OnlineCheckerMixin:
                 "ms": max(0, int(time.time() * 1000 - start_ms)),
                 "checkedAt": time.time(),
                 "source": "live",
+                "transportReused": bool(getattr(probe, "reused", False)),
+                "probeLevel": "transport_channel",
+                "timing": {
+                    "queueMs": queue_ms,
+                    "connectMs": connect_ms,
+                    "probeMs": probe_ms,
+                    "totalMs": max(0, int(time.time() * 1000 - start_ms)),
+                },
             }
         except Exception as exc:
             result = {
@@ -60,12 +67,15 @@ class OnlineCheckerMixin:
                 "ms": max(0, int(time.time() * 1000 - start_ms)),
                 "checkedAt": time.time(),
                 "source": "live",
+                "transportReused": False,
+                "probeLevel": "transport_channel",
+                "timing": {
+                    "queueMs": 0,
+                    "connectMs": 0,
+                    "probeMs": 0,
+                    "totalMs": max(0, int(time.time() * 1000 - start_ms)),
+                },
             }
-        finally:
-            try:
-                shell.close()
-            except Exception:
-                pass
 
         with self._lock:
             self._online_cache[robot_id] = dict(result)

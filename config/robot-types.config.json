@@ -62,7 +62,10 @@
       "testRefs": [
         "online"
       ],
-      "fixRefs": []
+      "fixRefs": [],
+      "autoMonitor": {
+        "batteryCommand": "source /opt/ros/jazzy/setup.bash >/dev/null 2>&1 || true; \\\r\nsource ~/ws/install/setup.bash >/dev/null 2>&1 || true; \\\r\ntimeout 6s ros2 topic echo --once /battery"
+      }
     }
   ]
 }

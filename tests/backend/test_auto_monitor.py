@@ -178,13 +178,18 @@ def test_auto_monitor_tick_recovers_offline_and_reads_battery(monkeypatch):
         },
         auto_monitor=False,
     )
+    monkeypatch.setattr(
+        manager,
+        "probe_transport",
+        lambda **_kwargs: type("_Probe", (), {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1})(),
+    )
     manager._run_auto_monitor_tick()
     runtime = manager.get_runtime_tests("r1")
 
     assert runtime["online"]["status"] == "ok"
     assert runtime["battery"]["value"] == "75%"
     assert "custom battery probe" in observed["commands"]
-    assert observed["connect_calls"] >= 2
+    assert observed["connect_calls"] >= 1
 
 
 def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
@@ -226,6 +231,11 @@ def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
             }
         },
         auto_monitor=False,
+    )
+    monkeypatch.setattr(
+        manager,
+        "probe_transport",
+        lambda **_kwargs: type("_Probe", (), {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1})(),
     )
     manager._run_auto_recovery_tests = lambda _robot_id: None
 
@@ -274,6 +284,29 @@ def test_auto_monitor_keeps_online_state_when_battery_command_fails(monkeypatch)
         },
         auto_monitor=False,
     )
+    fake_shell = FakeShell()
+
+    class FakeRunContext:
+        def run_command(self, command: str, timeout_sec: float | None = None, sudo_password: str | None = None):
+            return fake_shell.run_automation_command(command, timeout_sec or 12.0, sudo_password=sudo_password)
+
+        def close(self):
+            return None
+
+        def metadata_payload(self):
+            return {
+                "timing": {"queueMs": 0, "connectMs": 0, "executeMs": 0, "totalMs": 0},
+                "session": {
+                    "runId": "manual-run",
+                    "robotId": "r1",
+                    "pageSessionId": "manual-session",
+                    "runKind": "test",
+                    "transportReused": True,
+                    "resetPolicy": "run_scoped_shell",
+                },
+            }
+
+    manager._executor._create_automation_run_context = lambda **_kwargs: FakeRunContext()
     manager._record_runtime_tests(
         "r1",
         {
@@ -538,6 +571,29 @@ def test_manual_run_persists_runtime_results(monkeypatch):
         },
         auto_monitor=False,
     )
+    fake_shell = FakeShell()
+
+    class FakeRunContext:
+        def run_command(self, command: str, timeout_sec: float | None = None, sudo_password: str | None = None):
+            return fake_shell.run_automation_command(command, timeout_sec or 12.0, sudo_password=sudo_password)
+
+        def close(self):
+            return None
+
+        def metadata_payload(self):
+            return {
+                "timing": {"queueMs": 0, "connectMs": 0, "executeMs": 0, "totalMs": 0},
+                "session": {
+                    "runId": "manual-run",
+                    "robotId": "r1",
+                    "pageSessionId": "manual-session",
+                    "runKind": "test",
+                    "transportReused": True,
+                    "resetPolicy": "run_scoped_shell",
+                },
+            }
+
+    manager._executor._create_automation_run_context = lambda **_kwargs: FakeRunContext()
 
     results = manager.run_tests(
         robot_id="r1",
@@ -871,6 +927,11 @@ def test_auto_monitor_topics_mode_runs_topic_snapshot_on_interval(monkeypatch):
             }
         },
         auto_monitor=False,
+    )
+    monkeypatch.setattr(
+        manager,
+        "probe_transport",
+        lambda **_kwargs: type("_Probe", (), {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1})(),
     )
     manager.update_monitor_config(mode="online_battery_topics", topics_interval_sec=30.0)
 

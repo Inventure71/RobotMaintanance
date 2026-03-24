@@ -92,6 +92,9 @@ class FixRunnerMixin:
         fix_id: str,
         page_session_id: str | None = None,
         params: dict[str, Any] | None = None,
+        queue_timeout_sec: float | None = None,
+        connect_timeout_sec: float | None = None,
+        execute_timeout_sec: float | None = None,
     ) -> dict[str, Any]:
         normalized_robot_id = normalize_text(robot_id, "")
         normalized_fix_id = normalize_text(fix_id, "")
@@ -129,6 +132,20 @@ class FixRunnerMixin:
             "testRun": None,
             "error": None,
             "pageSessionId": normalized_page_session_id,
+            "timing": {
+                "queueMs": 0,
+                "connectMs": 0,
+                "executeMs": 0,
+                "totalMs": 0,
+            },
+            "session": {
+                "runId": run_id,
+                "robotId": normalized_robot_id,
+                "pageSessionId": normalized_page_session_id,
+                "runKind": "fix",
+                "transportReused": False,
+                "resetPolicy": "run_scoped_shell",
+            },
         }
 
         with self._lock:
@@ -143,6 +160,9 @@ class FixRunnerMixin:
                 "fix_spec": fix_spec,
                 "params": merged_params,
                 "page_session_id": normalized_page_session_id,
+                "queue_timeout_sec": queue_timeout_sec,
+                "connect_timeout_sec": connect_timeout_sec,
+                "execute_timeout_sec": execute_timeout_sec,
             },
             daemon=True,
         )
@@ -166,6 +186,9 @@ class FixRunnerMixin:
         fix_spec: dict[str, Any],
         params: dict[str, Any],
         page_session_id: str,
+        queue_timeout_sec: float | None = None,
+        connect_timeout_sec: float | None = None,
+        execute_timeout_sec: float | None = None,
     ) -> None:
         started_at = time.time()
         with self._lock:
@@ -186,15 +209,20 @@ class FixRunnerMixin:
                 self._record_fix_event(robot_id, run_id, event_type, message, data)
 
             _, _, sudo_password, _ = self._resolve_credentials(robot_id)
+            run_context = self.create_automation_run_context(
+                robot_id=robot_id,
+                page_session_id=page_session_id,
+                run_kind="fix",
+                queue_timeout_sec=queue_timeout_sec,
+                connect_timeout_sec=connect_timeout_sec,
+                execute_timeout_sec=execute_timeout_sec,
+            )
 
             def run_command(command: str, timeout_sec: float | None = None):
-                return self.run_automation_command(
-                    page_session_id=page_session_id,
-                    robot_id=robot_id,
-                    command=command,
+                return run_context.run_command(
+                    command,
                     timeout_sec=timeout_sec,
                     sudo_password=sudo_password,
-                    source="auto-fix",
                 )
 
             def run_tests(test_ids: list[str] | None) -> list[dict[str, Any]]:
@@ -211,15 +239,19 @@ class FixRunnerMixin:
                 "checks": [],
             }
 
-            execution = self._orchestrate_connector.run_definition(
-                definition,
-                run_scope=f"fix:{robot_id}:{run_id}",
-                run_command=run_command,
-                params=params,
-                dry_run=False,
-                emit_event=emit_event,
-                command_cache={},
-            )
+            try:
+                execution = self._orchestrate_connector.run_definition(
+                    definition,
+                    run_scope=f"fix:{robot_id}:{run_id}",
+                    run_command=run_command,
+                    params=params,
+                    dry_run=False,
+                    emit_event=emit_event,
+                    command_cache={},
+                )
+            finally:
+                run_context.close()
+            run_metadata = run_context.metadata_payload()
 
             post_test_ids = self._default_fix_test_ids(robot_id)
 
@@ -239,6 +271,13 @@ class FixRunnerMixin:
             }
 
             finished_at = time.time()
+            test_metadata = (
+                self.get_last_test_run_metadata(robot_id=robot_id, page_session_id=page_session_id)
+                if hasattr(self, "get_last_test_run_metadata")
+                else {}
+            )
+            timing_payload = run_metadata.get("timing") if isinstance(run_metadata, dict) else {}
+            session_payload = run_metadata.get("session") if isinstance(run_metadata, dict) else {}
             with self._lock:
                 payload = self._fix_runs.get((robot_id, run_id))
                 if not isinstance(payload, dict):
@@ -252,6 +291,12 @@ class FixRunnerMixin:
                 payload["finishedAt"] = finished_at
                 payload["updatedAt"] = finished_at
                 payload["error"] = None
+                if isinstance(timing_payload, dict):
+                    payload["timing"] = dict(timing_payload)
+                    if isinstance(test_metadata, dict) and isinstance(test_metadata.get("timing"), dict):
+                        payload["timing"]["postTests"] = dict(test_metadata["timing"])
+                if isinstance(session_payload, dict) and session_payload:
+                    payload["session"] = dict(session_payload)
 
             self._record_fix_event(robot_id, run_id, "finished", f"Fix '{fix_id}' completed with status 'succeeded'.")
         except Exception as exc:
