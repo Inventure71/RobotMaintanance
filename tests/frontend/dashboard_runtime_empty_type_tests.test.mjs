@@ -181,11 +181,8 @@ test('normalizeRobotTests preserves empty definitions for known robot types', as
   assert.deepEqual({ ...emptyType.tests }, {});
 
   const unknownType = api.normalizeRobotTests({}, 'unknown-type');
-  assert.deepEqual(
-    unknownType.definitions.map((definition) => definition.id),
-    ['online', 'general'],
-  );
-  assert.deepEqual(Object.keys(unknownType.tests), ['online', 'general']);
+  assert.deepEqual(Array.from(unknownType.definitions), []);
+  assert.deepEqual(Object.keys(unknownType.tests), []);
 });
 
 test('getConfiguredDefaultTestIds does not inject global tests for known empty types', async () => {
@@ -217,7 +214,7 @@ test('getConfiguredDefaultTestIds does not inject global tests for known empty t
       },
       false,
     )),
-    ['general'],
+    [],
   );
 });
 

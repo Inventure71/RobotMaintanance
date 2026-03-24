@@ -1444,7 +1444,7 @@ export function createFleetFeature(context, maybeEnv) {
       }
 
   function issueSummary(robot) {
-        const testDefinitions = robot?.testDefinitions || env.TEST_DEFINITIONS;
+        const testDefinitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
         return nonBatteryTestEntries(robot)
           .filter(([, test]) => test.status !== 'ok')
           .slice(0, 3)

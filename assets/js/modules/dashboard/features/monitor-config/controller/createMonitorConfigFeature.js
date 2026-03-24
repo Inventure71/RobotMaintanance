@@ -860,7 +860,7 @@ export function createMonitorConfigFeature(context, maybeEnv) {
         if (typeCfg) {
           return Array.isArray(typeCfg.tests) ? typeCfg.tests : [];
         }
-        return DEFAULT_TEST_DEFINITIONS;
+        return [];
       }
 
   function getAutoFixesForType(typeId) {

@@ -593,7 +593,7 @@ def test_monitor_config_defaults_and_update():
     default_config = manager.get_monitor_config()
     assert default_config["mode"] == "online_battery"
     assert default_config["topicsIntervalSec"] == 30.0
-    assert default_config["parallelism"] == 8
+    assert default_config["parallelism"] == manager.MONITOR_PARALLELISM_DEFAULT
 
     updated = manager.update_monitor_config(
         mode="online_battery_topics",

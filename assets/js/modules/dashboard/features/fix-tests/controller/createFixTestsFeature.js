@@ -1591,7 +1591,7 @@ export function createFixTestsFeature(context, maybeEnv) {
         const byDefinition =
           Array.isArray(robot?.testDefinitions)
             ? robot.testDefinitions
-            : env.TEST_DEFINITIONS;
+            : [];
         const testIds = byDefinition
           .filter((item) => item && typeof item === 'object' && item.enabled !== false)
           .map((item) => normalizeText(item?.id, ''))

@@ -534,7 +534,7 @@ export function createDetailFeature(context, maybeEnv) {
         syncModelViewerRotationForContainer(model, isOffline);
   
         testList.replaceChildren();
-        const definitions = robot?.testDefinitions || env.TEST_DEFINITIONS;
+        const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
         definitions.forEach((def) => {
           const result = robot.tests[def.id];
           const icon = getTestIconPresentation(def.id, def.icon);
@@ -570,42 +570,44 @@ export function createDetailFeature(context, maybeEnv) {
           testList.appendChild(row);
         });
   
-        // Extra tests added by backend but not in the current UI catalog.
-        Object.entries(robot.tests)
-          .filter(([id]) => !definitions.find((test) => test.id === id))
-          .forEach(([id, result]) => {
-            const icon = getTestIconPresentation(id, '⚙️');
-            const previewText = buildTestPreviewTextForResult(id, result);
-            const row = document.createElement('div');
-            row.className = 'test-row';
-            row.setAttribute('data-test-id', id);
-            row.innerHTML = `
-              <div class="test-info">
-                <span class="test-title">
-                  <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
-                  <span class="test-title-label">${id}</span>
-                  <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
-                </span>
-                <span class="test-value" data-role="detail-test-value">${previewText}</span>
-              </div>
-              <div class="test-actions">
-              <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
-              <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
-            </div>`.trim().replace(/>\s+</g, '><');
-            const valueNode = row.querySelector('[data-role="detail-test-value"]');
-            if (valueNode) {
-              valueNode.title = previewText;
-            }
-            const infoButton = row.querySelector(`[data-test-id="${id}"]`);
-            if (infoButton) {
-              infoButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                openTestDebugModal(robot, id);
-              });
-            }
-            testList.appendChild(row);
-          });
+        if (definitions.length > 0) {
+          // Extra tests added by backend but not in the current UI catalog.
+          Object.entries(robot.tests)
+            .filter(([id]) => !definitions.find((test) => test.id === id))
+            .forEach(([id, result]) => {
+              const icon = getTestIconPresentation(id, '⚙️');
+              const previewText = buildTestPreviewTextForResult(id, result);
+              const row = document.createElement('div');
+              row.className = 'test-row';
+              row.setAttribute('data-test-id', id);
+              row.innerHTML = `
+                <div class="test-info">
+                  <span class="test-title">
+                    <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
+                    <span class="test-title-label">${id}</span>
+                    <span class="pill" data-role="detail-test-status-pill" style="font-size: 0.72rem; background: rgba(255,255,255,0.05);">${result.status.toUpperCase()}</span>
+                  </span>
+                  <span class="test-value" data-role="detail-test-value">${previewText}</span>
+                </div>
+                <div class="test-actions">
+                <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
+                <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
+              </div>`.trim().replace(/>\s+</g, '><');
+              const valueNode = row.querySelector('[data-role="detail-test-value"]');
+              if (valueNode) {
+                valueNode.title = previewText;
+              }
+              const infoButton = row.querySelector(`[data-test-id="${id}"]`);
+              if (infoButton) {
+                infoButton.addEventListener('click', (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openTestDebugModal(robot, id);
+                });
+              }
+              testList.appendChild(row);
+            });
+        }
   
         const detailId = robotId(robot);
         if (state.activeTerminalRobotId !== detailId) {
@@ -1854,7 +1856,7 @@ export function createDetailFeature(context, maybeEnv) {
   function openTestDebugModal(robot, testId) {
         if (!robot || !testDebugModal || !testDebugTitle || !testDebugSummary || !testDebugBody) return;
   
-        const definitions = robot?.testDefinitions || env.TEST_DEFINITIONS;
+        const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
         const definitionLabel = getDefinitionLabel(definitions, testId);
         const basicResult = robot?.tests?.[testId] || { status: 'warning', value: 'n/a', details: 'No detail available' };
         const debugResult = robot?.testDebug?.[testId] || null;
@@ -1930,7 +1932,7 @@ export function createDetailFeature(context, maybeEnv) {
         const typeOptions = Array.from(new Set(state.robots.map((r) => r.type)));
         const knownTestDefinitions = new Map();
         state.robots.forEach((robot) => {
-          const definitions = robot?.testDefinitions || env.TEST_DEFINITIONS;
+          const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
           definitions.forEach((test) => {
             if (!knownTestDefinitions.has(test.id)) {
               knownTestDefinitions.set(test.id, test);
