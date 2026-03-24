@@ -188,17 +188,19 @@ class BatteryParserMixin:
         except HTTPException as exc:
             detail = normalize_text(exc.detail, "Unable to read /battery topic.")
             self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
-            self.apply_online_probe_to_runtime(
+            self._record_runtime_tests(
                 robot_id=robot_id,
-                probe={
-                    "status": "error",
-                    "value": "unreachable",
-                    "details": detail,
-                    "ms": 0,
-                    "checkedAt": time.time(),
-                    "source": "auto-monitor",
+                updates={
+                    "battery": {
+                        "status": "warning",
+                        "value": "unknown",
+                        "reason": "BATTERY_UNREADABLE",
+                        "details": detail,
+                        "ms": 0,
+                        "checkedAt": time.time(),
+                        "source": "auto-monitor",
+                    },
                 },
-                source="auto-monitor",
             )
             return
 
@@ -207,14 +209,6 @@ class BatteryParserMixin:
         self._record_runtime_tests(
             robot_id,
             {
-                "online": {
-                    "status": "ok",
-                    "value": "reachable",
-                    "details": "SSH connected and authenticated.",
-                    "ms": elapsed_ms,
-                    "checkedAt": time.time(),
-                    "source": "auto-monitor",
-                },
                 "battery": battery,
             },
         )

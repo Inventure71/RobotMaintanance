@@ -233,7 +233,7 @@ def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
     assert "custom battery probe" in observed["commands"]
 
 
-def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch):
+def test_auto_monitor_keeps_online_state_when_battery_command_fails(monkeypatch):
     class FakeShell:
         def __init__(self, **_kwargs):
             pass
@@ -288,12 +288,68 @@ def test_auto_monitor_marks_robot_offline_when_battery_command_fails(monkeypatch
     manager._run_auto_monitor_tick()
     runtime = manager.get_runtime_tests("r1")
 
-    assert runtime["online"]["status"] == "error"
-    assert runtime["online"]["value"] == "unreachable"
+    assert runtime["online"]["status"] == "ok"
+    assert runtime["online"]["value"] == "reachable"
     assert runtime["battery"]["status"] == "warning"
     assert runtime["battery"]["value"] == "unknown"
-    assert runtime["general"]["status"] == "warning"
-    assert runtime["general"]["value"] == "unknown"
+    assert "general" not in runtime
+
+
+def test_refresh_battery_state_does_not_override_online_status(monkeypatch):
+    class FakeShell:
+        def __init__(self, **_kwargs):
+            pass
+
+        def connect(self):
+            return None
+
+        def close(self):
+            return None
+
+        def run_command(self, _command, timeout):
+            _ = timeout
+            return "percentage: 0.66\nvoltage: 12.10\n"
+
+    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [{"id": "online", "enabled": True}, {"id": "battery", "enabled": True}],
+                "autoMonitor": {"batteryCommand": "custom battery probe"},
+            }
+        },
+        auto_monitor=False,
+    )
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "error",
+                "value": "unreachable",
+                "details": "preloaded offline",
+                "checkedAt": 10.0,
+                "source": "manual",
+            }
+        },
+    )
+
+    manager._refresh_battery_state("r1")
+    runtime = manager.get_runtime_tests("r1")
+
+    assert runtime["online"]["status"] == "error"
+    assert runtime["online"]["value"] == "unreachable"
+    assert runtime["battery"]["status"] == "ok"
+    assert runtime["battery"]["value"] == "66%"
 
 
 def test_manual_run_persists_runtime_results(monkeypatch):
