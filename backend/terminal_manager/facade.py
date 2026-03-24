@@ -69,6 +69,8 @@ class TerminalManager(
     ONLINE_INTERVAL_DEFAULT_SEC = 5.0
     ONLINE_INTERVAL_MIN_SEC = 0.5
     ONLINE_INTERVAL_MAX_SEC = 60.0
+    ONLINE_FAILURES_TO_MARK_OFFLINE = 2
+    ONLINE_SUCCESSES_TO_MARK_ONLINE = 1
     BATTERY_INTERVAL_DEFAULT_SEC = 2.0
     BATTERY_INTERVAL_MIN_SEC = 0.5
     BATTERY_INTERVAL_MAX_SEC = 60.0
@@ -131,6 +133,8 @@ class TerminalManager(
         self._battery_interval_sec = self.BATTERY_INTERVAL_DEFAULT_SEC
         self._monitor_parallelism = self.MONITOR_PARALLELISM_DEFAULT
         self._online_next_check_at = {}
+        self._online_failure_streak_by_robot = {}
+        self._online_success_streak_by_robot = {}
         self._battery_next_check_at = {}
         self._topics_next_check_at = {}
         self._manual_activity_by_robot = {}

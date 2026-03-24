@@ -8,6 +8,41 @@ from ..normalization import normalize_status, normalize_text
 
 
 class AutoMonitorWorkerMixin:
+    def _debounced_online_probe(self, robot_id: str, probe: dict[str, object]) -> dict[str, object] | None:
+        status = normalize_status(probe.get("status"))
+        is_online_now = bool(self.get_runtime_probe_state(robot_id).get("isOnline"))
+        offline_threshold = max(1, int(getattr(self, "ONLINE_FAILURES_TO_MARK_OFFLINE", 1)))
+        online_threshold = max(1, int(getattr(self, "ONLINE_SUCCESSES_TO_MARK_ONLINE", 1)))
+
+        with self._lock:
+            fail_streak = int(self._online_failure_streak_by_robot.get(robot_id, 0))
+            success_streak = int(self._online_success_streak_by_robot.get(robot_id, 0))
+
+            if status == "ok":
+                fail_streak = 0
+                success_streak += 1
+                self._online_failure_streak_by_robot[robot_id] = fail_streak
+                self._online_success_streak_by_robot[robot_id] = success_streak
+
+                if is_online_now:
+                    return dict(probe)
+                if success_streak >= online_threshold:
+                    self._online_success_streak_by_robot[robot_id] = 0
+                    return dict(probe)
+                return None
+
+            success_streak = 0
+            fail_streak += 1
+            self._online_failure_streak_by_robot[robot_id] = fail_streak
+            self._online_success_streak_by_robot[robot_id] = success_streak
+
+            if not is_online_now:
+                return dict(probe)
+            if fail_streak >= offline_threshold:
+                self._online_failure_streak_by_robot[robot_id] = 0
+                return dict(probe)
+            return None
+
     def _shutdown_auto_monitor_executor(self) -> None:
         executor = getattr(self, "_auto_monitor_executor", None)
         self._auto_monitor_executor = None
@@ -113,22 +148,26 @@ class AutoMonitorWorkerMixin:
                 if elapsed < min_visible_sec:
                     time.sleep(min_visible_sec - elapsed)
                 self._set_runtime_activity(robot_id, searching=False)
-            online_update = self.apply_online_probe_to_runtime(
-                robot_id=robot_id,
-                probe=online_probe,
-                source="auto-monitor",
-            )
             with self._lock:
                 self._online_next_check_at[robot_id] = now + online_interval_sec
-            is_online = bool(online_update.get("isOnline"))
-            if is_online and normalize_status(online_update.get("previousOnlineStatus")) != "ok":
-                with self._lock:
-                    self._battery_next_check_at[robot_id] = 0.0
-                    self._topics_next_check_at[robot_id] = 0.0
-                self._emit_connection_event_connected(
-                    robot_id,
-                    connected_at=float(online_update.get("checkedAt") or time.time()),
+            debounced_probe = self._debounced_online_probe(robot_id, online_probe)
+            if debounced_probe is not None:
+                online_update = self.apply_online_probe_to_runtime(
+                    robot_id=robot_id,
+                    probe=debounced_probe,
+                    source="auto-monitor",
                 )
+                is_online = bool(online_update.get("isOnline"))
+                if is_online and normalize_status(online_update.get("previousOnlineStatus")) != "ok":
+                    with self._lock:
+                        self._battery_next_check_at[robot_id] = 0.0
+                        self._topics_next_check_at[robot_id] = 0.0
+                    self._emit_connection_event_connected(
+                        robot_id,
+                        connected_at=float(online_update.get("checkedAt") or time.time()),
+                    )
+            else:
+                is_online = bool(self.get_runtime_probe_state(robot_id).get("isOnline"))
 
         if not is_online:
             self._emit_connection_event_disconnected(robot_id)

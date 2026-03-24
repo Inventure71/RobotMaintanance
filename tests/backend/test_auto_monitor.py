@@ -352,6 +352,111 @@ def test_refresh_battery_state_does_not_override_online_status(monkeypatch):
     assert runtime["battery"]["value"] == "66%"
 
 
+def test_auto_monitor_requires_two_consecutive_failures_before_marking_offline(monkeypatch):
+    manager = _manager()
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "ok",
+                "value": "reachable",
+                "details": "preloaded online",
+                "checkedAt": 1.0,
+                "source": "manual",
+            }
+        },
+    )
+    manager._refresh_battery_state = lambda _robot_id: None
+    manager._emit_connection_event_connected = lambda *_args, **_kwargs: None
+    manager._emit_connection_event_disconnected = lambda *_args, **_kwargs: None
+
+    probes = iter(
+        [
+            {
+                "status": "error",
+                "value": "unreachable",
+                "details": "transient timeout #1",
+                "checkedAt": 2.0,
+                "source": "live",
+            },
+            {
+                "status": "error",
+                "value": "unreachable",
+                "details": "transient timeout #2",
+                "checkedAt": 3.0,
+                "source": "live",
+            },
+        ]
+    )
+    manager.check_online = lambda **_kwargs: dict(next(probes))
+
+    manager._run_auto_monitor_tick()
+    first_runtime = manager.get_runtime_tests("r1")
+    assert first_runtime["online"]["status"] == "ok"
+    manager._online_next_check_at["r1"] = 0.0
+
+    manager._run_auto_monitor_tick()
+    second_runtime = manager.get_runtime_tests("r1")
+    assert second_runtime["online"]["status"] == "error"
+    assert "timeout #2" in second_runtime["online"]["details"]
+
+
+def test_auto_monitor_fail_streak_resets_after_success(monkeypatch):
+    manager = _manager()
+    manager._record_runtime_tests(
+        "r1",
+        {
+            "online": {
+                "status": "ok",
+                "value": "reachable",
+                "details": "preloaded online",
+                "checkedAt": 1.0,
+                "source": "manual",
+            }
+        },
+    )
+    manager._refresh_battery_state = lambda _robot_id: None
+    manager._emit_connection_event_connected = lambda *_args, **_kwargs: None
+    manager._emit_connection_event_disconnected = lambda *_args, **_kwargs: None
+
+    probes = iter(
+        [
+            {
+                "status": "error",
+                "value": "unreachable",
+                "details": "timeout #1",
+                "checkedAt": 2.0,
+                "source": "live",
+            },
+            {
+                "status": "ok",
+                "value": "reachable",
+                "details": "recovered",
+                "checkedAt": 3.0,
+                "source": "live",
+            },
+            {
+                "status": "error",
+                "value": "unreachable",
+                "details": "timeout #2",
+                "checkedAt": 4.0,
+                "source": "live",
+            },
+        ]
+    )
+    manager.check_online = lambda **_kwargs: dict(next(probes))
+
+    manager._run_auto_monitor_tick()
+    manager._online_next_check_at["r1"] = 0.0
+    manager._run_auto_monitor_tick()
+    manager._online_next_check_at["r1"] = 0.0
+    manager._run_auto_monitor_tick()
+
+    runtime = manager.get_runtime_tests("r1")
+    assert runtime["online"]["status"] == "ok"
+    assert runtime["online"]["details"] == "recovered"
+
+
 def test_manual_run_persists_runtime_results(monkeypatch):
     class FakeShell:
         def __init__(self, **_kwargs):
