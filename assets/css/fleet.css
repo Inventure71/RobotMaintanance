@@ -1406,7 +1406,16 @@
     }
 
     .definitions-library-panel {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 0.9rem;
+      min-height: 56vh;
+    }
+
+    .definitions-library-panel .manage-entity-list {
+      max-height: none;
+      min-height: 0;
+      height: 100%;
     }
 
     .definitions-library-header {
