@@ -1,0 +1,52 @@
+{
+  "id": "inventure71_test",
+  "label": "Inventure71 Test",
+  "description": "Testing",
+  "enabled": true,
+  "ownerTags": [
+    "inventure71"
+  ],
+  "platformTags": [
+    "ros2"
+  ],
+  "mode": "orchestrate",
+  "execute": [
+    {
+      "id": "step_1",
+      "command": "ls",
+      "saveAs": "out_1"
+    }
+  ],
+  "checks": [
+    {
+      "id": "inventure71_test__hydra_folder_present",
+      "metadata": {
+        "label": "hydra folder present",
+        "icon": "\ud83d\udcbe",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_string",
+        "inputRef": "out_1",
+        "needle": "hydra",
+        "caseSensitive": false
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "Passed"
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "Failed"
+      }
+    }
+  ],
+  "params": {}
+}

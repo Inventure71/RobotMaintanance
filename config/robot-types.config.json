@@ -17,13 +17,7 @@
         "topics_snapshot_rosbot_2_pro__general",
         "topics_snapshot_rosbot_2_pro__lidar",
         "topics_snapshot_rosbot_2_pro__movement",
-        "topics_snapshot_rosbot_2_pro__proximity",
-        "topics_snapshot_rosbot_2_pro_copy__battery",
-        "topics_snapshot_rosbot_2_pro_copy__camera",
-        "topics_snapshot_rosbot_2_pro_copy__general",
-        "topics_snapshot_rosbot_2_pro_copy__lidar",
-        "topics_snapshot_rosbot_2_pro_copy__movement",
-        "topics_snapshot_rosbot_2_pro_copy__proximity"
+        "topics_snapshot_rosbot_2_pro__proximity"
       ],
       "fixRefs": [
         "flash_fix"
@@ -66,7 +60,9 @@
       "id": "rosbot-3-pro",
       "name": "Rosbot 3 Pro",
       "testRefs": [
-        "online"
+        "online",
+        "inventure71_test__hydra_folder_present",
+        "global_test__should_fail"
       ],
       "fixRefs": [],
       "autoMonitor": {

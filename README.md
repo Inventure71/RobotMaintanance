@@ -182,7 +182,7 @@ UI workflow is also supported through the Manage/Recorder flow builder for creat
 
 Auto connection retry behavior:
 - On `offline -> online`, the backend runs checks flagged `runAtConnection=true`.
-- If any selected check fails, it retries every `5` seconds for up to `60` seconds from reconnect.
+- If any selected check fails, it retries every `2.5` seconds for up to `60` seconds from reconnect.
 - Retries stop immediately on manual activity or disconnect.
 
 ## Adding New Fixes

@@ -440,9 +440,11 @@ export function createFleetFeature(context, maybeEnv) {
         const { ownerTags, platformTags } = getDefinitionTagMeta(definition, fallback);
         const selectedOwnerTags = normalizeTagList(state?.filter?.ownerTags);
         const selectedPlatformTags = normalizeTagList(state?.filter?.platformTags);
-        const ownerSelection = selectedOwnerTags.length
-          ? Array.from(new Set([...selectedOwnerTags, 'global']))
-          : selectedOwnerTags;
+        const activeOwnerProfile = getActiveOwnerProfile();
+        const effectiveOwnerSelection = selectedOwnerTags.length
+          ? selectedOwnerTags
+          : (activeOwnerProfile ? [activeOwnerProfile] : ['global']);
+        const ownerSelection = Array.from(new Set([...effectiveOwnerSelection, 'global']));
         const matchesOwner = hasTagIntersection(ownerTags, ownerSelection);
         const matchesPlatform = hasTagIntersection(platformTags, selectedPlatformTags);
         return matchesOwner && matchesPlatform;

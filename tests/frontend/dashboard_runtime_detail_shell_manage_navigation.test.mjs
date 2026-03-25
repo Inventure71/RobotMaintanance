@@ -333,3 +333,69 @@ test('showAddRobotPage can explicitly force the Existing robots registry panel',
   assert.equal(env.robotRegistryPanels[2].classList.contains('hidden'), true);
   assert.equal(env.robotRegistryPanels[3].classList.contains('hidden'), true);
 });
+
+test('openTestDebugModal surfaces error code and source in the summary', async () => {
+  const createDetailFeature = await loadApi();
+  const env = makeEnv('existing-robots');
+  env.testDebugModal = makeNode({ classes: ['hidden'] });
+  env.testDebugTitle = makeNode();
+  env.testDebugSummary = makeNode();
+  env.testDebugBody = makeNode();
+  const calls = {
+    addRobotMessages: [],
+    editRobotMessages: [],
+    addRobotTypeMessages: [],
+    populateAddRobotTypeOptions: 0,
+    populateEditRobotSelectOptions: [],
+    renderRecorderRobotOptions: 0,
+    setActiveManageTab: [],
+    syncFixModePanels: 0,
+  };
+  const api = createDetailFeature(makeRuntime(calls), env);
+
+  api.openTestDebugModal(
+    {
+      name: 'Robot 1',
+      testDefinitions: [{ id: 'general', label: 'General' }],
+      tests: {
+        general: {
+          status: 'error',
+          value: 'read_error',
+          details: 'Parser mismatch',
+          errorCode: 'definition_output_missing',
+          source: 'executor',
+        },
+      },
+      testDebug: {
+        general: {
+          id: 'general',
+          status: 'error',
+          value: 'read_error',
+          details: 'Parser mismatch',
+          errorCode: 'definition_output_missing',
+          source: 'executor',
+          read: {
+            kind: 'contains_string',
+            passed: false,
+            details: 'Substring not found.',
+            missing: ['/scan'],
+            matched: [],
+          },
+          runId: 'run-1',
+          startedAt: 10,
+          finishedAt: 20,
+          ms: 50,
+          steps: [],
+        },
+      },
+    },
+    'general',
+  );
+
+  assert.match(env.testDebugSummary.textContent, /ErrorCode: definition_output_missing/);
+  assert.match(env.testDebugSummary.textContent, /Source: executor/);
+  assert.match(env.testDebugSummary.textContent, /CheckEval: contains_string \| fail \| Substring not found\. \| missing: \/scan/);
+  assert.equal(env.testDebugModal.classList.contains('hidden'), false);
+  assert.equal(env.testDebugModal.getAttribute('aria-hidden'), 'false');
+  assert.equal(env.state.testDebugModalOpen, true);
+});

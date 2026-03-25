@@ -244,6 +244,10 @@ def test_contains_string_fail_is_stable_and_explicit():
     results = executor.run_tests(robot_id="r1", page_session_id="page-1", test_ids=["string-check"])
     assert results[0]["status"] == "error"
     assert results[0]["value"] == "missing"
+    assert results[0]["read"]["kind"] == "contains_string"
+    assert results[0]["read"]["passed"] is False
+    assert results[0]["read"]["details"] == "Substring not found."
+    assert results[0]["read"]["missing"] == ["missing"]
 
 
 def test_run_tests_without_explicit_ids_executes_all_enabled_mapped_tests():

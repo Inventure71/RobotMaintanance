@@ -243,6 +243,93 @@ test('getConfiguredDefaultTestIds uses all enabled mapped tests and can include 
   );
 });
 
+test('updateRobotTestState preserves extended debug metadata for Info modal rendering', async () => {
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{
+        id: 'robot-1',
+        name: 'Robot 1',
+        typeId: 'rosbot',
+        tests: {},
+        testDebug: {},
+      }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+    mapRobots: (updater) => {
+      env.state.robots = env.state.robots.map((item) => updater(item));
+    },
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  api.updateRobotTestState(
+    'robot-1',
+    [{
+      id: 'general',
+      status: 'error',
+      value: 'read_error',
+      details: 'Parser mismatch in expected output.',
+      reason: 'validator_fail',
+      errorCode: 'definition_output_missing',
+      source: 'executor',
+      checkedAt: 111.5,
+      ms: 320,
+      read: { kind: 'contains_string', passed: false },
+      steps: [{
+        id: 'topics',
+        status: 'error',
+        value: 'missing_topic',
+        details: 'Topic /scan was not present',
+        ms: 300,
+        output: '/battery\n/camera',
+      }],
+    }],
+    {
+      runId: 'run-42',
+      startedAt: 100,
+      finishedAt: 200,
+      session: {
+        runId: 'run-42',
+        robotId: 'robot-1',
+        pageSessionId: 'page-test-1',
+        runKind: 'test',
+        transportReused: true,
+        resetPolicy: 'run_scoped_shell',
+      },
+      timing: {
+        queueMs: 5,
+        connectMs: 10,
+        executeMs: 300,
+        totalMs: 320,
+      },
+    },
+  );
+
+  const robot = env.state.robots[0];
+  assert.equal(robot.tests.general.errorCode, 'definition_output_missing');
+  assert.equal(robot.tests.general.source, 'executor');
+  assert.equal(robot.tests.general.checkedAt, 111.5);
+  assert.equal(robot.testDebug.general.errorCode, 'definition_output_missing');
+  assert.equal(robot.testDebug.general.source, 'executor');
+  assert.equal(robot.testDebug.general.reason, 'validator_fail');
+  assert.equal(robot.testDebug.general.read.kind, 'contains_string');
+  assert.equal(robot.testDebug.general.session.pageSessionId, 'page-test-1');
+  assert.equal(robot.testDebug.general.timing.totalMs, 320);
+});
+
 test('runAutoFixForRobot clears local fixing state when the backend reports a terminal failure', async () => {
   const fetchCalls = [];
   const fetchMock = async (url, options = {}) => {

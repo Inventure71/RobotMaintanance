@@ -1495,6 +1495,8 @@ export function createFixTestsFeature(context, maybeEnv) {
           runId: normalizeText(payload?.runId, ''),
           startedAt: Number.isFinite(Number(payload?.startedAt)) ? Number(payload.startedAt) : 0,
           finishedAt: Number.isFinite(Number(payload?.finishedAt)) ? Number(payload.finishedAt) : 0,
+          session: normalizeDebugSession(payload?.session, normalizeText(payload?.runId, '')),
+          timing: normalizeDebugTiming(payload?.timing),
           results: Array.isArray(payload?.results) ? payload.results : [],
         };
       }
@@ -1657,6 +1659,28 @@ export function createFixTestsFeature(context, maybeEnv) {
         return Array.from(new Set(testIds)).filter(Boolean);
       }
 
+  function normalizeDebugSession(session, runIdFallback = '') {
+        if (!session || typeof session !== 'object') return {};
+        return {
+          runId: normalizeText(session.runId, runIdFallback),
+          robotId: normalizeText(session.robotId, ''),
+          pageSessionId: normalizeText(session.pageSessionId, ''),
+          runKind: normalizeText(session.runKind, ''),
+          transportReused: Boolean(session.transportReused),
+          resetPolicy: normalizeText(session.resetPolicy, ''),
+        };
+      }
+
+  function normalizeDebugTiming(timing) {
+        if (!timing || typeof timing !== 'object') return {};
+        return {
+          queueMs: Number.isFinite(Number(timing.queueMs)) ? Number(timing.queueMs) : 0,
+          connectMs: Number.isFinite(Number(timing.connectMs)) ? Number(timing.connectMs) : 0,
+          executeMs: Number.isFinite(Number(timing.executeMs)) ? Number(timing.executeMs) : 0,
+          totalMs: Number.isFinite(Number(timing.totalMs)) ? Number(timing.totalMs) : 0,
+        };
+      }
+
   function normalizeStepDebug(step) {
         if (!step || typeof step !== 'object') return null;
         return {
@@ -1677,7 +1701,13 @@ export function createFixTestsFeature(context, maybeEnv) {
           status: normalizeStatus(result.status),
           value: normalizeText(result.value, 'n/a'),
           details: normalizeText(result.details, 'No detail available'),
+          reason: normalizeText(result.reason, ''),
+          errorCode: normalizeText(result.errorCode, ''),
+          source: normalizeText(result.source, ''),
+          checkedAt: Number.isFinite(Number(result.checkedAt)) ? Number(result.checkedAt) : 0,
+          skipped: Boolean(result.skipped),
           ms: Number.isFinite(Number(result.ms)) ? Number(result.ms) : 0,
+          read: result.read && typeof result.read === 'object' ? result.read : {},
           raw: result.raw && typeof result.raw === 'object' ? result.raw : {},
           steps,
         };
@@ -1695,11 +1725,14 @@ export function createFixTestsFeature(context, maybeEnv) {
           if (!id) return;
           const debugResult = normalizeTestDebugResult({ ...base, id });
           if (!debugResult) return;
+          const session = normalizeDebugSession(base.session, normalizeText(base.runId, ''));
           normalized[id] = {
             ...debugResult,
-            runId: normalizeText(base.runId, ''),
+            runId: normalizeText(base.runId, normalizeText(session.runId, '')),
             startedAt: Number.isFinite(Number(base.startedAt)) ? Number(base.startedAt) : 0,
             finishedAt: Number.isFinite(Number(base.finishedAt)) ? Number(base.finishedAt) : 0,
+            session,
+            timing: normalizeDebugTiming(base.timing),
           };
         });
         return normalized;
@@ -1709,7 +1742,10 @@ export function createFixTestsFeature(context, maybeEnv) {
         const id = robotId(robotIdValue);
         if (!id) return;
         if (!results.length) return;
-  
+        const runSession = normalizeDebugSession(runMeta?.session, normalizeText(runMeta?.runId, ''));
+        const runTiming = normalizeDebugTiming(runMeta?.timing);
+        const runId = normalizeText(runMeta?.runId, normalizeText(runSession.runId, ''));
+
         const robot = state.robots.find((item) => robotId(item) === id);
         const updates = { ...(robot?.tests || {}) };
         const debugUpdates = { ...(robot?.testDebug || {}) };
@@ -1722,14 +1758,20 @@ export function createFixTestsFeature(context, maybeEnv) {
             value: normalizeText(result.value, 'n/a'),
             details: normalizeText(result.details, 'No detail available'),
             reason: normalizeText(result.reason, ''),
+            errorCode: normalizeText(result.errorCode, ''),
+            source: normalizeText(result.source, ''),
+            checkedAt: Number.isFinite(Number(result.checkedAt)) ? Number(result.checkedAt) : 0,
+            skipped: Boolean(result.skipped),
           };
           const debugResult = normalizeTestDebugResult(result);
           if (debugResult) {
             debugUpdates[resultId] = {
               ...debugResult,
-              runId: normalizeText(runMeta.runId, ''),
-              startedAt: Number.isFinite(Number(runMeta.startedAt)) ? Number(runMeta.startedAt) : 0,
-              finishedAt: Number.isFinite(Number(runMeta.finishedAt)) ? Number(runMeta.finishedAt) : 0,
+              runId,
+              startedAt: Number.isFinite(Number(runMeta?.startedAt)) ? Number(runMeta.startedAt) : 0,
+              finishedAt: Number.isFinite(Number(runMeta?.finishedAt)) ? Number(runMeta.finishedAt) : 0,
+              session: runSession,
+              timing: runTiming,
             };
           }
         });

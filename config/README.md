@@ -130,4 +130,4 @@ Validation:
 - `POST /api/robots/{robotId}/tests/run` returns flat `results[]` by check id.
 - `POST /api/robots/{robotId}/fixes/{fixId}/runs` starts async fix jobs.
 - `GET /api/robots/{robotId}/fixes/runs/{runId}` polls job state/events/results.
-- On `offline -> online`, backend runs checks flagged `runAtConnection=true`; retries every 5s for up to 60s, and cancels on manual activity or disconnect.
+- On `offline -> online`, backend runs checks flagged `runAtConnection=true`; retries every 2.5s for up to 60s, and cancels on manual activity or disconnect.

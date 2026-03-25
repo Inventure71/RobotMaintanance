@@ -1,0 +1,50 @@
+{
+  "id": "global_test",
+  "label": "Global Test",
+  "description": "Testing",
+  "enabled": true,
+  "ownerTags": [
+    "global"
+  ],
+  "platformTags": [],
+  "mode": "orchestrate",
+  "execute": [
+    {
+      "id": "step_1",
+      "command": "ls",
+      "saveAs": "out_1"
+    }
+  ],
+  "checks": [
+    {
+      "id": "global_test__should_fail",
+      "metadata": {
+        "label": "Should Fail",
+        "icon": "\ud83d\udcbe",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_string",
+        "inputRef": "out_1",
+        "needle": "plane",
+        "caseSensitive": false
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "Passed"
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "Failed"
+      }
+    }
+  ],
+  "params": {}
+}

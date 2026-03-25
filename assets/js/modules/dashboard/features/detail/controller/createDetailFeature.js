@@ -1808,6 +1808,46 @@ export function createDetailFeature(context, maybeEnv) {
         }
       }
 
+  function formatReadEvaluationSummary(readResult) {
+        if (!readResult || typeof readResult !== 'object') return '';
+        const kind = normalizeText(readResult.kind, '');
+        const detailText = normalizeText(readResult.details, '');
+        const missing = Array.isArray(readResult.missing) ? readResult.missing.filter(Boolean) : [];
+        const matched = Array.isArray(readResult.matched) ? readResult.matched.filter(Boolean) : [];
+        const status = readResult.passed ? 'pass' : 'fail';
+        const parts = [];
+        if (kind) parts.push(`${kind}`);
+        parts.push(status);
+        if (detailText) parts.push(detailText);
+        if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
+        if (matched.length) parts.push(`matched: ${matched.join(', ')}`);
+        return parts.join(' | ');
+      }
+
+  function formatReadEvaluationPre(readResult) {
+        if (!readResult || typeof readResult !== 'object') return '';
+        const lines = [];
+        lines.push(`kind: ${normalizeText(readResult.kind, 'n/a')}`);
+        lines.push(`passed: ${Boolean(readResult.passed)}`);
+        lines.push(`details: ${normalizeText(readResult.details, 'No detail available')}`);
+        if (Array.isArray(readResult.missing) && readResult.missing.length) {
+          lines.push(`missing: ${readResult.missing.join(', ')}`);
+        }
+        if (Array.isArray(readResult.matched) && readResult.matched.length) {
+          lines.push(`matched: ${readResult.matched.join(', ')}`);
+        }
+        if (Number.isFinite(Number(readResult.failedRules))) {
+          lines.push(`failedRules: ${Number(readResult.failedRules)}`);
+        }
+        if (Number.isFinite(Number(readResult.totalRules))) {
+          lines.push(`totalRules: ${Number(readResult.totalRules)}`);
+        }
+        lines.push('');
+        lines.push('raw:');
+        lines.push(JSON.stringify(readResult, null, 2));
+        return lines.join('\n');
+      }
+
   function closeTestDebugModal() {
         if (!testDebugModal) return;
         testDebugModal.classList.add('hidden');
@@ -1932,9 +1972,16 @@ export function createDetailFeature(context, maybeEnv) {
           normalizeText(testId, '').toLowerCase() === 'battery'
             ? batteryReasonText(basicResult)
             : '';
+        const errorCodeLabel = normalizeText(debugResult?.errorCode || basicResult?.errorCode, '');
+        const sourceLabel = normalizeText(debugResult?.source || basicResult?.source, '');
+        const debugReasonLabel = normalizeText(debugResult?.reason || basicResult?.reason, '');
+        const readSummaryLabel = formatReadEvaluationSummary(debugResult?.read);
+        const checkedAtLabel = Number.isFinite(Number(debugResult?.checkedAt))
+          ? formatEpochSeconds(debugResult.checkedAt)
+          : 'n/a';
   
         testDebugTitle.textContent = `${robot.name} • ${definitionLabel}`;
-        testDebugSummary.textContent = `Status: ${basicResult.status} | Value: ${basicResult.value} | Details: ${basicResult.details}${reasonLabel ? ` | Reason: ${reasonLabel}` : ''}`;
+        testDebugSummary.textContent = `Status: ${basicResult.status} | Value: ${basicResult.value} | Details: ${basicResult.details}${reasonLabel ? ` | Reason: ${reasonLabel}` : ''}${errorCodeLabel ? ` | ErrorCode: ${errorCodeLabel}` : ''}${sourceLabel ? ` | Source: ${sourceLabel}` : ''}${debugReasonLabel && debugReasonLabel !== reasonLabel ? ` | ResultReason: ${debugReasonLabel}` : ''}${readSummaryLabel ? ` | CheckEval: ${readSummaryLabel}` : ''}`;
         testDebugBody.replaceChildren();
   
         const summaryBlock = document.createElement('pre');
@@ -1948,10 +1995,71 @@ export function createDetailFeature(context, maybeEnv) {
               `status: ${debugResult.status}`,
               `value: ${debugResult.value}`,
               `details: ${debugResult.details}`,
+              `errorCode: ${normalizeText(debugResult.errorCode, 'n/a')}`,
+              `source: ${normalizeText(debugResult.source, 'n/a')}`,
+              `reason: ${normalizeText(debugResult.reason, 'n/a')}`,
+              `checkedAt: ${checkedAtLabel}`,
+              `skipped: ${Boolean(debugResult.skipped)}`,
             ].join('\n')
           : 'No detailed backend output recorded yet for this test. Run tests once from this page.';
         testDebugBody.appendChild(summaryBlock);
-  
+
+        const sessionResult = debugResult?.session && typeof debugResult.session === 'object' ? debugResult.session : null;
+        if (sessionResult && Object.keys(sessionResult).length) {
+          const sessionSection = document.createElement('section');
+          sessionSection.className = 'test-debug-step';
+          const sessionTitle = document.createElement('h4');
+          sessionTitle.className = 'test-debug-step-title';
+          sessionTitle.textContent = 'Run session';
+          sessionSection.appendChild(sessionTitle);
+          const sessionPre = document.createElement('pre');
+          sessionPre.className = 'test-debug-pre';
+          sessionPre.textContent = [
+            `runId: ${normalizeText(sessionResult.runId, 'n/a')}`,
+            `robotId: ${normalizeText(sessionResult.robotId, 'n/a')}`,
+            `pageSessionId: ${normalizeText(sessionResult.pageSessionId, 'n/a')}`,
+            `runKind: ${normalizeText(sessionResult.runKind, 'n/a')}`,
+            `transportReused: ${Boolean(sessionResult.transportReused)}`,
+            `resetPolicy: ${normalizeText(sessionResult.resetPolicy, 'n/a')}`,
+          ].join('\n');
+          sessionSection.appendChild(sessionPre);
+          testDebugBody.appendChild(sessionSection);
+        }
+
+        const timingResult = debugResult?.timing && typeof debugResult.timing === 'object' ? debugResult.timing : null;
+        if (timingResult && Object.keys(timingResult).length) {
+          const timingSection = document.createElement('section');
+          timingSection.className = 'test-debug-step';
+          const timingTitle = document.createElement('h4');
+          timingTitle.className = 'test-debug-step-title';
+          timingTitle.textContent = 'Run timing';
+          timingSection.appendChild(timingTitle);
+          const timingPre = document.createElement('pre');
+          timingPre.className = 'test-debug-pre';
+          timingPre.textContent = [
+            `queueMs: ${Number.isFinite(Number(timingResult.queueMs)) ? Number(timingResult.queueMs) : 0}`,
+            `connectMs: ${Number.isFinite(Number(timingResult.connectMs)) ? Number(timingResult.connectMs) : 0}`,
+            `executeMs: ${Number.isFinite(Number(timingResult.executeMs)) ? Number(timingResult.executeMs) : 0}`,
+            `totalMs: ${Number.isFinite(Number(timingResult.totalMs)) ? Number(timingResult.totalMs) : 0}`,
+          ].join('\n');
+          timingSection.appendChild(timingPre);
+          testDebugBody.appendChild(timingSection);
+        }
+
+        if (debugResult && debugResult.read && Object.keys(debugResult.read).length) {
+          const readSection = document.createElement('section');
+          readSection.className = 'test-debug-step';
+          const readTitle = document.createElement('h4');
+          readTitle.className = 'test-debug-step-title';
+          readTitle.textContent = 'Check criteria & evaluation';
+          readSection.appendChild(readTitle);
+          const readPre = document.createElement('pre');
+          readPre.className = 'test-debug-pre';
+          readPre.textContent = formatReadEvaluationPre(debugResult.read);
+          readSection.appendChild(readPre);
+          testDebugBody.appendChild(readSection);
+        }
+
         if (debugResult && Array.isArray(debugResult.steps) && debugResult.steps.length) {
           debugResult.steps.forEach((step) => {
             const stepSection = document.createElement('section');

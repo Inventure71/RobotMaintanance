@@ -298,6 +298,7 @@ class TestExecutor:
             output_payload.get("details"), normalize_text(test_spec.get("defaultDetails"), "No detail available")
         )
         ms = int(output_payload.get("ms") or total_ms)
+        read_payload = output_payload.get("read") if isinstance(output_payload.get("read"), dict) else {}
 
         normalized_steps = []
         for step in steps:
@@ -320,6 +321,7 @@ class TestExecutor:
             "value": value,
             "details": details,
             "ms": ms,
+            "read": read_payload,
             "raw": {
                 "definitionId": definition_id,
                 "sharedExecutionId": shared_execution_id,

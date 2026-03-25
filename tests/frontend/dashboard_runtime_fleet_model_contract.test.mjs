@@ -639,6 +639,72 @@ test('matchesDefinitionFilters uses OR within fields and AND across owner/platfo
   );
 });
 
+test('matchesDefinitionFilters defaults to global owner scope when no owner is selected', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.ownerTags = [];
+  env.state.filter.activeOwnerProfile = '';
+  env.state.filter.platformTags = [];
+
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['global'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['alice'], platformTags: ['ros2'] },
+      {},
+    ),
+    false,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['global', 'alice'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+});
+
+test('matchesDefinitionFilters includes active user and global when active owner is selected', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.ownerTags = [];
+  env.state.filter.activeOwnerProfile = 'alice';
+  env.state.filter.platformTags = [];
+
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['global'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['alice'], platformTags: ['ros2'] },
+      {},
+    ),
+    true,
+  );
+  assert.equal(
+    api.matchesDefinitionFilters(
+      { ownerTags: ['bob'], platformTags: ['ros2'] },
+      {},
+    ),
+    false,
+  );
+});
+
 test('matchesDefinitionFilters includes global definitions when a specific owner is selected', async () => {
   const createFleetFeature = await loadApi();
   const env = makeEnv();
