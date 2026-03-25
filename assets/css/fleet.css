@@ -157,8 +157,8 @@
 
     .scan-countdown {
       position: absolute;
-      top: 8px;
-      right: 8px;
+      bottom: 8px;
+      left: 8px;
       z-index: 6;
       pointer-events: none;
       border-radius: 999px;
@@ -3001,10 +3001,6 @@
 
 .robot-card.inner-state-na .robot-card-inner-border {
   border-color: rgba(142, 155, 178, 0.52);
-}
-
-.robot-card.outer-state-na [data-role="user-scope-pill"] {
-  color: #b9c3d8;
 }
 
 .robot-card.outer-scope-hidden {

@@ -484,7 +484,7 @@ export function createFleetFeature(context, maybeEnv) {
           if (scope === 'global' && !entry.ownerTags.includes('global')) return false;
           if (scope === 'active-user') {
             if (!activeOwner) return false;
-            if (!entry.ownerTags.includes(activeOwner) && !entry.ownerTags.includes('global')) return false;
+            if (!entry.ownerTags.includes(activeOwner)) return false;
           }
           return matchesDefinitionFilters(
             {
@@ -1732,10 +1732,6 @@ export function createFleetFeature(context, maybeEnv) {
           .map((entry) => `fault-${entry.id}`)
           .join(' ');
         const activeOwnerProfile = normalizeText(activeUserAggregate.activeOwner, '');
-        const userScopeLabel = activeOwnerProfile
-          ? `User(${activeOwnerProfile}): ${getStatusChipTone(outerStateKey).text}`
-          : 'User: N/A';
-
         return {
           stateKey,
           outerStateKey,
@@ -1760,7 +1756,6 @@ export function createFleetFeature(context, maybeEnv) {
           title: robot.name,
           subtitle: robot.type,
           issueSummaryText: issues.join(', ') || 'No active errors',
-          userScopeLabel,
           batteryState: getRobotBatteryState(robot),
           lastFullTestLabel: buildLastFullTestPillLabel(robot),
         };
@@ -1929,16 +1924,6 @@ export function createFleetFeature(context, maybeEnv) {
           issuesPill.textContent = `Issue cluster: ${descriptor.issueSummaryText}`;
         }
 
-        const userScopePill = card.querySelector('[data-role="user-scope-pill"]');
-        if (userScopePill) {
-          userScopePill.textContent = descriptor.userScopeLabel;
-        }
-
-        const movementPill = card.querySelector('[data-role="movement-pill"]');
-        if (movementPill) {
-          movementPill.textContent = `Movement: ${robot.tests.movement?.value || 'n/a'}`;
-        }
-
         const lastFullTestPill = card.querySelector('[data-role="last-full-test-pill"]');
         if (lastFullTestPill) {
           lastFullTestPill.textContent = descriptor.lastFullTestLabel;
@@ -2053,8 +2038,6 @@ export function createFleetFeature(context, maybeEnv) {
           </div>
           <div class="summary">
             <span class="pill" data-role="issues-pill">Issue cluster: ${descriptor.issueSummaryText}</span>
-            <span class="pill" data-role="user-scope-pill">${descriptor.userScopeLabel}</span>
-            <span class="pill" data-role="movement-pill">Movement: ${robot.tests.movement?.value || 'n/a'}</span>
             <span class="pill" data-role="last-full-test-pill">${descriptor.lastFullTestLabel}</span>
             <span data-role="summary-battery-pill">${renderBatteryPill({
               value: descriptor.batteryState.value,

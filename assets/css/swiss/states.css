@@ -106,19 +106,19 @@
 }
 
 .robot-card.state-ok {
-  background: rgba(15, 123, 69, 0.08) !important;
+  background: rgba(15, 123, 69, 0.16) !important;
 }
 
 .robot-card.state-warning {
-  background: rgba(161, 92, 0, 0.1) !important;
+  background: rgba(161, 92, 0, 0.18) !important;
 }
 
 .robot-card.state-critical {
-  background: rgba(170, 19, 40, 0.1) !important;
+  background: rgba(170, 19, 40, 0.2) !important;
 }
 
 .robot-card.state-offline {
-  background: rgba(83, 83, 83, 0.12) !important;
+  background: rgba(83, 83, 83, 0.16) !important;
 }
 
 .robot-card.outer-state-ok {
@@ -144,6 +144,35 @@
 
 .robot-card.outer-scope-hidden {
   border-color: transparent !important;
+}
+
+.robot-card .robot-card-inner-border {
+  border-width: 3px !important;
+}
+
+.robot-card.inner-state-ok .robot-card-inner-border {
+  border-color: rgba(15, 123, 69, 0.9) !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 123, 69, 0.3);
+}
+
+.robot-card.inner-state-warning .robot-card-inner-border {
+  border-color: rgba(161, 92, 0, 0.92) !important;
+  box-shadow: inset 0 0 0 1px rgba(161, 92, 0, 0.32);
+}
+
+.robot-card.inner-state-critical .robot-card-inner-border {
+  border-color: rgba(170, 19, 40, 0.92) !important;
+  box-shadow: inset 0 0 0 1px rgba(170, 19, 40, 0.34);
+}
+
+.robot-card.inner-state-unknown .robot-card-inner-border {
+  border-color: rgba(126, 136, 151, 0.88) !important;
+  border-style: dashed !important;
+  box-shadow: inset 0 0 0 1px rgba(126, 136, 151, 0.25);
+}
+
+.robot-card.inner-state-na .robot-card-inner-border {
+  border-color: rgba(126, 136, 151, 0.62) !important;
 }
 
 .robot-card.selected,

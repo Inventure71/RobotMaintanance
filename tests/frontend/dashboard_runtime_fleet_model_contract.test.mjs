@@ -549,6 +549,57 @@ test('applyFilters keeps robots visible when only active owner profile is select
   assert.equal(visible.length, 2);
 });
 
+test('getActiveUserAggregate excludes global-only tests from user outer scope', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.activeOwnerProfile = 'alice';
+  const aggregate = api.getActiveUserAggregate({
+    id: 'r1',
+    tests: {
+      online: { status: 'warning', value: 'unknown', details: 'unknown', source: 'manual', checkedAt: 11 },
+      movement: { status: 'warning', value: 'blocked', details: 'blocked', source: 'manual', checkedAt: 12 },
+    },
+    testDefinitions: [
+      { id: 'online', label: 'Online', ownerTags: ['global'], platformTags: ['ros2'] },
+      { id: 'movement', label: 'Movement', ownerTags: ['global'], platformTags: ['ros2'] },
+    ],
+  });
+
+  assert.equal(aggregate.hasChecks, false);
+  assert.equal(aggregate.entries.length, 0);
+  assert.equal(aggregate.state, 'unknown');
+});
+
+test('getActiveUserAggregate only uses selected user tests when both user and global exist', async () => {
+  const createFleetFeature = await loadApi();
+  const env = makeEnv();
+  const runtime = makeRuntime(env);
+  const api = createFleetFeature(runtime, env);
+
+  env.state.filter.activeOwnerProfile = 'alice';
+  const aggregate = api.getActiveUserAggregate({
+    id: 'r2',
+    tests: {
+      online: { status: 'warning', value: 'unknown', details: 'unknown', source: 'manual', checkedAt: 21 },
+      movement: { status: 'warning', value: 'blocked', details: 'blocked', source: 'manual', checkedAt: 22 },
+      camera: { status: 'ok', value: 'clear', details: 'clear', source: 'manual', checkedAt: 23 },
+    },
+    testDefinitions: [
+      { id: 'online', label: 'Online', ownerTags: ['global'], platformTags: ['ros2'] },
+      { id: 'movement', label: 'Movement', ownerTags: ['global'], platformTags: ['ros2'] },
+      { id: 'camera', label: 'Camera', ownerTags: ['alice'], platformTags: ['ros2'] },
+    ],
+  });
+
+  assert.equal(aggregate.hasChecks, true);
+  assert.equal(aggregate.entries.length, 1);
+  assert.equal(aggregate.entries[0].id, 'camera');
+  assert.equal(aggregate.state, 'ok');
+});
+
 test('matchesDefinitionFilters uses OR within fields and AND across owner/platform', async () => {
   const createFleetFeature = await loadApi();
   const env = makeEnv();
