@@ -63,6 +63,7 @@ class InteractiveShell:
     SUDO_PROMPT_SETTLE_SEC = 0.05
     SUDO_RESET_TIMEOUT_SEC = 2.0
     SUDO_RESET_QUIET_SEC = 0.1
+    INITIAL_DIRECTORY_TIMEOUT_SEC = 5.0
     COMMAND_DONE_PREFIX = "__CODEX_CMD_DONE__"
     AUTOMATION_DONE_PREFIX = "__CODEX_AUTO_DONE__"
     AUTOMATION_EXIT_PREFIX = "__CODEX_AUTO_EXIT__"
@@ -96,6 +97,7 @@ class InteractiveShell:
         sleep_fn: Callable[[float], None] = time.sleep,
         time_fn: Callable[[], float] = time.time,
         prompt_detector: Optional[Callable[[str], bool]] = None,
+        initial_directory: str | None = None,
         connected_client: ShellClient | None = None,
         owns_client: bool = True,
     ):
@@ -112,6 +114,7 @@ class InteractiveShell:
         self._sleep = sleep_fn
         self._time = time_fn
         self._prompt_detector = prompt_detector
+        self._initial_directory = str(initial_directory or "").strip() or None
         self._connected_client = connected_client
         self._owns_client = bool(owns_client)
 
@@ -165,6 +168,11 @@ class InteractiveShell:
         self._stop.clear()
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
+        try:
+            self._apply_initial_directory()
+        except Exception:
+            self.close()
+            raise
 
     def close(self) -> None:
         self._stop.set()
@@ -228,6 +236,41 @@ class InteractiveShell:
         marker = f"{self.COMMAND_DONE_PREFIX}{uuid.uuid4().hex}__"
         command = f"printf '\\n%s\\n' '{marker}'"
         return marker, command
+
+    @staticmethod
+    def _quote_shell_value(value: str) -> str:
+        text = str(value or "")
+        return "'" + text.replace("'", "'\"'\"'") + "'"
+
+    def _apply_initial_directory(self) -> None:
+        directory = str(self._initial_directory or "").strip()
+        if not directory:
+            return
+
+        quoted_directory = self._quote_shell_value(directory)
+        command = (
+            f"__CODEX_START_DIR={quoted_directory}; "
+            "__CODEX_LOGIN_HOME=\"$(getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f6)\"; "
+            "[ -n \"$__CODEX_LOGIN_HOME\" ] || __CODEX_LOGIN_HOME=\"$HOME\"; "
+            "case \"$__CODEX_START_DIR\" in "
+            "'~') __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME\" ;; "
+            "'~/'*) __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME/${__CODEX_START_DIR#~/}\" ;; "
+            "'$HOME') __CODEX_START_DIR=\"$HOME\" ;; "
+            "'$HOME/'*) __CODEX_START_DIR=\"$HOME/${__CODEX_START_DIR#\\$HOME/}\" ;; "
+            "esac; "
+            "cd -- \"$__CODEX_START_DIR\""
+        )
+        timeout = max(
+            0.5,
+            min(float(self.connect_timeout), float(self.INITIAL_DIRECTORY_TIMEOUT_SEC)),
+        )
+        result = self.run_automation_command(command, timeout=timeout)
+        if result.timed_out:
+            raise RuntimeError(f"Failed to set initial directory '{directory}': command timed out")
+        if result.exit_code != 0:
+            details = str(result.output or "").strip()
+            suffix = f": {details}" if details else ""
+            raise RuntimeError(f"Failed to set initial directory '{directory}'{suffix}")
 
     @staticmethod
     def _build_marker(prefix: str) -> str:

@@ -474,16 +474,17 @@ class TestExecutor:
             if definition_id:
                 definition_groups.setdefault(definition_id, []).append(spec)
 
-        run_context: AutomationRunProtocol | None = None
         fallback_run_id = f"test-{robot_id}-{uuid.uuid4().hex[:10]}"
+        definition_run_metadata: list[dict[str, Any]] = []
         try:
             for definition_id, grouped_specs in definition_groups.items():
                 definition = self._test_definitions_by_id.get(definition_id)
                 mode = normalize_text(definition.get("mode") if isinstance(definition, dict) else "", "orchestrate")
                 requires_automation_shell = (mode != "online_probe") and not dry_run
-                if requires_automation_shell and run_context is None:
-                    try:
-                        run_context = self._open_automation_context(
+                definition_context: AutomationRunProtocol | None = None
+                try:
+                    if requires_automation_shell:
+                        definition_context = self._open_automation_context(
                             robot_id=robot_id,
                             page_session_id=page_session_id,
                             run_kind="test",
@@ -491,21 +492,21 @@ class TestExecutor:
                             connect_timeout_sec=connect_timeout_sec,
                             execute_timeout_sec=effective_execute_timeout_sec,
                         )
-                    except Exception as exc:
-                        for spec in grouped_specs:
-                            results.append(
-                                {
-                                    "id": normalize_text(spec.get("id"), "test"),
-                                    "status": "error",
-                                    "value": "execution_error",
-                                    "details": f"Test execution failed: {exc}",
-                                    "errorCode": "execution_error",
-                                    "source": "executor",
-                                    "ms": 0,
-                                    "steps": [],
-                                }
-                            )
-                        continue
+                except Exception as exc:
+                    for spec in grouped_specs:
+                        results.append(
+                            {
+                                "id": normalize_text(spec.get("id"), "test"),
+                                "status": "error",
+                                "value": "execution_error",
+                                "details": f"Test execution failed: {exc}",
+                                "errorCode": "execution_error",
+                                "source": "executor",
+                                "ms": 0,
+                                "steps": [],
+                            }
+                        )
+                    continue
 
                 try:
                     execution = self._execute_definition_once(
@@ -515,7 +516,7 @@ class TestExecutor:
                         dry_run=dry_run,
                         command_output_cache=command_output_cache,
                         run_scope=run_scope,
-                        run_context=run_context,
+                        run_context=definition_context,
                         default_execute_timeout_sec=effective_execute_timeout_sec,
                     )
                 except HTTPException as exc:
@@ -548,6 +549,14 @@ class TestExecutor:
                             }
                         )
                     continue
+                finally:
+                    if definition_context is not None:
+                        try:
+                            definition_context.close()
+                        finally:
+                            metadata_payload = definition_context.metadata_payload()
+                            if isinstance(metadata_payload, dict):
+                                definition_run_metadata.append(metadata_payload)
 
                 outputs = execution.get("outputs") if isinstance(execution.get("outputs"), dict) else {}
                 steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
@@ -582,9 +591,39 @@ class TestExecutor:
                         )
                     )
         finally:
-            if run_context is not None:
-                run_context.close()
-                metadata = run_context.metadata_payload()
+            if len(definition_run_metadata) == 1:
+                metadata = dict(definition_run_metadata[0])
+            elif definition_run_metadata:
+                elapsed_ms = max(0, int((time.time() - run_started) * 1000))
+                queue_ms = 0
+                connect_ms = 0
+                execute_ms = 0
+                transport_reused = False
+                for payload in definition_run_metadata:
+                    timing_payload = payload.get("timing") if isinstance(payload.get("timing"), dict) else {}
+                    queue_ms += int(timing_payload.get("queueMs") or 0)
+                    connect_ms += int(timing_payload.get("connectMs") or 0)
+                    execute_ms += int(timing_payload.get("executeMs") or 0)
+                    session_payload = payload.get("session") if isinstance(payload.get("session"), dict) else {}
+                    transport_reused = transport_reused or bool(session_payload.get("transportReused"))
+
+                metadata = {
+                    "timing": {
+                        "queueMs": int(queue_ms),
+                        "connectMs": int(connect_ms),
+                        "executeMs": int(execute_ms),
+                        "totalMs": int(elapsed_ms),
+                    },
+                    "session": {
+                        "runId": fallback_run_id,
+                        "robotId": robot_id,
+                        "pageSessionId": page_session_id,
+                        "runKind": "test",
+                        "transportReused": transport_reused,
+                        "resetPolicy": "definition_scoped_shell",
+                        "shellCount": len(definition_run_metadata),
+                    },
+                }
             else:
                 elapsed_ms = max(0, int((time.time() - run_started) * 1000))
                 metadata = {

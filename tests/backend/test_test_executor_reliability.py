@@ -381,3 +381,146 @@ def test_explicit_empty_test_ids_raise_no_tests_selected():
         executor.run_tests(robot_id="r1", page_session_id="page-1", test_ids=[])
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "No tests selected."
+
+
+def test_run_tests_isolates_shell_state_between_definitions():
+    robot_type = {
+        "typeId": "rosbot-2-pro",
+        "tests": [
+            {
+                "id": "persistence",
+                "definitionId": "test_persistence",
+                "manualOnly": True,
+                "runAtConnection": True,
+                "enabled": True,
+            },
+            {
+                "id": "folder-check",
+                "definitionId": "test_test",
+                "manualOnly": True,
+                "runAtConnection": True,
+                "enabled": True,
+            },
+        ],
+    }
+    definitions = {
+        "test_persistence": {
+            "id": "test_persistence",
+            "mode": "orchestrate",
+            "execute": [
+                {"id": "step_1", "command": "cd hydra/"},
+                {"id": "step_2", "command": "pwd", "saveAs": "persistence_pwd"},
+            ],
+            "checks": [
+                {
+                    "id": "persistence",
+                    "read": {
+                        "kind": "contains_string",
+                        "inputRef": "persistence_pwd",
+                        "needle": "/home/husarion/hydra",
+                    },
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+        "test_test": {
+            "id": "test_test",
+            "mode": "orchestrate",
+            "execute": [{"id": "step_1", "command": "pwd", "saveAs": "folder_pwd"}],
+            "checks": [
+                {
+                    "id": "folder-check",
+                    "read": {
+                        "kind": "contains_lines_unordered",
+                        "inputRef": "folder_pwd",
+                        "lines": ["/home/husarion"],
+                        "requireAll": True,
+                    },
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        },
+    }
+
+    context_counter = {"value": 0}
+
+    class FakeRunContext:
+        def __init__(self):
+            context_counter["value"] += 1
+            self._context_id = context_counter["value"]
+            self._cwd = "/home/husarion"
+
+        def run_command(
+            self,
+            command: str,
+            timeout_sec: float | None = None,
+            sudo_password: str | None = None,
+        ) -> AutomationCommandResult:
+            _ = timeout_sec
+            _ = sudo_password
+            cmd = str(command or "").strip()
+            if cmd.startswith("cd "):
+                target = cmd[3:].strip().strip("'\"")
+                if target.rstrip("/") == "hydra":
+                    self._cwd = "/home/husarion/hydra"
+                elif target in {"~", "/home/husarion"}:
+                    self._cwd = "/home/husarion"
+                output = ""
+            elif cmd == "pwd":
+                output = self._cwd
+            else:
+                output = ""
+
+            return AutomationCommandResult(
+                output=output,
+                exit_code=0,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
+
+        def close(self) -> None:
+            return None
+
+        def metadata_payload(self) -> dict[str, object]:
+            return {
+                "timing": {"queueMs": 0, "connectMs": 0, "executeMs": 0, "totalMs": 0},
+                "session": {
+                    "runId": f"definition-{self._context_id}",
+                    "robotId": "r1",
+                    "pageSessionId": "page-1",
+                    "runKind": "test",
+                    "transportReused": True,
+                    "resetPolicy": "run_scoped_shell",
+                },
+            }
+
+    executor = TestExecutor(
+        robot_types_by_id={"rosbot-2-pro": robot_type},
+        resolve_robot_type=lambda _robot_id: robot_type,
+        resolve_credentials=lambda _robot_id: ("10.0.0.1", "u", "p", 22),
+        check_online=lambda _robot_id: {"status": "ok", "value": "reachable", "details": "ok", "ms": 1},
+        create_automation_run_context=lambda **_kwargs: FakeRunContext(),
+        test_definitions_by_id=definitions,
+        check_definitions_by_id={
+            "persistence": {"id": "persistence", "definitionId": "test_persistence"},
+            "folder-check": {"id": "folder-check", "definitionId": "test_test"},
+        },
+        orchestrate_connector=OrchestrateConnector(read=ReadConnector(), write=WriteConnector({})),
+    )
+
+    results = executor.run_tests(
+        robot_id="r1",
+        page_session_id="page-1",
+        test_ids=["persistence", "folder-check"],
+    )
+    by_id = {result["id"]: result for result in results}
+    assert by_id["persistence"]["status"] == "ok"
+    assert by_id["folder-check"]["status"] == "ok"
+    assert context_counter["value"] == 2
+
+    metadata = executor.get_last_run_metadata()
+    assert metadata["session"]["resetPolicy"] == "definition_scoped_shell"
+    assert metadata["session"]["shellCount"] == 2

@@ -2209,7 +2209,7 @@ export function createDetailFeature(context, maybeEnv) {
 
         if (filterActiveOwner) {
           const activeOwnerOptions = Array.from(ownerProfiles).sort((left, right) => left.localeCompare(right));
-          filterActiveOwner.innerHTML = `<option value="">All</option>`;
+          filterActiveOwner.innerHTML = `<option value="">Global</option>`;
           activeOwnerOptions.forEach((tag) => {
             const option = document.createElement('option');
             option.value = tag;

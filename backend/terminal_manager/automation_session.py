@@ -48,6 +48,7 @@ class AutomationSessionMixin:
             minimum=self.AUTOMATION_EXECUTE_TIMEOUT_MIN_SEC,
             maximum=self.AUTOMATION_EXECUTE_TIMEOUT_MAX_SEC,
         )
+        initial_directory = self._resolve_initial_directory(robot_id)
         return AutomationRunContext(
             pool=self._transport_pool,
             robot_id=robot_id,
@@ -61,6 +62,7 @@ class AutomationSessionMixin:
             connect_timeout_sec=connect_timeout,
             execute_timeout_sec=execute_timeout,
             prompt_regex=r"[$#] ",
+            initial_directory=initial_directory,
         )
 
     def probe_transport(

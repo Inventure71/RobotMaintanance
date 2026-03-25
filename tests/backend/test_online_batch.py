@@ -93,11 +93,12 @@ def test_online_batch_endpoint_returns_mixed_results():
 
 
 def test_get_or_connect_uses_terminal_connect_timeout(monkeypatch):
-    observed = {"connect_timeout": None, "connect_calls": 0}
+    observed = {"connect_timeout": None, "initial_directory": None, "connect_calls": 0}
 
     class FakeShell:
         def __init__(self, **kwargs):
             observed["connect_timeout"] = kwargs.get("connect_timeout")
+            observed["initial_directory"] = kwargs.get("initial_directory")
 
         def connect(self):
             observed["connect_calls"] += 1
@@ -124,6 +125,73 @@ def test_get_or_connect_uses_terminal_connect_timeout(monkeypatch):
     assert shell is not None
     assert observed["connect_calls"] == 1
     assert observed["connect_timeout"] == TerminalManager.TERMINAL_CONNECT_TIMEOUT_SEC
+    assert observed["initial_directory"] == "~"
+
+
+def test_get_or_connect_uses_robot_configured_initial_directory(monkeypatch):
+    observed = {"initial_directory": None}
+
+    class FakeShell:
+        def __init__(self, **kwargs):
+            observed["initial_directory"] = kwargs.get("initial_directory")
+
+        def connect(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {
+                    "username": "u",
+                    "password": "p",
+                    "port": 22,
+                    "cwd": "/home/u/ros2_ws",
+                },
+            }
+        },
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+    )
+
+    manager.get_or_connect(page_session_id="p1", robot_id="r1")
+
+    assert observed["initial_directory"] == "/home/u/ros2_ws"
+
+
+def test_create_automation_run_context_uses_same_initial_directory_policy():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {
+                    "username": "u",
+                    "password": "p",
+                    "port": 22,
+                    "cwd": "/home/u/ros2_ws",
+                },
+            }
+        },
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+    )
+
+    run_context = manager.create_automation_run_context(
+        robot_id="r1",
+        page_session_id="p1",
+        run_kind="test",
+    )
+    try:
+        assert run_context._initial_directory == "/home/u/ros2_ws"
+    finally:
+        run_context.close()
 
 
 def test_terminal_manager_stream_helpers_use_existing_shell_handle():

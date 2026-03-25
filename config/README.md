@@ -16,7 +16,7 @@ Each robot entry:
 - `name` (required)
 - `type` (required): references `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json` `robotTypes[].id`
 - `ip` (required)
-- `ssh` (optional): `username`, `password`, `port`
+- `ssh` (optional): `username`, `password`, `port`, optional startup directory (`cwd` or `initialDirectory`)
 - `model` (optional robot-level override object):
   - `file_name` (optional override)
   - `path_to_quality_folders` (optional override, default `assets/models`)

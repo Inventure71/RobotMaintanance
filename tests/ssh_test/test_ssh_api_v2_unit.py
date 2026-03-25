@@ -6,7 +6,7 @@ from queue import Queue
 
 import pytest
 
-from backend.ssh_client import InteractiveShell
+from backend.ssh_client import AutomationCommandResult, InteractiveShell
 
 
 class FakeChannel:
@@ -141,6 +141,100 @@ def test_connect_keeps_startup_banner_output_available():
         banner = shell.read(wait_timeout=0.1)
         assert "Last login:" in banner
         assert "husarion@alexander:~$ " in banner
+    finally:
+        shell.close()
+
+
+def test_connect_sets_configured_initial_directory():
+    fake_client = FakeClient()
+    shell = InteractiveShell(
+        host="10.0.0.5",
+        username="robot",
+        password="pw",
+        port=2222,
+        initial_directory="/home/robot/workspace",
+        client_factory=lambda: fake_client,
+    )
+    observed = {"command": None}
+
+    def fake_run_automation_command(command: str, timeout: float = 10.0, sudo_password=None):
+        _ = (timeout, sudo_password)
+        observed["command"] = command
+        return AutomationCommandResult(
+            output="",
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
+
+    shell.run_automation_command = fake_run_automation_command  # type: ignore[method-assign]
+    try:
+        shell.connect()
+        command = str(observed["command"] or "")
+        assert "__CODEX_START_DIR='/home/robot/workspace'" in command
+        assert 'cd -- "$__CODEX_START_DIR"' in command
+    finally:
+        shell.close()
+
+
+def test_connect_raises_when_initial_directory_cannot_be_set():
+    fake_client = FakeClient()
+    shell = InteractiveShell(
+        host="10.0.0.5",
+        username="robot",
+        password="pw",
+        port=2222,
+        initial_directory="/missing/path",
+        client_factory=lambda: fake_client,
+    )
+
+    def fake_run_automation_command(command: str, timeout: float = 10.0, sudo_password=None):
+        _ = (command, timeout, sudo_password)
+        return AutomationCommandResult(
+            output="bash: cd: /missing/path: No such file or directory",
+            exit_code=1,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
+
+    shell.run_automation_command = fake_run_automation_command  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="Failed to set initial directory '/missing/path'"):
+        shell.connect()
+
+
+def test_connect_expands_tilde_initial_directory_to_home():
+    fake_client = FakeClient()
+    shell = InteractiveShell(
+        host="10.0.0.5",
+        username="robot",
+        password="pw",
+        port=2222,
+        initial_directory="~",
+        client_factory=lambda: fake_client,
+    )
+    observed = {"command": None}
+
+    def fake_run_automation_command(command: str, timeout: float = 10.0, sudo_password=None):
+        _ = (timeout, sudo_password)
+        observed["command"] = command
+        return AutomationCommandResult(
+            output="",
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
+
+    shell.run_automation_command = fake_run_automation_command  # type: ignore[method-assign]
+    try:
+        shell.connect()
+        command = str(observed["command"] or "")
+        assert "__CODEX_START_DIR='~'" in command
+        assert "__CODEX_LOGIN_HOME" in command
+        assert "'~') __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME\"" in command
     finally:
         shell.close()
 

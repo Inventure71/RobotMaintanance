@@ -338,10 +338,33 @@ async function loadApi() {
     setTimeout,
     clearTimeout,
     document: {
-      createElement: () => makeNode(),
+      createElement: (tagName = '') => {
+        const node = makeNode();
+        if (String(tagName).toLowerCase() === 'a') {
+          node.click = () => {
+            context.__downloads = context.__downloads || [];
+            const blob = context.__blobByUrl?.get?.(node.href);
+            const text = blob && Array.isArray(blob.parts)
+              ? blob.parts.map((part) => String(part ?? '')).join('')
+              : '';
+            context.__downloads.push({
+              href: node.href,
+              download: node.download,
+              text,
+            });
+          };
+        }
+        return node;
+      },
       body: { classList: makeClassList() },
       addEventListener: () => {},
       removeEventListener: () => {},
+    },
+    Blob: class MockBlob {
+      constructor(parts = [], options = {}) {
+        this.parts = parts;
+        this.type = options?.type || '';
+      }
     },
     window: {
       prompt: () => '',
@@ -351,6 +374,19 @@ async function loadApi() {
           writeText: async (value) => {
             context.__copiedText = value;
           },
+        },
+      },
+      URL: {
+        createObjectURL: (blob) => {
+          context.__blobCursor = (context.__blobCursor || 0) + 1;
+          const url = `blob:mock-${context.__blobCursor}`;
+          context.__blobByUrl = context.__blobByUrl || new Map();
+          context.__blobByUrl.set(url, blob);
+          return url;
+        },
+        revokeObjectURL: (url) => {
+          context.__revokedUrls = context.__revokedUrls || [];
+          context.__revokedUrls.push(url);
         },
       },
       setTimeout,
@@ -368,6 +404,10 @@ async function loadApi() {
   const apiFactory = context.module.exports.createRecorderFeature;
   apiFactory.__setFetchMock = (mock) => {
     context.__fetch = mock;
+  };
+  apiFactory.__getDownloads = () => context.__downloads || [];
+  apiFactory.__resetDownloads = () => {
+    context.__downloads = [];
   };
   return apiFactory;
 }
@@ -548,6 +588,7 @@ function makeEnv() {
       }
     },
     manageDefinitionFilterButtons,
+    filterActiveOwner: makeNode(),
     manageDefinitionsList: makeNode(),
     manageFlowModeButtons,
     manageFlowModeHint: makeNode(),
@@ -762,6 +803,9 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
   const api = createRecorderFeature(runtime, env);
 
   api.renderManageDefinitionsList();
+  assert.equal(env.manageDefinitionsList.children.length, 1);
+  env.filterActiveOwner.value = 'alice';
+  api.renderManageDefinitionsList();
   assert.equal(env.manageDefinitionsList.children.length, 2);
 
   api.setManageDefinitionsFilter('fixes');
@@ -774,7 +818,7 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
   assert.equal(fixTagRow.children[0].textContent, 'owner:alice');
   assert.equal(fixTagRow.children[1].textContent, 'platform:interbotix');
   const actionButtons = fixRow.children[1].children;
-  assert.equal(actionButtons.length, 3);
+  assert.equal(actionButtons.length, 4);
   assert.equal(actionButtons[0].textContent, 'Edit/View');
   actionButtons[0].click();
 
@@ -786,6 +830,92 @@ test('renderManageDefinitionsList filters entries and edit/view opens fix defini
   assert.equal(env.state.manageFlowEditorMode, 'fix');
   assert.equal(env.manageRecorderFixEditorPanel.classList.contains('active'), true);
   assert.equal(env.manageRecorderTestEditorPanel.classList.contains('hidden'), true);
+});
+
+test('export test action downloads recorder-import-compatible JSON', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.state.definitionsSummary.tests = [
+    {
+      id: 'battery_health',
+      label: 'Battery health',
+      description: 'Verify battery topic is available.',
+      execute: [{ id: 'step_1', command: 'rostopic list', saveAs: 'out_1' }],
+      checks: [
+        {
+          id: 'battery_health__battery',
+          label: 'Battery',
+          metadata: { runAtConnection: false },
+          read: { kind: 'contains_string', inputRef: 'out_1', needle: '/battery' },
+          pass: { status: 'ok', value: 'present', details: 'Battery topic present' },
+          fail: { status: 'error', value: 'missing', details: 'Battery topic missing' },
+        },
+      ],
+      ownerTags: ['alice'],
+      platformTags: ['ros2'],
+    },
+  ];
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+  createRecorderFeature.__resetDownloads();
+
+  env.filterActiveOwner.value = 'alice';
+  api.setManageDefinitionsFilter('tests');
+  const testRow = env.manageDefinitionsList.children[0];
+  const exportButton = testRow.children[1].children[2];
+  exportButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const downloads = createRecorderFeature.__getDownloads();
+  assert.equal(downloads.length, 1);
+  assert.equal(downloads[0].download, 'battery_health.test.json');
+  const downloadedPayload = JSON.parse(downloads[0].text);
+  assert.equal(downloadedPayload.id, 'battery_health');
+  assert.equal(downloadedPayload.mode, 'orchestrate');
+  assert.equal(downloadedPayload.execute[0].command, 'rostopic list');
+  assert.equal(downloadedPayload.checks[0].id, 'battery_health__battery');
+  assert.equal(downloadedPayload.checks[0].runAtConnection, false);
+  assert.deepEqual(downloadedPayload.ownerTags, ['alice']);
+  assert.deepEqual(downloadedPayload.platformTags, ['ros2']);
+  assert.equal(env.manageTabStatus.textContent, "Downloaded test definition 'battery_health' JSON file.");
+});
+
+test('export fix action downloads fix definition JSON', async () => {
+  const createRecorderFeature = await loadApi();
+  const env = makeEnv();
+  env.state.definitionsSummary.fixes = [
+    {
+      id: 'flash_fix',
+      label: 'Flash fix',
+      description: 'Reflash firmware',
+      enabled: true,
+      runAtConnection: true,
+      ownerTags: ['global'],
+      platformTags: ['interbotix'],
+      execute: [{ id: 'fix_step_1', command: 'flash firmware' }],
+    },
+  ];
+  const runtime = makeRuntime(env.state);
+  const api = createRecorderFeature(runtime, env);
+  createRecorderFeature.__resetDownloads();
+
+  api.setManageDefinitionsFilter('fixes');
+  const fixRow = env.manageDefinitionsList.children[0];
+  const exportButton = fixRow.children[1].children[2];
+  exportButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const downloads = createRecorderFeature.__getDownloads();
+  assert.equal(downloads.length, 1);
+  assert.equal(downloads[0].download, 'flash_fix.fix.json');
+  const downloadedPayload = JSON.parse(downloads[0].text);
+  assert.equal(downloadedPayload.id, 'flash_fix');
+  assert.equal(downloadedPayload.label, 'Flash fix');
+  assert.equal(downloadedPayload.runAtConnection, true);
+  assert.equal(downloadedPayload.execute[0].command, 'flash firmware');
+  assert.deepEqual(downloadedPayload.ownerTags, ['global']);
+  assert.deepEqual(downloadedPayload.platformTags, ['interbotix']);
+  assert.equal(env.manageTabStatus.textContent, "Downloaded fix definition 'flash_fix' JSON file.");
 });
 
 test('duplicate test action opens a copied recorder draft', async () => {

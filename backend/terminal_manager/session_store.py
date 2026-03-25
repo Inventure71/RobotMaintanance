@@ -9,6 +9,8 @@ from ..models import ShellHandle
 
 
 class SessionStoreMixin:
+    DEFAULT_SHELL_INITIAL_DIRECTORY = "~"
+
     def _idle_sweep_interval_sec(self) -> float:
         configured = float(getattr(self, "IDLE_SWEEP_INTERVAL_SEC", 2.0))
         return max(0.5, configured)
@@ -33,6 +35,29 @@ class SessionStoreMixin:
             )
 
         return host, username, password, port
+
+    def _resolve_initial_directory(self, robot_id: str) -> str:
+        robot = self.robots_by_id.get(robot_id)
+        if not isinstance(robot, dict):
+            fallback = str(getattr(self, "DEFAULT_SHELL_INITIAL_DIRECTORY", "~") or "~").strip()
+            return fallback or "~"
+
+        ssh_cfg = robot.get("ssh") if isinstance(robot.get("ssh"), dict) else {}
+        candidates = [
+            ssh_cfg.get("initialDirectory"),
+            ssh_cfg.get("initialDir"),
+            ssh_cfg.get("cwd"),
+            robot.get("initialDirectory"),
+            robot.get("initialDir"),
+            robot.get("cwd"),
+        ]
+        for raw in candidates:
+            value = str(raw or "").strip()
+            if value:
+                return value
+
+        fallback = str(getattr(self, "DEFAULT_SHELL_INITIAL_DIRECTORY", "~") or "~").strip()
+        return fallback or "~"
 
     def _close_handle(self, key: tuple[str, str]) -> None:
         handle = self._handles.pop(key, None)
@@ -79,6 +104,7 @@ class SessionStoreMixin:
             port=port,
             connect_timeout=self.TERMINAL_CONNECT_TIMEOUT_SEC,
             prompt_regex=r"[$#] ",
+            initial_directory=self._resolve_initial_directory(robot_id),
         )
         try:
             shell.connect()

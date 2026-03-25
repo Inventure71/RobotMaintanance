@@ -36,6 +36,7 @@ class AutomationRunContext:
         term: str = "xterm-256color",
         width: int = 160,
         height: int = 48,
+        initial_directory: str | None = None,
         time_fn: Callable[[], float] = time.time,
     ):
         self._pool = pool
@@ -53,6 +54,7 @@ class AutomationRunContext:
         self._term = term
         self._width = int(width)
         self._height = int(height)
+        self._initial_directory = str(initial_directory or "").strip() or None
         self._time = time_fn
 
         self._run_id = f"{run_kind}-{robot_id}-{uuid.uuid4().hex[:10]}"
@@ -94,6 +96,7 @@ class AutomationRunContext:
             width=self._width,
             height=self._height,
             prompt_regex=self._prompt_regex,
+            initial_directory=self._initial_directory,
             connected_client=acquire_result.client,
             owns_client=False,
         )

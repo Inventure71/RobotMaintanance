@@ -40,7 +40,7 @@ test('dashboard shell organizes header, sidebar, and main fleet content', async 
     /<aside class="dashboard-sidebar" aria-label="Fleet controls">[\s\S]*?Fleet health[\s\S]*?Control[\s\S]*?Search &amp; filter[\s\S]*?Expert Mode[\s\S]*?<\/aside>/,
   );
   assert.match(dashboardSection, /for="filterActiveOwner">Ownership scope<\/label>/);
-  assert.match(dashboardSection, /<select id="filterActiveOwner" class="filter-item">[\s\S]*?<option value="">All<\/option>/);
+  assert.match(dashboardSection, /<select id="filterActiveOwner" class="filter-item">[\s\S]*?<option value="">Global<\/option>/);
   assert.doesNotMatch(dashboardSection, /id="filterOwnerTags"/);
   assert.doesNotMatch(dashboardSection, /id="filterPlatformTags"/);
   assert.match(

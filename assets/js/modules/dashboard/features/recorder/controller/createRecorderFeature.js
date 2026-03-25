@@ -1515,6 +1515,22 @@ export function createRecorderFeature(context, maybeEnv) {
         }
       }
 
+  function getManageActiveOwnerProfile() {
+        if (filterActiveOwner) {
+          return normalizeText(filterActiveOwner.value, '').toLowerCase();
+        }
+        return normalizeText(state?.filter?.activeOwnerProfile, '').toLowerCase();
+      }
+
+  function matchesManageDefinitionOwnerScope(definition = {}) {
+        const ownerTags = normalizeTagList(definition?.ownerTags, { ownerDefault: true });
+        const activeOwnerProfile = getManageActiveOwnerProfile();
+        const ownerSelection = activeOwnerProfile
+          ? [activeOwnerProfile, 'global']
+          : ['global'];
+        return ownerSelection.some((tag) => ownerTags.includes(tag));
+      }
+
   function buildManageDefinitionsListItems() {
         const tests = Array.isArray(state.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
         const fixes = Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
@@ -1524,9 +1540,11 @@ export function createRecorderFeature(context, maybeEnv) {
         ];
         const activeFilter = getManageDefinitionsFilter();
         const filtered = items.filter((item) => (
-          activeFilter === 'all'
+          matchesManageDefinitionOwnerScope(item.definition)
+          && (activeFilter === 'all'
             || (activeFilter === 'tests' && item.kind === 'test')
             || (activeFilter === 'fixes' && item.kind === 'fix')
+          )
         ));
         return filtered.sort((left, right) => {
           const leftLabel = normalizeText(left?.definition?.label, normalizeText(left?.definition?.id, ''));
@@ -1558,6 +1576,125 @@ export function createRecorderFeature(context, maybeEnv) {
           chips.push({ tone: 'platform', label: `platform:${tag}` });
         });
         return chips;
+      }
+
+  function buildManageDefinitionExportFilename(kind, definitionId) {
+        const normalizedKind = kind === 'fix' ? 'fix' : 'test';
+        const baseName = slugifyRecorderValue(definitionId, normalizedKind);
+        return `${baseName}.${normalizedKind}.json`;
+      }
+
+  function downloadTextFile({ fileName, textValue, mimeType = 'application/json;charset=utf-8' }) {
+        const documentRef = typeof document !== 'undefined' ? document : null;
+        const anchor = documentRef?.createElement?.('a');
+        const urlApi = (typeof window !== 'undefined' && window?.URL)
+          ? window.URL
+          : (typeof globalThis !== 'undefined' ? globalThis?.URL : null);
+        const BlobCtor = typeof Blob === 'function' ? Blob : null;
+        if (!anchor || !BlobCtor || typeof urlApi?.createObjectURL !== 'function') {
+          throw new Error('File download is unavailable in this browser.');
+        }
+        const payload = String(textValue ?? '');
+        const blob = new BlobCtor([payload], { type: mimeType });
+        const url = urlApi.createObjectURL(blob);
+        try {
+          anchor.href = url;
+          anchor.download = normalizeText(fileName, 'definition.json');
+          anchor.rel = 'noopener';
+          anchor.style.display = 'none';
+          documentRef?.body?.appendChild?.(anchor);
+          anchor.click?.();
+        } finally {
+          anchor.remove?.();
+          if (typeof urlApi?.revokeObjectURL === 'function') {
+            if (scheduleDelay) {
+              scheduleDelay(() => {
+                urlApi.revokeObjectURL(url);
+              }, 0);
+            } else {
+              urlApi.revokeObjectURL(url);
+            }
+          }
+        }
+      }
+
+  function normalizeDefinitionExportExecute(definition = {}) {
+        return (Array.isArray(definition?.execute) ? definition.execute : []).map((step) => {
+          const payload = step && typeof step === 'object' ? step : {};
+          return {
+            ...payload,
+            command: normalizeText(payload.command, ''),
+          };
+        });
+      }
+
+  function normalizeDefinitionExportChecks(definition = {}) {
+        return (Array.isArray(definition?.checks) ? definition.checks : []).map((check, index) => {
+          const payload = check && typeof check === 'object' ? check : {};
+          return {
+            ...payload,
+            id: normalizeText(payload.id, `check_${index + 1}`),
+            runAtConnection: resolveCheckRunAtConnection(payload, true),
+          };
+        });
+      }
+
+  function buildManageDefinitionExportPayload(item) {
+        const definition = item?.definition && typeof item.definition === 'object'
+          ? item.definition
+          : {};
+        const id = normalizeText(definition?.id, '');
+        const label = normalizeText(definition?.label, id);
+        const ownerTags = normalizeTagList(definition?.ownerTags, { ownerDefault: true });
+        const platformTags = normalizeTagList(definition?.platformTags);
+        const execute = normalizeDefinitionExportExecute(definition);
+
+        if (item?.kind === 'fix') {
+          return {
+            id,
+            label,
+            description: normalizeText(definition?.description, ''),
+            enabled: definition?.enabled !== false,
+            runAtConnection: Boolean(definition?.runAtConnection),
+            ownerTags,
+            platformTags,
+            execute,
+          };
+        }
+
+        return {
+          id,
+          label,
+          description: normalizeText(definition?.description, ''),
+          enabled: definition?.enabled !== false,
+          mode: 'orchestrate',
+          ownerTags,
+          platformTags,
+          execute,
+          checks: normalizeDefinitionExportChecks(definition),
+        };
+      }
+
+  async function exportManageDefinitionJson(item) {
+        const kind = item?.kind === 'fix' ? 'fix' : 'test';
+        const definitionId = normalizeText(item?.definition?.id, '');
+        if (!definitionId) return '';
+        const payload = buildManageDefinitionExportPayload(item);
+        const serialized = JSON.stringify(payload, null, 2);
+        try {
+          downloadTextFile({
+            fileName: buildManageDefinitionExportFilename(kind, definitionId),
+            textValue: serialized,
+          });
+          setManageTabStatus(`Downloaded ${kind} definition '${definitionId}' JSON file.`, 'ok');
+          return serialized;
+        } catch (error) {
+          setManageTabStatus(
+            `Unable to export ${kind} definition '${definitionId}': ${error instanceof Error ? error.message : String(error)}`,
+            'error',
+          );
+          return '';
+        }
       }
 
   function renderManageDefinitionRow(item) {
@@ -1632,6 +1769,15 @@ export function createRecorderFeature(context, maybeEnv) {
           }
         });
 
+        const exportButton = document.createElement('button');
+        exportButton.type = 'button';
+        exportButton.className = 'button button-compact';
+        exportButton.textContent = 'Export JSON';
+        exportButton.setAttribute('aria-label', `Export ${kind} definition ${id} as JSON`);
+        exportButton.addEventListener('click', async () => {
+          await exportManageDefinitionJson({ kind, definition });
+        });
+
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'button button-compact button-danger';
@@ -1645,7 +1791,7 @@ export function createRecorderFeature(context, maybeEnv) {
           }
         });
 
-        actions.append(editButton, duplicateButton, removeButton);
+        actions.append(editButton, duplicateButton, exportButton, removeButton);
         row.append(summary, actions);
         return row;
       }
@@ -3212,6 +3358,8 @@ export function createRecorderFeature(context, maybeEnv) {
     renderManageDefinitionsList,
     renderManageTestsList,
     renderManageFixesList,
+    buildManageDefinitionExportPayload,
+    exportManageDefinitionJson,
     renderRecorderRobotOptions,
     renderManageDefinitions,
     loadDefinitionsSummary,
