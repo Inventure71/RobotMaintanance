@@ -4,6 +4,7 @@
 .venv
 .pytest_cache
 .run
+.vscode
 logs
 tasks
 NextSteps.md
@@ -11,5 +12,10 @@ __pycache__
 *.pyc
 *.pyo
 *.pyd
+*.log
 node_modules
-
+.playwright-cli
+output
+.env
+.env.*
+SYSTEM.md
