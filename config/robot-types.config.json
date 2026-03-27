@@ -61,8 +61,10 @@
       "name": "Rosbot 3 Pro",
       "testRefs": [
         "online",
-        "inventure71_test__hydra_folder_present",
-        "global_test__should_fail"
+        "global_test__should_fail",
+        "ro2_mosaic_test__hydra_agent",
+        "ro2_mosaic_test__hydra_folder_present",
+        "persistance_test__found_firefox"
       ],
       "fixRefs": [],
       "autoMonitor": {

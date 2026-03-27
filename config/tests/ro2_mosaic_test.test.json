@@ -1,0 +1,89 @@
+{
+  "id": "ro2_mosaic_test",
+  "label": "ROS 2 Mosaic Test",
+  "description": "Test to check if the folder is installed and if the agent is running",
+  "enabled": true,
+  "ownerTags": [
+    "mgiorgetti"
+  ],
+  "platformTags": [],
+  "mode": "orchestrate",
+  "execute": [
+    {
+      "id": "step_1",
+      "command": "bash -lc 'source /opt/ros/jazzy/setup.bash >/dev/null 2>&1 || true; ros2 topic list'",
+      "saveAs": "topics_raw"
+    },
+    {
+      "id": "step_2",
+      "command": "bash -lc 'source /opt/ros/jazzy/setup.bash >/dev/null 2>&1 || true; ros2 node list'",
+      "saveAs": "nodes_raw"
+    },
+    {
+      "id": "step_3",
+      "command": "ls",
+      "saveAs": "out_3"
+    }
+  ],
+  "checks": [
+    {
+      "id": "ro2_mosaic_test__hydra_agent",
+      "metadata": {
+        "label": "Robot agent node",
+        "icon": "N",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_string",
+        "inputRef": "nodes_raw",
+        "needle": "/hydra_robot_agent",
+        "caseSensitive": true
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "The hydra robot agent node is present."
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "The hydra robot agent node is missing."
+      }
+    },
+    {
+      "id": "ro2_mosaic_test__hydra_folder_present",
+      "metadata": {
+        "label": "hydra_folder_present",
+        "icon": "\ud83d\udcbe",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_string",
+        "inputRef": "out_3",
+        "needle": "hydra",
+        "caseSensitive": false
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "Passed"
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "Failed"
+      }
+    }
+  ],
+  "params": {}
+}

@@ -1,27 +1,30 @@
 {
-  "id": "inventure71_test",
-  "label": "Inventure71 Test",
-  "description": "Testing",
+  "id": "persistance_test",
+  "label": "Testing Persistance Of Folders",
+  "description": "",
   "enabled": true,
   "ownerTags": [
-    "inventure71"
+    "global"
   ],
-  "platformTags": [
-    "ros2"
-  ],
+  "platformTags": [],
   "mode": "orchestrate",
   "execute": [
     {
       "id": "step_1",
-      "command": "ls",
+      "command": "cd snap/",
       "saveAs": "out_1"
+    },
+    {
+      "id": "step_2",
+      "command": "ls",
+      "saveAs": "out_2"
     }
   ],
   "checks": [
     {
-      "id": "inventure71_test__hydra_folder_present",
+      "id": "persistance_test__found_firefox",
       "metadata": {
-        "label": "hydra folder present",
+        "label": "Found firefox",
         "icon": "\ud83d\udcbe",
         "manualOnly": true,
         "enabled": true,
@@ -32,8 +35,8 @@
       },
       "read": {
         "kind": "contains_string",
-        "inputRef": "out_1",
-        "needle": "hydra",
+        "inputRef": "out_2",
+        "needle": "firefox",
         "caseSensitive": false
       },
       "pass": {
