@@ -423,6 +423,34 @@ def create_robots_router(
             robot_entry["model"] = normalized_model
         return robot_entry
 
+    def _compact_runtime_tests_payload(raw_tests: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+        tests = raw_tests if isinstance(raw_tests, dict) else {}
+        compact: dict[str, dict[str, Any]] = {}
+        for test_id in ("online", "battery"):
+            payload = tests.get(test_id)
+            if not isinstance(payload, dict):
+                continue
+            compact[test_id] = {
+                "status": normalize_status(payload.get("status")),
+                "value": normalize_text(payload.get("value"), "unknown"),
+                "details": normalize_text(payload.get("details"), ""),
+                "reason": normalize_text(payload.get("reason"), ""),
+                "source": normalize_text(payload.get("source"), "live"),
+                "checkedAt": int(payload.get("checkedAt") or 0),
+            }
+        return compact
+
+    def _compact_runtime_activity_payload(raw_activity: dict[str, Any] | None) -> dict[str, Any]:
+        activity = raw_activity if isinstance(raw_activity, dict) else {}
+        return {
+            "searching": bool(activity.get("searching")),
+            "testing": bool(activity.get("testing")),
+            "phase": normalize_text(activity.get("phase"), "") or None,
+            "lastFullTestAt": int(activity.get("lastFullTestAt") or 0),
+            "lastFullTestSource": normalize_text(activity.get("lastFullTestSource"), "") or None,
+            "updatedAt": int(activity.get("updatedAt") or 0),
+        }
+
     def _robot_override_model_file_name(robot_id: str, suffix: str) -> str:
         return f"robots/{_normalize_robot_id(robot_id)}{suffix}"
 
@@ -490,7 +518,7 @@ def create_robots_router(
         return {"robots": [_build_static_robot_payload(robot) for robot in robots_by_id.values()]}
 
     @router.get("/api/fleet/runtime")
-    def get_fleet_runtime(since: int = 0) -> dict[str, Any]:
+    def get_fleet_runtime(since: int = 0, compact: bool = False) -> dict[str, Any]:
         safe_since = max(0, int(since or 0))
         if runtime_snapshot_provider:
             snapshot = runtime_snapshot_provider(safe_since)
@@ -504,12 +532,20 @@ def create_robots_router(
                         {
                             "id": normalize_text(robot_payload.get("id"), ""),
                             "version": int(robot_payload.get("version") or 0),
-                            "tests": robot_payload.get("tests")
-                            if isinstance(robot_payload.get("tests"), dict)
-                            else {},
-                            "activity": robot_payload.get("activity")
-                            if isinstance(robot_payload.get("activity"), dict)
-                            else {},
+                            "tests": _compact_runtime_tests_payload(robot_payload.get("tests"))
+                            if compact
+                            else (
+                                robot_payload.get("tests")
+                                if isinstance(robot_payload.get("tests"), dict)
+                                else {}
+                            ),
+                            "activity": _compact_runtime_activity_payload(robot_payload.get("activity"))
+                            if compact
+                            else (
+                                robot_payload.get("activity")
+                                if isinstance(robot_payload.get("activity"), dict)
+                                else {}
+                            ),
                         }
                         for robot_payload in robots_payload
                         if isinstance(robot_payload, dict) and normalize_text(robot_payload.get("id"), "")
@@ -529,8 +565,12 @@ def create_robots_router(
                     {
                         "id": robot_id,
                         "version": 0,
-                        "tests": runtime_tests if isinstance(runtime_tests, dict) else {},
-                        "activity": runtime_activity if isinstance(runtime_activity, dict) else {},
+                        "tests": _compact_runtime_tests_payload(runtime_tests)
+                        if compact
+                        else (runtime_tests if isinstance(runtime_tests, dict) else {}),
+                        "activity": _compact_runtime_activity_payload(runtime_activity)
+                        if compact
+                        else (runtime_activity if isinstance(runtime_activity, dict) else {}),
                     }
                 )
         return {

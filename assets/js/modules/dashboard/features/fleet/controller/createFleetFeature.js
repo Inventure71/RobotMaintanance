@@ -197,6 +197,33 @@ export function createFleetFeature(context, maybeEnv) {
       { id: MODEL_RESOLUTION_HIGH, folder: 'HighRes' },
     ],
   });
+  const LARGE_FLEET_WINDOW_THRESHOLD = 160;
+  const LARGE_FLEET_WINDOW_INITIAL = 120;
+  const LARGE_FLEET_WINDOW_STEP = 80;
+  let largeFleetWindowingEnabled = false;
+  let onlineRenderLimit = Number.POSITIVE_INFINITY;
+  let offlineRenderLimit = Number.POSITIVE_INFINITY;
+  let latestOnlineCount = 0;
+  let latestOfflineCount = 0;
+  let largeFleetWindowListenersBound = false;
+  let modelViewerRuntimePromise = null;
+  const lazyModelViewerObserver =
+    typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry?.isIntersecting) return;
+            hydrateLazyModelViewer(entry.target).catch(() => {});
+            lazyModelViewerObserver.unobserve(entry.target);
+          });
+        },
+        {
+          root: null,
+          rootMargin: '240px 0px',
+          threshold: 0.01,
+        },
+      )
+      : null;
 
   const addRecorderOutputVisual = (...args) => runtime.addRecorderOutputVisual(...args);
   const addRecorderReadVisual = (...args) => runtime.addRecorderReadVisual(...args);
@@ -966,10 +993,89 @@ export function createFleetFeature(context, maybeEnv) {
         return `<img class="${cornerClasses}" data-role="connection-corner-icon" src="assets/Icons/connected.png" alt="${alt}" />`;
       }
 
+  function shouldEnableModelAutoRotate() {
+        try {
+          if (window?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false;
+          if (window?.matchMedia?.('(max-width: 900px)')?.matches) return false;
+          if (navigator?.connection?.saveData) return false;
+        } catch (_error) {
+          // Fall through to default behavior.
+        }
+        return true;
+      }
+
+  async function ensureModelViewerRuntime() {
+        if (!CAN_USE_MODEL_VIEWER) return false;
+        if (!modelViewerRuntimePromise) {
+          modelViewerRuntimePromise = import('@google/model-viewer')
+            .then(() => true)
+            .catch(() => false);
+        }
+        return modelViewerRuntimePromise;
+      }
+
+  async function hydrateLazyModelViewer(modelViewer) {
+        if (!modelViewer || modelViewer.dataset.lazyHydrating === '1') return;
+        const resolvedLazySrc = normalizeText(modelViewer.dataset.lazySrc, '');
+        if (!resolvedLazySrc && !normalizeText(modelViewer.getAttribute('src'), '')) return;
+        modelViewer.dataset.lazyHydrating = '1';
+        const runtimeReady = await ensureModelViewerRuntime();
+        if (!runtimeReady || !modelViewer.isConnected) {
+          modelViewer.dataset.lazyHydrating = '';
+          return;
+        }
+        if (!normalizeText(modelViewer.getAttribute('src'), '') && resolvedLazySrc) {
+          modelViewer.setAttribute('src', resolvedLazySrc);
+        }
+        const baseModelUrl = normalizeText(modelViewer.dataset.modelResolutionBaseUrl, resolvedLazySrc);
+        const preferredResolution = normalizeText(
+          modelViewer.dataset.modelResolutionQuality,
+          MODEL_RESOLUTION_LOW,
+        );
+        modelAssetResolver.bindModelViewerSource(modelViewer, baseModelUrl, preferredResolution);
+        const modelContainer = modelViewer.closest('[data-role="robot-model-container"]');
+        const isOffline = Boolean(modelContainer?.classList?.contains('offline'));
+        if (isOffline || !shouldEnableModelAutoRotate()) {
+          modelViewer.removeAttribute('auto-rotate');
+          modelViewer.removeAttribute('auto-rotate-delay');
+          modelViewer.removeAttribute('rotation-per-second');
+        } else {
+          modelViewer.setAttribute('auto-rotate', '');
+          modelViewer.setAttribute('auto-rotate-delay', '0');
+          modelViewer.setAttribute('rotation-per-second', '20deg');
+        }
+        modelViewer.dataset.lazyLoaded = '1';
+        modelViewer.dataset.lazyHydrating = '';
+        const placeholder = modelViewer.parentElement?.querySelector?.('[data-role="robot-model-placeholder"]');
+        if (placeholder) {
+          placeholder.classList.add('hidden');
+        }
+      }
+
+  function registerLazyModelViewersInNode(node) {
+        if (!node) return;
+        const modelViewers = Array.from(node.querySelectorAll?.('model-viewer[data-lazy-src]') || []);
+        modelViewers.forEach((modelViewer) => {
+          if (modelViewer.dataset.lazyObserved === '1') {
+            return;
+          }
+          modelViewer.dataset.lazyObserved = '1';
+          if (lazyModelViewerObserver) {
+            lazyModelViewerObserver.observe(modelViewer);
+          } else {
+            hydrateLazyModelViewer(modelViewer).catch(() => {});
+          }
+        });
+      }
+
   function syncModelViewerRotationForContainer(container, isOffline) {
         if (!container) return;
         const modelViewer = container.querySelector('model-viewer');
         if (!modelViewer) return;
+        if (!normalizeText(modelViewer.getAttribute('src'), '')) {
+          registerLazyModelViewersInNode(container);
+          return;
+        }
         const baseModelUrl = normalizeText(
           modelViewer.dataset.modelResolutionBaseUrl,
           modelViewer.getAttribute('src'),
@@ -979,7 +1085,7 @@ export function createFleetFeature(context, maybeEnv) {
           MODEL_RESOLUTION_LOW,
         );
         modelAssetResolver.bindModelViewerSource(modelViewer, baseModelUrl, preferredResolution);
-        if (isOffline) {
+        if (isOffline || !shouldEnableModelAutoRotate()) {
           modelViewer.removeAttribute('auto-rotate');
           modelViewer.removeAttribute('auto-rotate-delay');
           modelViewer.removeAttribute('rotation-per-second');
@@ -998,6 +1104,65 @@ export function createFleetFeature(context, maybeEnv) {
           return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
         }
         return `${seconds}s`;
+      }
+
+  function bindLargeFleetWindowListeners() {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (largeFleetWindowListenersBound) return;
+        largeFleetWindowListenersBound = true;
+        window.addEventListener(
+          'scroll',
+          () => {
+            maybeExpandLargeFleetWindow();
+          },
+          { passive: true },
+        );
+        window.addEventListener(
+          'resize',
+          () => {
+            maybeExpandLargeFleetWindow();
+          },
+          { passive: true },
+        );
+      }
+
+  function resetLargeFleetWindowLimits() {
+        onlineRenderLimit = Number.POSITIVE_INFINITY;
+        offlineRenderLimit = Number.POSITIVE_INFINITY;
+        largeFleetWindowingEnabled = false;
+      }
+
+  function ensureLargeFleetWindowLimits(totalVisibleCount) {
+        if (totalVisibleCount > LARGE_FLEET_WINDOW_THRESHOLD) {
+          if (!largeFleetWindowingEnabled) {
+            largeFleetWindowingEnabled = true;
+            onlineRenderLimit = LARGE_FLEET_WINDOW_INITIAL;
+            offlineRenderLimit = LARGE_FLEET_WINDOW_INITIAL;
+          }
+          return;
+        }
+        resetLargeFleetWindowLimits();
+      }
+
+  function maybeExpandLargeFleetWindow() {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (!largeFleetWindowingEnabled) return;
+        const nearPageBottom =
+          window.innerHeight + window.scrollY >= Math.max(0, document.documentElement.scrollHeight - 680);
+        if (!nearPageBottom) return;
+        const nextOnlineLimit = Math.min(latestOnlineCount, onlineRenderLimit + LARGE_FLEET_WINDOW_STEP);
+        const nextOfflineLimit = Math.min(latestOfflineCount, offlineRenderLimit + LARGE_FLEET_WINDOW_STEP);
+        if (nextOnlineLimit === onlineRenderLimit && nextOfflineLimit === offlineRenderLimit) return;
+        onlineRenderLimit = nextOnlineLimit;
+        offlineRenderLimit = nextOfflineLimit;
+        renderDashboard();
+      }
+
+  function applyLargeFleetWindow(list, kind) {
+        if (!largeFleetWindowingEnabled) return list;
+        const safeList = Array.isArray(list) ? list : [];
+        const limit = kind === 'online' ? onlineRenderLimit : offlineRenderLimit;
+        return safeList.slice(0, Math.max(0, limit));
       }
 
   function getMonitorOnlineIntervalMs() {
@@ -1600,14 +1765,12 @@ export function createFleetFeature(context, maybeEnv) {
         if (modelUrl && CAN_USE_MODEL_VIEWER) {
           return `
             <div class="robot-viewer">
+              <div class="robot-model-placeholder" data-role="robot-model-placeholder" aria-hidden="true">3D Model</div>
               <model-viewer
-                src="${modelUrl}"
+                data-lazy-src="${modelUrl}"
                 data-model-resolution-base-url="${baseModelUrl}"
                 data-model-resolution-quality="${preferredResolution}"
                 alt="${robot.name || 'Robot model'}"
-                ${isOffline ? '' : 'auto-rotate'}
-                ${isOffline ? '' : 'auto-rotate-delay="0"'}
-                ${isOffline ? '' : 'rotation-per-second="20deg"'}
                 disable-zoom
                 camera-controls
                 interaction-prompt="none">
@@ -1882,6 +2045,7 @@ export function createFleetFeature(context, maybeEnv) {
           existingModelContainer.setAttribute('data-role', 'robot-model-container');
         }
 
+        registerLazyModelViewersInNode(card);
         syncModelViewerRotationForContainer(card, descriptor.isOffline);
       }
 
@@ -2062,6 +2226,7 @@ export function createFleetFeature(context, maybeEnv) {
         });
   
         hydrateActionButtons(card);
+        registerLazyModelViewersInNode(card);
         syncModelViewerRotationForContainer(card, descriptor.isOffline);
   
         return card;
@@ -2114,16 +2279,22 @@ export function createFleetFeature(context, maybeEnv) {
 
   function renderDashboard() {
         const visible = applyFilters();
-        const onlineRobots = sortOnlineRobots(
+        bindLargeFleetWindowListeners();
+        ensureLargeFleetWindowLimits(visible.length);
+        const allOnlineRobots = sortOnlineRobots(
           visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) === 'ok'),
         );
-        const offlineRobots = visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) !== 'ok');
+        const allOfflineRobots = visible.filter((robot) => normalizeStatus(robot?.tests?.online?.status) !== 'ok');
+        latestOnlineCount = allOnlineRobots.length;
+        latestOfflineCount = allOfflineRobots.length;
+        const onlineRobots = applyLargeFleetWindow(allOnlineRobots, 'online');
+        const offlineRobots = applyLargeFleetWindow(allOfflineRobots, 'offline');
   
         if (onlineSectionTitle) {
-          onlineSectionTitle.textContent = `Online (${onlineRobots.length})`;
+          onlineSectionTitle.textContent = `Online (${allOnlineRobots.length})`;
         }
         if (offlineSectionTitle) {
-          offlineSectionTitle.textContent = `Offline (${offlineRobots.length})`;
+          offlineSectionTitle.textContent = `Offline (${allOfflineRobots.length})`;
         }
   
         if (onlineGrid && offlineGrid) {
@@ -2156,6 +2327,55 @@ export function createFleetFeature(context, maybeEnv) {
         if (state.fixModeOpen.dashboard) {
           renderFixModeActionsForContext(FIX_MODE_CONTEXT_DASHBOARD);
         }
+      }
+
+  function patchDashboardForChangedRobots(changedRobotIds) {
+        const changedIds = Array.from(changedRobotIds || []).map((id) => robotId(id)).filter(Boolean);
+        if (!changedIds.length) return false;
+        const visibleRobots = applyFilters();
+        const visibleRobotsById = new Map(
+          visibleRobots.map((robot) => [robotId(robot), robot]).filter(([id]) => Boolean(id)),
+        );
+        let requiresFullRender = false;
+
+        changedIds.forEach((id) => {
+          const robot = getRobotById(id);
+          const existingCard = queryCardByRobotId(id);
+          const isVisible = visibleRobotsById.has(id);
+          if (!robot) {
+            if (existingCard) requiresFullRender = true;
+            return;
+          }
+          if (!isVisible) {
+            if (existingCard) requiresFullRender = true;
+            return;
+          }
+          if (!existingCard) {
+            if (largeFleetWindowingEnabled) {
+              return;
+            }
+            requiresFullRender = true;
+            return;
+          }
+          const shouldBeOnline = normalizeStatus(robot?.tests?.online?.status) === 'ok';
+          const isInOnlineGrid = Boolean(existingCard.closest('#onlineRobotGrid'));
+          const isInOfflineGrid = Boolean(existingCard.closest('#offlineRobotGrid'));
+          if ((shouldBeOnline && !isInOnlineGrid) || (!shouldBeOnline && !isInOfflineGrid)) {
+            requiresFullRender = true;
+            return;
+          }
+          syncRobotCard(existingCard, robot);
+        });
+
+        if (requiresFullRender) {
+          renderDashboard();
+          return false;
+        }
+
+        applyDashboardMetaFromVisible(visibleRobots);
+        invalidateCountdownNodeCache();
+        hydrateActionButtons(dashboard);
+        return true;
       }
 
   function getStatusChipTone(statusKey) {
@@ -2273,6 +2493,7 @@ export function createFleetFeature(context, maybeEnv) {
     updateKPIs,
     renderDashboard,
     applyDashboardMetaFromVisible,
+    patchDashboardForChangedRobots,
     getStatusChipTone,
     queryCardByRobotId,
   };

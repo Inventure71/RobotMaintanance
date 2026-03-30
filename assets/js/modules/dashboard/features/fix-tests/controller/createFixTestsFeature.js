@@ -310,6 +310,7 @@ export function createFixTestsFeature(context, maybeEnv) {
   const openTestDebugModal = (...args) => runtime.openTestDebugModal(...args);
   const parseJsonInput = (...args) => runtime.parseJsonInput(...args);
   const parseManageRoute = (...args) => runtime.parseManageRoute(...args);
+  const patchDashboardForChangedRobots = (...args) => runtime.patchDashboardForChangedRobots?.(...args);
   const patchRobotTypeMapping = (...args) => runtime.patchRobotTypeMapping(...args);
   const persistManageTab = (...args) => runtime.persistManageTab(...args);
   const populateAddRobotTypeOptions = (...args) => runtime.populateAddRobotTypeOptions(...args);
@@ -629,7 +630,10 @@ export function createFixTestsFeature(context, maybeEnv) {
         const changedIds = Array.from(changedRobotIds || []).map((id) => robotId(id)).filter(Boolean);
         if (!changedIds.length) return;
 
-        renderDashboard();
+        const patched = Boolean(patchDashboardForChangedRobots(changedIds));
+        if (!patched) {
+          renderDashboard();
+        }
         if (state.detailRobotId) {
           const activeRobot = getRobotById(state.detailRobotId);
           patchDetailRuntimeContent(activeRobot);

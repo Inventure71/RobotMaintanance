@@ -65,6 +65,7 @@ Definitions are validated at startup and on reload, including ID references and 
 ### Prerequisites
 
 - Python 3.9+
+- Node.js + npm (for Vite frontend dev server)
 - SSH reachability to target robots
 
 ### Run the Platform
@@ -77,8 +78,9 @@ Startup flow (`scripts/start_robot_maintenance.sh`):
 - optional safe git fast-forward update
 - virtual environment bootstrap when required
 - dependency installation from `backend/requirements.txt`
+- dependency installation from `package.json`
 - backend launch via `uvicorn`
-- static dashboard serving via `python -m http.server`
+- frontend launch via `vite` (`npm run dev`)
 
 Default ports:
 - backend: `8010`

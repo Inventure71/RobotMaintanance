@@ -709,6 +709,8 @@ export function createRecorderFeature(context, maybeEnv) {
 
   const RECORDER_TERMINAL_PRESET_IDS = new Set(['generic-info']);
   let recorderGenericInfoConfigPromise = null;
+  let filterRenderDebounceTimer = null;
+  let filterRenderRaf = null;
 
   function quoteRecorderShellValue(value) {
         return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
@@ -1936,6 +1938,7 @@ export function createRecorderFeature(context, maybeEnv) {
           panel.classList.toggle('active', tab === normalizedTab);
         });
         if (normalizedTab === 'recorder') {
+          ensureWorkflowRecorderInitialized();
           syncRecorderUiState();
         } else {
           setRecorderLlmHelpExpanded(false);
@@ -2317,8 +2320,21 @@ export function createRecorderFeature(context, maybeEnv) {
         setPublishSuccessCelebrationVisible(false);
       }
 
+  function ensurePublishSuccessCelebrationMediaLoaded() {
+        if (!publishSuccessCelebrationVideo) return;
+        const source = publishSuccessCelebrationVideo.querySelector?.('source[data-src]');
+        if (!source) return;
+        const currentSrc = normalizeText(source.getAttribute('src'), '');
+        const nextSrc = normalizeText(source.getAttribute('data-src'), '');
+        if (!currentSrc && nextSrc) {
+          source.setAttribute('src', nextSrc);
+          publishSuccessCelebrationVideo.load?.();
+        }
+      }
+
   async function playPublishSuccessCelebration() {
         if (!publishSuccessCelebration || !publishSuccessCelebrationVideo) return;
+        ensurePublishSuccessCelebrationMediaLoaded();
         await new Promise((resolve) => {
           let settled = false;
           let timeoutId = null;
@@ -3040,52 +3056,62 @@ export function createRecorderFeature(context, maybeEnv) {
         }
       }
 
+  function ensureWorkflowRecorderInitialized() {
+        if (state.isWorkflowRecorderUiInitialized) return;
+        initWorkflowRecorder();
+      }
+
   function initWorkflowRecorder() {
-        state.workflowRecorder = new WorkflowRecorderComponent({
-          terminalOutputEl: null,
-          outputsEl: recorderOutputs,
-          blocksEl: recorderFlowBlocks,
-          writeBlocksEl: recorderWriteBlocks,
-          readBlocksEl: recorderReadBlocks,
-          outputSelectEl: recorderReadOutputKeySelect,
-          inputRefSelectEl: recorderReadInputRefSelect,
-          statusEl: recorderStatus,
-          publishStatusEl: recorderPublishStatus,
-          onStatusChange: (message, tone) => setManageTabStatus(message, tone),
-          onPublishStatusChange: (message, tone) => setManageTabStatus(message, tone),
-          onStateChange: () => {
-            syncRecorderUiState();
-          },
-        });
-        state.workflowRecorder.render();
+        if (state.isWorkflowRecorderUiInitialized) return;
+        if (!state.workflowRecorder && typeof WorkflowRecorderComponent === 'function') {
+          state.workflowRecorder = new WorkflowRecorderComponent({
+            terminalOutputEl: null,
+            outputsEl: recorderOutputs,
+            blocksEl: recorderFlowBlocks,
+            writeBlocksEl: recorderWriteBlocks,
+            readBlocksEl: recorderReadBlocks,
+            outputSelectEl: recorderReadOutputKeySelect,
+            inputRefSelectEl: recorderReadInputRefSelect,
+            statusEl: recorderStatus,
+            publishStatusEl: recorderPublishStatus,
+            onStatusChange: (message, tone) => setManageTabStatus(message, tone),
+            onPublishStatusChange: (message, tone) => setManageTabStatus(message, tone),
+            onStateChange: () => {
+              syncRecorderUiState();
+            },
+          });
+        }
+        state.workflowRecorder?.render?.();
         if (recorderRunAtConnectionInput) {
           recorderRunAtConnectionInput.checked = Boolean(recorderRunAtConnectionInput.checked);
         }
   
-        try {
-          state.recorderTerminalComponent = new RobotTerminalComponent({
-            terminalElement: recorderTerminalDisplay,
-            toolbarElement: recorderTerminalToolbar,
-            badgeElement: recorderTerminalBadge,
-            hintElement: recorderTerminalHint,
-            terminalCtor: window.Terminal,
-            fitAddonCtor: window.FitAddon ? window.FitAddon.FitAddon : null,
-            endpointBuilder: (robotId) => buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/terminal`),
-            resolvePresetCommand: resolveRecorderTerminalPresetCommand,
-            onPresetLaunch: (preset) => {
-              if (normalizeText(preset?.id, '').toLowerCase() === 'generic-info') {
-                state.workflowRecorder?.setStatus?.(
-                  'Running generic info bundle. Let it finish, then add any robot-specific commands you still need.',
-                  'warn',
-                );
-              }
-            },
-            onTranscriptChange: () => {
-              syncRecorderUiState();
-            },
-          });
-        } catch (error) {
-          console.warn('Recorder terminal init failed', error);
+        if (typeof RobotTerminalComponent === 'function') {
+          try {
+            state.recorderTerminalComponent = new RobotTerminalComponent({
+              terminalElement: recorderTerminalDisplay,
+              toolbarElement: recorderTerminalToolbar,
+              badgeElement: recorderTerminalBadge,
+              hintElement: recorderTerminalHint,
+              terminalCtor: window.Terminal,
+              fitAddonCtor: window.FitAddon ? window.FitAddon.FitAddon : null,
+              endpointBuilder: (robotId) => buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/terminal`),
+              resolvePresetCommand: resolveRecorderTerminalPresetCommand,
+              onPresetLaunch: (preset) => {
+                if (normalizeText(preset?.id, '').toLowerCase() === 'generic-info') {
+                  state.workflowRecorder?.setStatus?.(
+                    'Running generic info bundle. Let it finish, then add any robot-specific commands you still need.',
+                    'warn',
+                  );
+                }
+              },
+              onTranscriptChange: () => {
+                syncRecorderUiState();
+              },
+            });
+          } catch (error) {
+            console.warn('Recorder terminal init failed', error);
+          }
         }
   
         if (state.recorderSelectionMouseupHandler) {
@@ -3306,6 +3332,7 @@ export function createRecorderFeature(context, maybeEnv) {
         state.recorderSimplePromptBundle = '';
         setManageDefinitionsFilter(state.manageDefinitionsFilter || 'all');
         setFlowEditorMode(state.manageFlowEditorMode || 'test', { announce: false });
+        state.isWorkflowRecorderUiInitialized = true;
         syncRecorderUiState();
       }
 
@@ -3331,13 +3358,25 @@ export function createRecorderFeature(context, maybeEnv) {
         } catch (_error) {
           // Ignore localStorage write failures and keep runtime state in-memory.
         }
-        renderDashboard();
-        if (detail?.classList?.contains?.('active') && state.detailRobotId) {
-          const activeRobot = getRobotById(state.detailRobotId);
-          if (activeRobot) {
-            renderDetail(activeRobot);
-          }
+        if (filterRenderDebounceTimer) {
+          window.clearTimeout(filterRenderDebounceTimer);
         }
+        filterRenderDebounceTimer = window.setTimeout(() => {
+          filterRenderDebounceTimer = null;
+          if (filterRenderRaf !== null) {
+            window.cancelAnimationFrame(filterRenderRaf);
+          }
+          filterRenderRaf = window.requestAnimationFrame(() => {
+            filterRenderRaf = null;
+            renderDashboard();
+            if (detail?.classList?.contains?.('active') && state.detailRobotId) {
+              const activeRobot = getRobotById(state.detailRobotId);
+              if (activeRobot) {
+                renderDetail(activeRobot);
+              }
+            }
+          });
+        }, 90);
       }
 
   return {

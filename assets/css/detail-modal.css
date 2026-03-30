@@ -199,6 +199,10 @@
       .test-debug-panel {
         max-height: 92vh;
       }
+
+      .test-debug-modal {
+        backdrop-filter: none;
+      }
     }
 
 /* Graphite + Orange modal overrides */

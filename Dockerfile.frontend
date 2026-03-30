@@ -1,11 +1,26 @@
-FROM python:3.12-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
+
+COPY package.json /app/package.json
+RUN npm install --no-audit --no-fund
 
 COPY index.html /app/index.html
 COPY assets /app/assets
 COPY config /app/config
+COPY vite.config.js /app/vite.config.js
+
+RUN npm run build
+
+FROM nginx:1.27-alpine
+
+COPY config/nginx/frontend.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Preserve runtime static fallback files referenced by dynamic paths.
+COPY assets/animations /usr/share/nginx/html/assets/animations
+COPY assets/Icons /usr/share/nginx/html/assets/Icons
+COPY assets/models /usr/share/nginx/html/assets/models
+COPY config /usr/share/nginx/html/config
 
 EXPOSE 80
-
-CMD ["python", "-m", "http.server", "80", "--directory", "/app"]

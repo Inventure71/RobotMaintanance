@@ -703,16 +703,53 @@ export function createDataInitFeature(context, maybeEnv) {
         }
       }
 
+  function hasActiveRuntimeWork() {
+        return Boolean(
+          state.testingRobotIds?.size
+          || state.searchingRobotIds?.size
+          || state.fixingRobotIds?.size
+          || state.autoActivityRobotIds?.size
+          || state.isTestRunInProgress
+          || state.isOnlineRefreshInFlight
+          || state.isAutoFixInProgress,
+        );
+      }
+
+  function getRuntimeSyncIntervalMs() {
+        const activeInterval = Math.max(900, Math.floor(RUNTIME_SYNC_INTERVAL_MS * 0.66));
+        const idleVisibleInterval = Math.max(2500, Math.floor(RUNTIME_SYNC_INTERVAL_MS * 1.6));
+        const hiddenInterval = Math.max(6000, Math.floor(RUNTIME_SYNC_INTERVAL_MS * 4));
+        if (document?.visibilityState === 'hidden') {
+          return hiddenInterval;
+        }
+        if (hasActiveRuntimeWork()) {
+          return activeInterval;
+        }
+        return idleVisibleInterval;
+      }
+
+  function scheduleRuntimeStateSync(delayMs = null) {
+        if (state.runtimeSyncTimer) {
+          window.clearTimeout(state.runtimeSyncTimer);
+        }
+        const nextDelayMs = Number.isFinite(Number(delayMs))
+          ? Math.max(0, Math.floor(Number(delayMs)))
+          : getRuntimeSyncIntervalMs();
+        state.runtimeSyncTimer = window.setTimeout(async () => {
+          state.runtimeSyncTimer = null;
+          await refreshRuntimeStateFromBackend();
+          scheduleRuntimeStateSync();
+        }, nextDelayMs);
+      }
+
   function startRuntimeStateSync() {
         if (state.runtimeSyncTimer) return;
-        state.runtimeSyncTimer = window.setInterval(() => {
-          refreshRuntimeStateFromBackend();
-        }, RUNTIME_SYNC_INTERVAL_MS);
+        scheduleRuntimeStateSync(0);
       }
 
   function stopRuntimeStateSync() {
         if (!state.runtimeSyncTimer) return;
-        window.clearInterval(state.runtimeSyncTimer);
+        window.clearTimeout(state.runtimeSyncTimer);
         state.runtimeSyncTimer = null;
       }
 
@@ -1020,6 +1057,11 @@ export function createDataInitFeature(context, maybeEnv) {
         });
   
         startRuntimeStateSync();
+        document.addEventListener('visibilitychange', () => {
+          if (state.runtimeSyncTimer) {
+            scheduleRuntimeStateSync(0);
+          }
+        });
         window.addEventListener('beforeunload', () => {
           stopRuntimeStateSync();
           stopOnlineRefreshStatusTimer();

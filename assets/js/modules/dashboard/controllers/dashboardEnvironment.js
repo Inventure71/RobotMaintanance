@@ -15,6 +15,7 @@ import {
   DESIGN_SYSTEM_STORAGE_KEY,
   initThemeSwitcher,
 } from '../../../components/theme-switcher-component.js';
+import { applyThemeStyles } from '../../../components/theme-style-loader.js';
 import {
   DEFAULT_TEST_DEFINITIONS,
   PRESET_COMMANDS,
@@ -672,6 +673,7 @@ const runtimeEnv = {
   filterPlatformTags,
   filterType,
   hydrateActionButtons,
+  applyThemeStyles,
   initThemeSwitcher,
   initVisualFlows,
   DEFAULT_DESIGN_SYSTEM_ID,

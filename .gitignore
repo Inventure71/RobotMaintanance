@@ -15,3 +15,5 @@ assets/models/Legacy
 .playwright-cli/
 output/
 SYSTEM.md
+node_modules/
+dist/

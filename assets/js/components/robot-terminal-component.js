@@ -1,5 +1,34 @@
 import { applyActionButton, createActionButton } from './action-button-component.js';
 
+let terminalRuntimePromise = null;
+
+async function loadTerminalRuntimeModules() {
+  if (!terminalRuntimePromise) {
+    terminalRuntimePromise = Promise.all([
+      import('xterm'),
+      import('xterm-addon-fit'),
+      import('xterm/css/xterm.css'),
+    ])
+      .then(([xtermModule, fitAddonModule]) => ({
+        Terminal:
+          xtermModule?.Terminal ||
+          xtermModule?.default?.Terminal ||
+          xtermModule?.default ||
+          null,
+        FitAddon:
+          fitAddonModule?.FitAddon ||
+          fitAddonModule?.default?.FitAddon ||
+          fitAddonModule?.default ||
+          null,
+      }))
+      .catch((error) => {
+        terminalRuntimePromise = null;
+        throw error;
+      });
+  }
+  return terminalRuntimePromise;
+}
+
 export class RobotTerminalComponent {
     constructor(options = {}) {
       this.terminalElement = options.terminalElement;
@@ -8,6 +37,9 @@ export class RobotTerminalComponent {
       this.hintElement = options.hintElement;
       this.terminalCtor = options.terminalCtor;
       this.fitAddonCtor = options.fitAddonCtor;
+      this.runtimeLoader = typeof options.runtimeLoader === 'function'
+        ? options.runtimeLoader
+        : loadTerminalRuntimeModules;
       this.endpointBuilder =
         options.endpointBuilder ||
         ((robotId) => `${window.location.protocol}//${window.location.host}/api/robots/${encodeURIComponent(robotId)}/terminal`);
@@ -37,6 +69,7 @@ export class RobotTerminalComponent {
       this._sessionStatePromise = null;
       this._sessionInFlight = false;
       this._disposing = false;
+      this._terminalRuntimeLoad = null;
       this._connectionLedElement = null;
       this._connectionTextElement = null;
       this._connectionWrapElement = null;
@@ -51,8 +84,15 @@ export class RobotTerminalComponent {
       this._disposing = false;
       this.currentRobot = robot;
       this._renderToolbar();
-      this._initializeTerminal(robot);
-      this._connectLiveSession(robot, { runAutoPreset: true }).catch(() => {});
+      this._initializeTerminal(robot)
+        .then((initialized) => {
+          if (!initialized) return;
+          this._connectLiveSession(robot, { runAutoPreset: true }).catch(() => {});
+        })
+        .catch(() => {
+          this._setFallbackMode('Unable to initialize terminal runtime.');
+          this._fallbackState();
+        });
     }
 
     exportTranscript() {
@@ -75,24 +115,52 @@ export class RobotTerminalComponent {
       this.onTranscriptChange(this._transcript);
     }
 
-    _initializeTerminal(robot) {
+    async _ensureTerminalRuntime() {
+      if (this.terminalCtor) return true;
+      if (typeof this.runtimeLoader !== 'function') return false;
+      if (!this._terminalRuntimeLoad) {
+        this._terminalRuntimeLoad = Promise.resolve(this.runtimeLoader()).catch(() => null);
+      }
+      const runtime = await this._terminalRuntimeLoad;
+      if (!runtime || typeof runtime !== 'object') {
+        return false;
+      }
+      if (!this.terminalCtor && typeof runtime.Terminal === 'function') {
+        this.terminalCtor = runtime.Terminal;
+      }
+      if (!this.fitAddonCtor && typeof runtime.FitAddon === 'function') {
+        this.fitAddonCtor = runtime.FitAddon;
+      }
+      return Boolean(this.terminalCtor);
+    }
+
+    async _initializeTerminal(robot) {
       if (!this.terminalElement || !robot) {
         this._setFallbackMode('Invalid terminal container or robot.');
         this._fallbackState();
-        return;
+        return false;
+      }
+
+      if (!this.terminalCtor) {
+        const loaded = await this._ensureTerminalRuntime();
+        if (!loaded) {
+          this._setFallbackMode('Terminal runtime is not available in this browser.');
+          this._fallbackState();
+          return false;
+        }
       }
 
       if (!this.terminalCtor) {
         this._setFallbackMode('Terminal runtime is not available in this browser.');
         this._fallbackState();
-        return;
+        return false;
       }
 
       const endpoint = this._buildEndpoint(robot.id);
       if (!endpoint) {
         this._setFallbackMode('Command endpoint not configured.');
         this._fallbackState();
-        return;
+        return false;
       }
 
       this._cleanupTerminalDOM();
@@ -141,7 +209,9 @@ export class RobotTerminalComponent {
       } catch (_error) {
         this._setFallbackMode('Unable to initialize terminal view.');
         this._fallbackState();
+        return false;
       }
+      return true;
     }
 
     async runCommand(command, commandId = '', options = {}) {

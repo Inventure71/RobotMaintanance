@@ -73,6 +73,7 @@ export function createMonitorConfigFeature(context, maybeEnv) {
     addRobotSection,
     addRobotTypeSelect,
     applyActionButton,
+    applyThemeStyles,
     bugReportMessageInput,
     bugReportModal,
     bugReportStatus,
@@ -613,7 +614,6 @@ export function createMonitorConfigFeature(context, maybeEnv) {
       }
 
   function initThemeControls() {
-        const swissThemeStylesheet = document.getElementById('swissThemeStylesheet');
         initThemeSwitcher({
           selectElement: themeSelect,
           rootElement: document.documentElement,
@@ -622,9 +622,7 @@ export function createMonitorConfigFeature(context, maybeEnv) {
           storageKey: DESIGN_SYSTEM_STORAGE_KEY,
           themes: DESIGN_SYSTEM_OPTIONS,
           onApply: (designSystemId) => {
-            if (swissThemeStylesheet) {
-              swissThemeStylesheet.disabled = designSystemId !== 'swiss';
-            }
+            applyThemeStyles(designSystemId).catch(() => {});
           },
         });
       }

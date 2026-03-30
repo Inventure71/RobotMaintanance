@@ -10,6 +10,8 @@ HOST="${HOST:-0.0.0.0}"
 REQ_FILE="${ROOT_DIR}/backend/requirements.txt"
 VENV_DIR="${ROOT_DIR}/.venv"
 MIN_PYTHON="3.9"
+FRONTEND_MODE=""
+NPM_BIN="$(command -v npm || true)"
 
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
   PYTHON_BIN="${VENV_DIR}/bin/python"
@@ -273,6 +275,29 @@ ensure_python_requirements() {
   fi
 }
 
+ensure_frontend_runtime() {
+  if [[ -n "${NPM_BIN}" ]] && [[ -f "${ROOT_DIR}/package.json" ]]; then
+    FRONTEND_MODE="vite-dev"
+    echo "Checking/installing frontend dependencies with ${NPM_BIN}..."
+    if ! "${NPM_BIN}" --prefix "${ROOT_DIR}" install --no-audit --no-fund; then
+      echo "Frontend dependency installation failed." >&2
+      echo "Check npm/node availability, then rerun ./start.sh." >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [[ -d "${ROOT_DIR}/dist" ]]; then
+    FRONTEND_MODE="static-dist"
+    echo "npm not available. Falling back to static serving from dist/."
+    return 0
+  fi
+
+  echo "Frontend startup failed: npm is not available and dist/ does not exist." >&2
+  echo "Install Node.js + npm or run 'npm install && npm run build' first, then rerun ./start.sh." >&2
+  exit 1
+}
+
 reserve_frontend_port() {
   local candidate="${FRONTEND_PORT}"
   local max_tries=20
@@ -358,6 +383,7 @@ select_compatible_python
 attempt_auto_update
 PI_IP="$(detect_ip)"
 ensure_python_requirements
+ensure_frontend_runtime
 
 reserve_backend_port
 reserve_frontend_port
@@ -371,15 +397,23 @@ echo "Starting backend on ${HOST}:${BACKEND_PORT}..."
 "${PYTHON_BIN}" -m uvicorn backend.main:app --host "${HOST}" --port "${BACKEND_PORT}" >"${RUN_DIR}/backend.log" 2>&1 &
 BACKEND_PID=$!
 
-echo "Starting static UI server on ${HOST}:${FRONTEND_PORT}..."
-"${PYTHON_BIN}" -m http.server "${FRONTEND_PORT}" --bind "${HOST}" --directory "${ROOT_DIR}" >"${RUN_DIR}/frontend.log" 2>&1 &
-FRONTEND_PID=$!
+if [[ "${FRONTEND_MODE}" == "vite-dev" ]]; then
+  echo "Starting frontend Vite dev server on ${HOST}:${FRONTEND_PORT}..."
+  "${NPM_BIN}" --prefix "${ROOT_DIR}" run dev -- --host "${HOST}" --port "${FRONTEND_PORT}" >"${RUN_DIR}/frontend.log" 2>&1 &
+  FRONTEND_PID=$!
+else
+  echo "Starting static UI server from dist/ on ${HOST}:${FRONTEND_PORT}..."
+  "${PYTHON_BIN}" -m http.server "${FRONTEND_PORT}" --bind "${HOST}" --directory "${ROOT_DIR}/dist" >"${RUN_DIR}/frontend.log" 2>&1 &
+  FRONTEND_PID=$!
+fi
 
 sleep 1
 
 echo "Opening browser at ${FRONTEND_URL}"
 if command -v xdg-open >/dev/null 2>&1; then
   xdg-open "${FRONTEND_URL}" >/dev/null 2>&1 || true
+elif command -v open >/dev/null 2>&1; then
+  open "${FRONTEND_URL}" >/dev/null 2>&1 || true
 elif command -v chromium-browser >/dev/null 2>&1; then
   chromium-browser "${FRONTEND_URL}" >/dev/null 2>&1 || true
 fi

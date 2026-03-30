@@ -4,11 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#06081a" />
   <title>Robot Maintenance Command Deck</title>
   <link rel="icon" type="image/x-icon" href="/assets/Icons/favicon.ico" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" crossorigin="anonymous" />
-  <link rel="stylesheet" href="assets/css/main.css" />
-  <link id="swissThemeStylesheet" rel="stylesheet" href="assets/css/swiss-international.css" />
   <script>
     (() => {
       const storageKey = 'dashboard.designSystem';
@@ -24,17 +22,8 @@
       }
 
       document.documentElement.setAttribute('data-design-system', designSystem);
-      const swissThemeStylesheet = document.getElementById('swissThemeStylesheet');
-      if (swissThemeStylesheet) {
-        swissThemeStylesheet.disabled = designSystem !== 'swiss';
-      }
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"
-    crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js" type="module"
-    crossorigin="anonymous"></script>
 </head>
 
 <body>
@@ -1273,8 +1262,8 @@
     <div id="recorderLlmPromptModal" class="hidden" aria-hidden="true"></div>
     <div id="recorderLlmImportModal" class="hidden" aria-hidden="true"></div>
     <div id="publishSuccessCelebration" class="publish-success-celebration hidden" aria-hidden="true">
-      <video id="publishSuccessCelebrationVideo" muted playsinline preload="auto">
-        <source src="assets/animations/confetti.webm" type="video/webm" />
+      <video id="publishSuccessCelebrationVideo" muted playsinline preload="none">
+        <source data-src="assets/animations/confetti.webm" type="video/webm" />
       </video>
     </div>
 
