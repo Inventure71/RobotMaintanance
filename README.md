@@ -185,6 +185,11 @@ Auto connection retry behavior:
 - If any selected check fails, it retries every `2.5` seconds for up to `60` seconds from reconnect.
 - Retries stop immediately on manual activity or disconnect.
 
+Manual/API test-run online precheck:
+- `POST /api/robots/{robot_id}/tests/run` performs a forced online probe before running any non-`online` checks.
+- If the robot is offline, the endpoint returns `200` with structured results: current `online` status plus skipped non-online checks (`reason=OFFLINE_PRECHECK`, `skipped=true`).
+- `online`-only runs remain allowed.
+
 ## Adding New Fixes
 
 1. Create `config/fixes/<name>.fix.json` (`id`, `label`, `description`, `enabled`, `execute[]`, optional `postTestIds`).

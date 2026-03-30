@@ -42,7 +42,9 @@ class BatteryParserMixin:
         if isinstance(auto_monitor, dict):
             configured = normalize_text(auto_monitor.get("batteryCommand"), "")
             if configured:
-                return configured
+                normalized = configured.replace("\r", "").strip()
+                if normalized:
+                    return normalized
         return None
 
     def _parse_battery_output(self, raw_output: str, elapsed_ms: int) -> dict[str, Any]:

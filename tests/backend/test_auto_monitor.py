@@ -594,6 +594,11 @@ def test_manual_run_persists_runtime_results(monkeypatch):
             }
 
     manager._executor._create_automation_run_context = lambda **_kwargs: FakeRunContext()
+    manager.probe_transport = lambda **_kwargs: type(
+        "_Probe",
+        (),
+        {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1},
+    )()
 
     results = manager.run_tests(
         robot_id="r1",
@@ -1453,6 +1458,136 @@ def test_auto_monitor_tick_uses_parallel_workers_from_monitor_parallelism():
     manager._run_auto_monitor_tick()
 
     assert len(seen_thread_ids) > 1
+
+
+def test_auto_monitor_tick_times_out_pending_parallel_future_and_recovers(caplog):
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {"id": "r1", "type": "rosbot-2-pro", "ip": "10.0.0.1", "ssh": {"username": "u", "password": "p", "port": 22}},
+            "r2": {"id": "r2", "type": "rosbot-2-pro", "ip": "10.0.0.2", "ssh": {"username": "u", "password": "p", "port": 22}},
+        },
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+        auto_monitor=False,
+    )
+    manager.update_monitor_config(parallelism=2)
+    manager._auto_monitor_enabled = True
+    manager._auto_monitor_tick_timeout_sec = lambda: 0.02
+
+    from concurrent.futures import Future
+
+    class FakeExecutor:
+        def submit(self, _fn, robot_id, _now):
+            future = Future()
+            if robot_id == "r1":
+                future.set_result(None)
+            return future
+
+    manager._ensure_auto_monitor_executor = lambda _worker_count: FakeExecutor()
+    shutdown_calls: list[float] = []
+    manager._shutdown_auto_monitor_executor = lambda: shutdown_calls.append(time.time())
+
+    caplog.set_level("WARNING")
+
+    started_first = time.time()
+    manager._run_auto_monitor_tick()
+    elapsed_first = time.time() - started_first
+
+    started_second = time.time()
+    manager._run_auto_monitor_tick()
+    elapsed_second = time.time() - started_second
+
+    assert elapsed_first < 0.3
+    assert elapsed_second < 0.3
+    assert len(shutdown_calls) == 2
+    assert "Auto-monitor tick timeout" in caplog.text
+    assert "r2" in caplog.text
+
+
+def test_auto_monitor_tick_logs_parallel_robot_future_failures(caplog):
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {"id": "r1", "type": "rosbot-2-pro", "ip": "10.0.0.1", "ssh": {"username": "u", "password": "p", "port": 22}},
+            "r2": {"id": "r2", "type": "rosbot-2-pro", "ip": "10.0.0.2", "ssh": {"username": "u", "password": "p", "port": 22}},
+        },
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+        auto_monitor=False,
+    )
+    manager.update_monitor_config(parallelism=2)
+    manager._auto_monitor_enabled = True
+
+    from concurrent.futures import Future
+
+    class FakeExecutor:
+        def submit(self, _fn, robot_id, _now):
+            future = Future()
+            if robot_id == "r2":
+                future.set_exception(RuntimeError("boom"))
+            else:
+                future.set_result(None)
+            return future
+
+    manager._ensure_auto_monitor_executor = lambda _worker_count: FakeExecutor()
+    caplog.set_level("ERROR")
+
+    manager._run_auto_monitor_tick()
+
+    assert "phase=run_auto_monitor_tick_parallel" in caplog.text
+    assert "robot_id=r2" in caplog.text
+
+
+def test_auto_monitor_loop_logs_tick_exception(caplog):
+    manager = _manager()
+
+    def raise_and_stop():
+        manager._auto_monitor_stop.set()
+        raise RuntimeError("tick failed")
+
+    manager._run_auto_monitor_tick = raise_and_stop
+    caplog.set_level("ERROR")
+
+    manager._auto_monitor_loop()
+
+    assert "Auto-monitor loop failure" in caplog.text
+    assert "phase=auto_monitor_loop_tick" in caplog.text
+
+
+def test_refresh_battery_state_sanitizes_carriage_returns_in_configured_command():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [{"id": "online", "enabled": True}, {"id": "battery", "enabled": True}],
+                "autoMonitor": {
+                    "batteryCommand": "source /opt/ros/jazzy/setup.bash >/dev/null 2>&1 || true; \\\r\n"
+                    "source ~/ws/install/setup.bash >/dev/null 2>&1 || true; \\\r\n"
+                    "timeout 6s ros2 topic echo --once /battery\r",
+                },
+            }
+        },
+        auto_monitor=False,
+    )
+
+    captured_commands: list[str] = []
+
+    def fake_run_command(*, page_session_id: str, robot_id: str, command: str, timeout_sec: float | None = None, source: str | None = None):
+        _ = page_session_id, robot_id, timeout_sec, source
+        captured_commands.append(command)
+        return "percentage: 0.66\nvoltage: 12.10\n"
+
+    manager.run_command = fake_run_command
+
+    manager._refresh_battery_state("r1")
+
+    assert captured_commands
+    assert "\r" not in captured_commands[0]
 
 
 def test_auto_monitor_skips_online_probe_while_auto_testing_active():

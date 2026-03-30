@@ -18,6 +18,12 @@ function normalizeText(value, fallback = '') {
   return text || String(fallback ?? '');
 }
 
+function normalizeStatus(value) {
+  const normalized = normalizeText(value, 'warning').toLowerCase();
+  if (normalized === 'ok' || normalized === 'warning' || normalized === 'error') return normalized;
+  return 'warning';
+}
+
 function makeClassList(initial = []) {
   const values = new Set(initial);
   return {
@@ -198,6 +204,7 @@ function makeEnv(initialPanel = 'existing-robots') {
   return {
     MANAGE_TABS: ['robots', 'definitions', 'recorder'],
     normalizeText,
+    normalizeStatus,
     ROBOT_TYPES: [],
     state: {
       robots: [{ id: 'robot-1', typeId: 'picker' }],
@@ -398,4 +405,156 @@ test('openTestDebugModal surfaces error code and source in the summary', async (
   assert.equal(env.testDebugModal.classList.contains('hidden'), false);
   assert.equal(env.testDebugModal.getAttribute('aria-hidden'), 'false');
   assert.equal(env.state.testDebugModalOpen, true);
+});
+
+test('runManualTests always runs online precheck and skips execution when probe fails', async () => {
+  const createDetailFeature = await loadApi();
+  const env = makeEnv('existing-robots');
+  const terminalLines = [];
+  env.terminal = {
+    appendChild: (node) => {
+      terminalLines.push(String(node?.textContent || ''));
+    },
+    scrollTop: 0,
+    scrollHeight: 0,
+    classList: makeClassList(),
+  };
+  env.state = {
+    pageSessionId: 'page-1',
+    robots: [
+      {
+        id: 'r1',
+        name: 'Robot 1',
+        typeId: 'picker',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'cached green' } },
+      },
+    ],
+    selectedRobotIds: new Set(),
+    detailRobotId: '',
+    isTestRunInProgress: false,
+    isAutoFixInProgress: false,
+  };
+  const calls = {
+    addRobotMessages: [],
+    editRobotMessages: [],
+    addRobotTypeMessages: [],
+    populateAddRobotTypeOptions: 0,
+    populateEditRobotSelectOptions: [],
+    renderRecorderRobotOptions: 0,
+    setActiveManageTab: [],
+    syncFixModePanels: 0,
+    onlineChecks: 0,
+    runRobotTests: 0,
+  };
+  const runtime = makeRuntime(calls);
+  runtime.getRobotIdsForRun = () => ['r1'];
+  runtime.hasMixedRobotTypesForIds = () => false;
+  runtime.getRobotActionAvailability = () => ({ allowed: true, title: 'Run tests' });
+  runtime.getFleetParallelism = () => 1;
+  runtime.getRobotById = (id) => env.state.robots.find((robot) => robot.id === id) || null;
+  runtime.robotId = (value) => normalizeText(typeof value === 'string' ? value : value?.id, '');
+  runtime.runOneRobotOnlineCheck = async () => {
+    calls.onlineChecks += 1;
+    return { status: 'error', value: 'unreachable', details: 'offline now' };
+  };
+  runtime.updateOnlineCheckEstimateFromResults = () => {};
+  runtime.mapRobots = (updater) => {
+    env.state.robots = env.state.robots.map((robot) => updater(robot));
+  };
+  runtime.renderDashboard = () => {};
+  runtime.setRobotSearching = () => {};
+  runtime.setRobotTesting = () => {};
+  runtime.runRobotTestsForRobot = async () => {
+    calls.runRobotTests += 1;
+    return { results: [] };
+  };
+  runtime.getConfiguredDefaultTestIds = () => ['general'];
+  runtime.estimateTestCountdownMsFromBody = () => 1000;
+  runtime.updateRobotTestState = () => {};
+  runtime.setRunningButtonState = () => {};
+
+  const api = createDetailFeature(runtime, env);
+  await api.runManualTests({ fallbackToActive: true, body: { testIds: ['general'] } });
+
+  assert.equal(calls.onlineChecks, 1);
+  assert.equal(calls.runRobotTests, 0);
+  assert.equal(terminalLines.some((line) => line.includes('Skipping tests for r1: robot is offline')), true);
+});
+
+test('runManualTests runs tests after successful online precheck', async () => {
+  const createDetailFeature = await loadApi();
+  const env = makeEnv('existing-robots');
+  const terminalLines = [];
+  env.terminal = {
+    appendChild: (node) => {
+      terminalLines.push(String(node?.textContent || ''));
+    },
+    scrollTop: 0,
+    scrollHeight: 0,
+    classList: makeClassList(),
+  };
+  env.state = {
+    pageSessionId: 'page-2',
+    robots: [
+      {
+        id: 'r1',
+        name: 'Robot 1',
+        typeId: 'picker',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'cached green' } },
+      },
+    ],
+    selectedRobotIds: new Set(),
+    detailRobotId: '',
+    isTestRunInProgress: false,
+    isAutoFixInProgress: false,
+  };
+  const calls = {
+    addRobotMessages: [],
+    editRobotMessages: [],
+    addRobotTypeMessages: [],
+    populateAddRobotTypeOptions: 0,
+    populateEditRobotSelectOptions: [],
+    renderRecorderRobotOptions: 0,
+    setActiveManageTab: [],
+    syncFixModePanels: 0,
+    onlineChecks: 0,
+    runRobotTests: 0,
+  };
+  const runtime = makeRuntime(calls);
+  runtime.getRobotIdsForRun = () => ['r1'];
+  runtime.hasMixedRobotTypesForIds = () => false;
+  runtime.getRobotActionAvailability = () => ({ allowed: true, title: 'Run tests' });
+  runtime.getFleetParallelism = () => 1;
+  runtime.getRobotById = (id) => env.state.robots.find((robot) => robot.id === id) || null;
+  runtime.robotId = (value) => normalizeText(typeof value === 'string' ? value : value?.id, '');
+  runtime.runOneRobotOnlineCheck = async () => {
+    calls.onlineChecks += 1;
+    return { status: 'ok', value: 'reachable', details: 'live probe ok' };
+  };
+  runtime.updateOnlineCheckEstimateFromResults = () => {};
+  runtime.mapRobots = (updater) => {
+    env.state.robots = env.state.robots.map((robot) => updater(robot));
+  };
+  runtime.renderDashboard = () => {};
+  runtime.setRobotSearching = () => {};
+  runtime.setRobotTesting = () => {};
+  runtime.runRobotTestsForRobot = async () => {
+    calls.runRobotTests += 1;
+    return {
+      results: [
+        { id: 'general', status: 'ok', value: 'good', details: 'done' },
+      ],
+    };
+  };
+  runtime.getConfiguredDefaultTestIds = () => ['general'];
+  runtime.estimateTestCountdownMsFromBody = () => 1000;
+  runtime.updateRobotTestState = () => {};
+  runtime.setRunningButtonState = () => {};
+
+  const api = createDetailFeature(runtime, env);
+  await api.runManualTests({ fallbackToActive: true, body: { testIds: ['general'] } });
+
+  assert.equal(calls.onlineChecks, 1);
+  assert.equal(calls.runRobotTests, 1);
+  assert.equal(terminalLines.some((line) => line.includes('Running online precheck for Robot 1')), true);
 });

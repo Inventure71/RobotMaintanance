@@ -761,55 +761,54 @@ export function createDetailFeature(context, maybeEnv) {
               return;
             }
   
-            const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
-            const shouldAutoRunOnlineCheck = currentOnlineStatus !== 'ok';
-            if (shouldAutoRunOnlineCheck) {
+            const previousOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
+            if (terminal) {
+              appendTerminalLine(
+                `Running online precheck for ${robot.name || robotId(robot)}...`,
+                'warn',
+              );
+            }
+
+            const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
+            const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
+            setRobotSearching(normalizedRobotId, true, searchCountdownMs);
+            const onlineStatus = await runOneRobotOnlineCheck(robot);
+            updateOnlineCheckEstimateFromResults([onlineStatus]);
+            mapRobots((item) =>
+              robotId(item) === normalizedRobotId
+                ? {
+                    ...item,
+                    tests: {
+                      ...(item.tests || {}),
+                      online: {
+                        status: onlineStatus.status,
+                        value: onlineStatus.value,
+                        details: onlineStatus.details,
+                      },
+                    },
+                  }
+                : item,
+            );
+            renderDashboard();
+            const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
+            if (activeRobotPostOnline) {
+              renderDetail(activeRobotPostOnline);
+            }
+
+            if (normalizeStatus(onlineStatus.status) !== 'ok') {
+              failureCount += 1;
               if (terminal) {
                 appendTerminalLine(
-                  `Robot ${robot.name || robotId(robot)} is not online. Running online check first...`,
-                  'warn',
+                  `Skipping tests for ${robotId(robot)}: robot is offline (${onlineStatus.details}).`,
+                  'err',
                 );
               }
-  
-              const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
-              const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
-              setRobotSearching(normalizedRobotId, true, searchCountdownMs);
-              const onlineStatus = await runOneRobotOnlineCheck(robot);
-              updateOnlineCheckEstimateFromResults([onlineStatus]);
-              mapRobots((item) =>
-                robotId(item) === normalizedRobotId
-                  ? {
-                      ...item,
-                      tests: {
-                        ...(item.tests || {}),
-                        online: {
-                          status: onlineStatus.status,
-                          value: onlineStatus.value,
-                          details: onlineStatus.details,
-                        },
-                      },
-                    }
-                  : item,
-              );
-              renderDashboard();
-              const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
-              if (activeRobotPostOnline) {
-                renderDetail(activeRobotPostOnline);
-              }
-  
-              if (normalizeStatus(onlineStatus.status) !== 'ok') {
-                failureCount += 1;
-                if (terminal) {
-                  appendTerminalLine(
-                    `Skipping tests for ${robotId(robot)}: robot is offline (${onlineStatus.details}).`,
-                    'err',
-                  );
-                }
-                setRobotSearching(normalizedRobotId, false);
-                setRobotTesting(normalizedRobotId, false);
-                return;
-              }
+              setRobotSearching(normalizedRobotId, false);
+              setRobotTesting(normalizedRobotId, false);
+              return;
+            }
 
+            if (previousOnlineStatus !== 'ok') {
               if (terminal) {
                 appendTerminalLine(
                   `Connected to ${robot.name || robotId(robot)}. Waiting 5s before starting tests...`,
@@ -817,8 +816,8 @@ export function createDetailFeature(context, maybeEnv) {
                 );
               }
               await new Promise((resolve) => window.setTimeout(resolve, POST_CONNECT_TEST_DELAY_MS));
-              setRobotSearching(normalizedRobotId, false);
             }
+            setRobotSearching(normalizedRobotId, false);
   
             const body = { ...options.body };
             const includeOnline = options.includeOnline !== false;

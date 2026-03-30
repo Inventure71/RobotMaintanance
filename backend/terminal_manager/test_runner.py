@@ -344,7 +344,92 @@ class TestRunnerMixin:
         connect_timeout_sec: float | None = None,
         execute_timeout_sec: float | None = None,
     ) -> list[dict[str, Any]]:
+        def _selected_configured_test_ids() -> list[str]:
+            configured = self._configured_test_ids(robot_id)
+            configured_set = set(configured)
+            if test_ids is None:
+                return configured
+
+            selected: list[str] = []
+            seen: set[str] = set()
+            for raw_test_id in test_ids:
+                normalized_test_id = normalize_text(raw_test_id, "")
+                if not normalized_test_id or normalized_test_id in seen:
+                    continue
+                seen.add(normalized_test_id)
+                if normalized_test_id in configured_set:
+                    selected.append(normalized_test_id)
+            return selected
+
+        def _record_local_metadata(total_ms: int) -> None:
+            with self._lock:
+                self._last_test_run_metadata[(robot_id, page_session_id)] = {
+                    "timing": {
+                        "queueMs": 0,
+                        "connectMs": 0,
+                        "executeMs": max(0, int(total_ms)),
+                        "totalMs": max(0, int(total_ms)),
+                    },
+                    "session": {
+                        "runId": f"test-{robot_id}-{int(time.time() * 1000)}",
+                        "robotId": robot_id,
+                        "pageSessionId": page_session_id,
+                        "runKind": "test",
+                        "transportReused": False,
+                        "resetPolicy": "offline_precheck",
+                    },
+                }
+
+        started_at = time.time()
         self._mark_manual_activity(robot_id=robot_id, page_session_id=page_session_id)
+        selected_test_ids = _selected_configured_test_ids()
+        selected_non_online_ids = [test_id for test_id in selected_test_ids if test_id != "online"]
+        if selected_non_online_ids:
+            precheck_probe = self.check_online(
+                robot_id=robot_id,
+                force_refresh=True,
+                timeout_sec=connect_timeout_sec,
+            )
+            self.apply_online_probe_to_runtime(
+                robot_id=robot_id,
+                probe=precheck_probe,
+                source="manual",
+            )
+            if normalize_status(precheck_probe.get("status")) != "ok":
+                now = time.time()
+                online_result = {
+                    "id": "online",
+                    "status": normalize_status(precheck_probe.get("status")),
+                    "value": normalize_text(precheck_probe.get("value"), "unreachable"),
+                    "details": normalize_text(precheck_probe.get("details"), "Robot is offline."),
+                    "ms": int(precheck_probe.get("ms") or 0),
+                    "checkedAt": float(precheck_probe.get("checkedAt") or now),
+                    "source": normalize_text(precheck_probe.get("source"), "live"),
+                }
+                skipped_results = [
+                    {
+                        "id": test_id,
+                        "status": "warning",
+                        "value": "skipped",
+                        "details": "Skipped because robot is offline (precheck failed).",
+                        "reason": "OFFLINE_PRECHECK",
+                        "source": "manual",
+                        "checkedAt": float(precheck_probe.get("checkedAt") or now),
+                        "skipped": True,
+                        "ms": 0,
+                        "steps": [],
+                    }
+                    for test_id in selected_non_online_ids
+                ]
+                results = [online_result, *skipped_results]
+                self._record_runtime_results_from_test_run(
+                    robot_id=robot_id,
+                    results=results,
+                    source="manual",
+                )
+                _record_local_metadata(max(0, int((time.time() - started_at) * 1000)))
+                return results
+
         results = self._executor.run_tests(
             robot_id=robot_id,
             page_session_id=page_session_id,

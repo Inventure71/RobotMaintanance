@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from ..normalization import normalize_status, normalize_text
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AutoMonitorWorkerMixin:
@@ -90,6 +93,19 @@ class AutoMonitorWorkerMixin:
         self._auto_monitor_thread = None
         self._shutdown_auto_monitor_executor()
 
+    def _auto_monitor_tick_timeout_sec(self) -> float:
+        online_timeout = max(0.0, float(getattr(self, "AUTO_MONITOR_ONLINE_TIMEOUT_SEC", 3.0)))
+        min_visible_sec = max(0.0, float(getattr(self, "AUTO_ACTIVITY_MIN_VISIBLE_SEC", 0.0)))
+        battery_timeout = max(0.0, float(getattr(self, "AUTO_MONITOR_BATTERY_TIMEOUT_SEC", 8.0)))
+        topics_timeout = max(0.0, float(getattr(self, "AUTO_MONITOR_TOPICS_TIMEOUT_SEC", 12.0)))
+        topics_setup_timeout = 3.0
+        timeout_buffer_sec = 1.0
+
+        total_timeout = online_timeout + min_visible_sec + battery_timeout + timeout_buffer_sec
+        if self._topics_monitor_enabled():
+            total_timeout += topics_setup_timeout + topics_timeout
+        return max(1.0, total_timeout)
+
     def _auto_monitor_loop(self) -> None:
         while not self._auto_monitor_stop.is_set():
             started = time.time()
@@ -97,7 +113,7 @@ class AutoMonitorWorkerMixin:
                 self._run_auto_monitor_tick()
             except Exception:
                 # Monitor is best-effort; do not kill the background thread on one robot failure.
-                pass
+                LOGGER.exception("Auto-monitor loop failure (phase=auto_monitor_loop_tick)")
             elapsed = time.time() - started
             wait_sec = max(0.0, self._auto_monitor_interval_sec - elapsed)
             self._auto_monitor_stop.wait(wait_sec)
@@ -214,19 +230,66 @@ class AutoMonitorWorkerMixin:
                 try:
                     self._run_auto_monitor_for_robot(robot_id, now)
                 except Exception:
+                    LOGGER.exception(
+                        "Auto-monitor robot failure (phase=run_auto_monitor_tick_sequential, robot_id=%s)",
+                        robot_id,
+                    )
                     continue
             return
 
         executor = self._ensure_auto_monitor_executor(worker_count)
         try:
-            futures = [executor.submit(self._run_auto_monitor_for_robot, robot_id, now) for robot_id in robot_ids]
-            for future in as_completed(futures):
+            try:
+                futures_by_robot = {
+                    executor.submit(self._run_auto_monitor_for_robot, robot_id, now): robot_id
+                    for robot_id in robot_ids
+                }
+            except Exception:
+                LOGGER.exception(
+                    "Auto-monitor executor submit failure (phase=run_auto_monitor_tick_parallel_submit)"
+                )
+                self._shutdown_auto_monitor_executor()
+                return
+            pending = set(futures_by_robot.keys())
+            tick_timeout_sec = self._auto_monitor_tick_timeout_sec()
+            deadline = time.time() + tick_timeout_sec
+
+            while pending:
                 if self._auto_monitor_stop.is_set():
                     return
-                try:
-                    future.result()
-                except Exception:
-                    continue
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                done, pending = wait(
+                    pending,
+                    timeout=min(0.25, remaining),
+                    return_when=FIRST_COMPLETED,
+                )
+                for future in done:
+                    robot_id = futures_by_robot.get(future, "")
+                    try:
+                        future.result()
+                    except Exception:
+                        LOGGER.exception(
+                            "Auto-monitor robot failure (phase=run_auto_monitor_tick_parallel, robot_id=%s)",
+                            robot_id or "<unknown>",
+                        )
+
+            if pending:
+                timed_out_robot_ids = sorted(
+                    robot_id
+                    for future, robot_id in futures_by_robot.items()
+                    if future in pending
+                )
+                LOGGER.warning(
+                    "Auto-monitor tick timeout (phase=run_auto_monitor_tick_parallel, timeout_sec=%.2f, "
+                    "timed_out_robot_ids=%s)",
+                    tick_timeout_sec,
+                    ",".join(timed_out_robot_ids) if timed_out_robot_ids else "<unknown>",
+                )
+                for future in pending:
+                    future.cancel()
+                self._shutdown_auto_monitor_executor()
         finally:
             if not bool(getattr(self, "_auto_monitor_enabled", False)):
                 self._shutdown_auto_monitor_executor()
