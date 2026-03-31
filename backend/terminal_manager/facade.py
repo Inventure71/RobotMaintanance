@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import threading
+import uuid
 from typing import Any
 
 from fastapi import HTTPException
@@ -9,6 +10,7 @@ from fastapi import HTTPException
 from ..connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from ..normalization import normalize_text, normalize_type_key
 from ..test_executor import TestExecutor
+from .job_scheduler import NoActiveUserJobError, RobotJobCoordinator, RobotJobExecutor
 from .activity_guard import ActivityGuardMixin
 from .automation_session import AutomationSessionMixin
 from .auto_monitor_worker import AutoMonitorWorkerMixin
@@ -163,7 +165,6 @@ class TerminalManager(
         self._connection_retry_sessions: dict[str, dict[str, Any]] = {}
         self._connection_retry_inflight: dict[str, int] = {}
         self._connection_retry_attempt_owner: dict[str, int] = {}
-        self._fix_runs: dict[tuple[str, str], dict[str, Any]] = {}
         self._next_idle_sweep_at = 0.0
         self._auto_monitor_executor = None
         self._auto_monitor_executor_workers = 0
@@ -197,6 +198,13 @@ class TerminalManager(
             check_definitions_by_id=self._check_definitions_by_id,
             orchestrate_connector=self._orchestrate_connector,
         )
+        self._job_executor = RobotJobExecutor(self)
+        self._job_coordinator = RobotJobCoordinator(
+            executor=self._job_executor,
+            on_snapshot=self._on_robot_job_snapshot,
+            close_session=self.close_session,
+            hard_reset_transport=lambda robot_id: self._transport_pool.hard_reset_robot(robot_id),
+        )
         if self._auto_monitor_enabled:
             self._start_auto_monitor()
 
@@ -214,6 +222,164 @@ class TerminalManager(
             raise HTTPException(status_code=404, detail=f"No robot type config found: {type_key}")
 
         return robot_type
+
+    def _on_robot_job_snapshot(self, robot_id: str, snapshot: dict[str, Any]) -> None:
+        if not isinstance(snapshot, dict):
+            return
+        self._set_runtime_job_queue_snapshot(
+            robot_id,
+            active_job=snapshot.get("activeJob"),
+            queued_jobs=snapshot.get("queuedJobs"),
+            queue_version=int(snapshot.get("jobQueueVersion") or 0),
+        )
+
+    def _default_job_label(
+        self,
+        *,
+        robot_id: str,
+        kind: str,
+        test_ids: list[str] | None = None,
+        fix_id: str | None = None,
+    ) -> str:
+        normalized_kind = normalize_text(kind, "").lower()
+        if normalized_kind == "test":
+            selected = [normalize_text(test_id, "") for test_id in (test_ids or []) if normalize_text(test_id, "")]
+            if len(selected) == 1:
+                return f"Run test {selected[0]}"
+            if len(selected) > 1:
+                return f"Run {len(selected)} tests"
+            return "Run tests"
+        if normalized_kind == "fix":
+            normalized_fix_id = normalize_text(fix_id, "")
+            if normalized_fix_id:
+                try:
+                    fix_spec = self._resolve_fix_spec(robot_id, normalized_fix_id)
+                    fix_label = normalize_text(fix_spec.get("label"), "")
+                    if fix_label:
+                        return f"Run fix {fix_label}"
+                except Exception:
+                    pass
+            return f"Run fix {normalize_text(fix_id, '') or 'job'}"
+        return f"Run {normalized_kind or 'job'}"
+
+    def _validate_job_enqueue_payload(self, robot_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if normalized_robot_id not in self.robots_by_id:
+            raise HTTPException(status_code=404, detail=f"Unknown robot id: {normalized_robot_id}")
+
+        kind = normalize_text(payload.get("kind"), "").lower()
+        if kind not in {"test", "fix"}:
+            raise HTTPException(status_code=400, detail="Invalid job kind. Expected 'test' or 'fix'.")
+
+        body = dict(payload)
+        if kind == "test":
+            raw_test_ids = body.get("testIds") if isinstance(body.get("testIds"), list) else None
+            normalized_test_ids = None
+            if raw_test_ids is not None:
+                normalized_test_ids = [normalize_text(test_id, "") for test_id in raw_test_ids]
+                normalized_test_ids = [test_id for test_id in normalized_test_ids if test_id]
+                if not normalized_test_ids:
+                    raise HTTPException(status_code=400, detail="No tests selected.")
+                configured = set(self._configured_test_ids(normalized_robot_id))
+                unknown = [test_id for test_id in normalized_test_ids if test_id not in configured]
+                if unknown:
+                    raise HTTPException(status_code=404, detail=f"Unknown test id(s): {', '.join(unknown)}")
+            body["testIds"] = normalized_test_ids
+            return body
+
+        fix_id = normalize_text(body.get("fixId"), "")
+        if not fix_id:
+            raise HTTPException(status_code=400, detail="fixId is required for fix jobs.")
+        try:
+            self._resolve_fix_spec(normalized_robot_id, fix_id)
+        except HTTPException as exc:
+            if exc.status_code in {400, 404}:
+                raise HTTPException(status_code=404, detail=normalize_text(exc.detail, "Unknown fix id"))
+            raise
+        body["fixId"] = fix_id
+        return body
+
+    def enqueue_robot_job(
+        self,
+        *,
+        robot_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        validated = self._validate_job_enqueue_payload(normalized_robot_id, payload)
+        normalized_kind = normalize_text(validated.get("kind"), "").lower()
+        source = normalize_text(validated.get("source"), "manual") or "manual"
+        label = normalize_text(validated.get("label"), "")
+        if not label:
+            label = self._default_job_label(
+                robot_id=normalized_robot_id,
+                kind=normalized_kind,
+                test_ids=validated.get("testIds") if isinstance(validated.get("testIds"), list) else None,
+                fix_id=validated.get("fixId"),
+            )
+        page_session_id = normalize_text(validated.get("pageSessionId"), "") or (
+            f"jobs-{normalized_robot_id}-{uuid.uuid4().hex[:8]}"
+        )
+
+        payload_body = {
+            "kind": normalized_kind,
+            "testIds": validated.get("testIds"),
+            "fixId": validated.get("fixId"),
+            "params": validated.get("params") if isinstance(validated.get("params"), dict) else {},
+            "timeoutSec": validated.get("timeoutSec"),
+            "queueTimeoutSec": validated.get("queueTimeoutSec"),
+            "connectTimeoutSec": validated.get("connectTimeoutSec"),
+            "executeTimeoutSec": validated.get("executeTimeoutSec"),
+        }
+        job_id, snapshot = self._job_coordinator.enqueue_user_job(
+            robot_id=normalized_robot_id,
+            kind=normalized_kind,
+            source=source,
+            label=label,
+            payload=payload_body,
+            page_session_id=page_session_id,
+        )
+        return {
+            "jobId": job_id,
+            "activeJob": snapshot.get("activeJob"),
+            "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+            "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
+        }
+
+    def get_robot_jobs(self, robot_id: str) -> dict[str, Any]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if normalized_robot_id not in self.robots_by_id:
+            raise HTTPException(status_code=404, detail=f"Unknown robot id: {normalized_robot_id}")
+        snapshot = self._job_coordinator.get_snapshot(normalized_robot_id)
+        return {
+            "activeJob": snapshot.get("activeJob"),
+            "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+            "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
+        }
+
+    def stop_active_robot_job(self, robot_id: str) -> tuple[dict[str, Any], bool]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if normalized_robot_id not in self.robots_by_id:
+            raise HTTPException(status_code=404, detail=f"Unknown robot id: {normalized_robot_id}")
+        try:
+            stop_result = self._job_coordinator.stop_active_job(normalized_robot_id)
+        except NoActiveUserJobError as exc:
+            raise HTTPException(status_code=409, detail="No active user job.") from exc
+        snapshot = stop_result.snapshot if isinstance(stop_result.snapshot, dict) else {}
+        return (
+            {
+                "activeJob": snapshot.get("activeJob"),
+                "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+                "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
+            },
+            bool(stop_result.already_interrupting),
+        )
+
+    def has_pending_user_work(self, robot_id: str) -> bool:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return False
+        return bool(self._job_coordinator.has_pending_user_work(normalized_robot_id))
 
     def reload_definitions(
         self,

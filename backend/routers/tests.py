@@ -16,6 +16,7 @@ from ..terminal_manager import TerminalManager
 
 def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
     router = APIRouter()
+    manual_runs_moved_detail = "Manual runs moved to /api/robots/{robotId}/jobs"
     DEFAULT_ONLINE_BATCH_PARALLELISM = 8
     MAX_ONLINE_BATCH_PARALLELISM = 100
     DEFAULT_ONLINE_BATCH_SAFE_PARALLELISM = 16
@@ -49,67 +50,8 @@ def create_tests_router(terminal_manager: TerminalManager) -> APIRouter:
 
     @router.post("/api/robots/{robot_id}/tests/run")
     def run_robot_tests(robot_id: str, body: TestRunRequest) -> dict[str, Any]:
-        page_session_id = (body.pageSessionId or f"test-{robot_id}-{uuid.uuid4().hex[:8]}").strip()
-        started_at = time.time()
-        normalized_test_ids = None
-        if body.testIds is not None:
-            normalized_test_ids = [normalize_text(test_id, "") for test_id in body.testIds]
-            normalized_test_ids = [test_id for test_id in normalized_test_ids if test_id]
-            if not normalized_test_ids:
-                raise HTTPException(status_code=400, detail="No tests selected.")
-
-        started_run = False
-        if hasattr(terminal_manager, "start_test_run"):
-            started_run = bool(
-                terminal_manager.start_test_run(
-                    robot_id=robot_id,
-                    page_session_id=page_session_id,
-                )
-            )
-            if not started_run:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A test run is already active for this robot.",
-                )
-
-        try:
-            results = terminal_manager.run_tests(
-                robot_id=robot_id,
-                page_session_id=page_session_id,
-                test_ids=normalized_test_ids,
-                dry_run=body.dryRun,
-                queue_timeout_sec=body.queueTimeoutSec,
-                connect_timeout_sec=body.connectTimeoutSec,
-                execute_timeout_sec=body.executeTimeoutSec or body.timeoutSec,
-            )
-        finally:
-            if started_run and hasattr(terminal_manager, "finish_test_run"):
-                terminal_manager.finish_test_run(
-                    robot_id=robot_id,
-                    page_session_id=page_session_id,
-                )
-        finished_at = time.time()
-        metadata: dict[str, Any] = {}
-        if hasattr(terminal_manager, "get_last_test_run_metadata"):
-            metadata = terminal_manager.get_last_test_run_metadata(robot_id=robot_id, page_session_id=page_session_id)
-        session_payload = metadata.get("session") if isinstance(metadata, dict) else {}
-        timing_payload = metadata.get("timing") if isinstance(metadata, dict) else {}
-        response = {
-            "ok": True,
-            "robotId": robot_id,
-            "runId": normalize_text(
-                session_payload.get("runId") if isinstance(session_payload, dict) else "",
-                f"run-{int(started_at * 1000)}",
-            ),
-            "startedAt": started_at,
-            "finishedAt": finished_at,
-            "results": results,
-        }
-        if isinstance(session_payload, dict) and session_payload:
-            response["session"] = session_payload
-        if isinstance(timing_payload, dict) and timing_payload:
-            response["timing"] = timing_payload
-        return response
+        _ = robot_id, body
+        raise HTTPException(status_code=410, detail=manual_runs_moved_detail)
 
     @router.post("/api/robots/online-check")
     def run_online_check_batch(body: OnlineBatchRequest) -> dict[str, Any]:

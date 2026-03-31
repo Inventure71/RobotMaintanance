@@ -18,6 +18,53 @@ function normalizeText(value, fallback = '') {
   return text || String(fallback ?? '');
 }
 
+function createJobQueueActivityHelpers() {
+  const normalizeJobSummary = (job) => {
+    if (!job || typeof job !== 'object') return null;
+    const id = normalizeText(job.id, '');
+    if (!id) return null;
+    const status = normalizeText(job.status, '').toLowerCase();
+    const kind = normalizeText(job.kind, '').toLowerCase();
+    const enqueuedAt = Number(job.enqueuedAt);
+    const startedAt = Number(job.startedAt);
+    const updatedAt = Number(job.updatedAt);
+    return {
+      id,
+      kind: kind === 'fix' ? 'fix' : 'test',
+      status,
+      source: normalizeText(job.source, 'manual') || 'manual',
+      label: normalizeText(job.label, id),
+      enqueuedAt: Number.isFinite(enqueuedAt) && enqueuedAt > 0 ? enqueuedAt : 0,
+      startedAt: Number.isFinite(startedAt) && startedAt > 0 ? startedAt : 0,
+      updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
+    };
+  };
+  const normalizeQueuedJobs = (jobs) =>
+    Array.isArray(jobs)
+      ? jobs
+          .map((item) => normalizeJobSummary(item))
+          .filter((item) => item && normalizeText(item.status, '') === 'queued')
+      : [];
+  const normalizeJobQueueSnapshot = (raw) => {
+    const payload = raw && typeof raw === 'object' ? raw : {};
+    const activeJob = normalizeJobSummary(payload.activeJob);
+    const version = Number(payload.jobQueueVersion);
+    return {
+      activeJob:
+        activeJob && (activeJob.status === 'running' || activeJob.status === 'interrupting')
+          ? activeJob
+          : null,
+      queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+      jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
+    };
+  };
+  return {
+    normalizeJobSummary,
+    normalizeQueuedJobs,
+    normalizeJobQueueSnapshot,
+  };
+}
+
 function makeNode() {
   return {
     classList: {
@@ -58,6 +105,7 @@ function makeEnv(state) {
   const env = {
     FIX_MODE_CONTEXT_DASHBOARD: 'dashboard',
     FIX_MODE_CONTEXT_DETAIL: 'detail',
+    JOB_QUEUE_ACTIVITY: createJobQueueActivityHelpers(),
     normalizeText,
     normalizeTypeId: (value) => normalizeText(value, '').toLowerCase(),
     state,

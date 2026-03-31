@@ -143,6 +143,19 @@ class AutomationRunContext:
 
         self._timing.total_ms = max(0, int((self._time() - self._started_at) * 1000))
 
+    def interrupt(self) -> None:
+        shell = self._shell
+        self._shell = None
+        if shell is not None:
+            try:
+                shell.close()
+            except Exception:
+                pass
+        try:
+            self._pool.hard_reset_robot(self._robot_id)
+        except Exception:
+            pass
+
     def timing_payload(self) -> dict[str, int]:
         if not self._closed:
             self._timing.total_ms = max(0, int((self._time() - self._started_at) * 1000))

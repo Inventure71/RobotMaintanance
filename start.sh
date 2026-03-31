@@ -2,4 +2,4 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${DIR}/scripts/start_robot_maintenance.sh"
+exec "${DIR}/scripts/start_vigil.sh"

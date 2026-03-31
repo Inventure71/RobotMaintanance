@@ -12,8 +12,8 @@ set -e
 
 TAG="${TAG:-latest}"
 
-FRONTEND_IMAGE="inventure71/robot-maintenance-frontend:$TAG"
-BACKEND_IMAGE="inventure71/robot-maintenance-backend:$TAG"
+FRONTEND_IMAGE="inventure71/vigil-frontend:$TAG"
+BACKEND_IMAGE="inventure71/vigil-backend:$TAG"
 
 echo "Using tag: $TAG"
 echo

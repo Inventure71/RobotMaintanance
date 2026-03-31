@@ -64,11 +64,11 @@ class InteractiveShell:
     SUDO_RESET_TIMEOUT_SEC = 2.0
     SUDO_RESET_QUIET_SEC = 0.1
     INITIAL_DIRECTORY_TIMEOUT_SEC = 5.0
-    COMMAND_DONE_PREFIX = "__CODEX_CMD_DONE__"
-    AUTOMATION_DONE_PREFIX = "__CODEX_AUTO_DONE__"
-    AUTOMATION_EXIT_PREFIX = "__CODEX_AUTO_EXIT__"
-    SUDO_PROMPT_PREFIX = "__CODEX_SUDO_PROMPT__"
-    AUTOMATION_STATUS_LINE = "__CODEX_AUTOMATION_STATUS=$?"
+    COMMAND_DONE_PREFIX = "__VIGIL_CMD_DONE__"
+    AUTOMATION_DONE_PREFIX = "__VIGIL_AUTO_DONE__"
+    AUTOMATION_EXIT_PREFIX = "__VIGIL_AUTO_EXIT__"
+    SUDO_PROMPT_PREFIX = "__VIGIL_SUDO_PROMPT__"
+    AUTOMATION_STATUS_LINE = "__VIGIL_AUTOMATION_STATUS=$?"
     SUDO_FAILURE_PHRASES = (
         "sorry, try again.",
         "sudo: a password is required",
@@ -249,16 +249,16 @@ class InteractiveShell:
 
         quoted_directory = self._quote_shell_value(directory)
         command = (
-            f"__CODEX_START_DIR={quoted_directory}; "
-            "__CODEX_LOGIN_HOME=\"$(getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f6)\"; "
-            "[ -n \"$__CODEX_LOGIN_HOME\" ] || __CODEX_LOGIN_HOME=\"$HOME\"; "
-            "case \"$__CODEX_START_DIR\" in "
-            "'~') __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME\" ;; "
-            "'~/'*) __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME/${__CODEX_START_DIR#~/}\" ;; "
-            "'$HOME') __CODEX_START_DIR=\"$HOME\" ;; "
-            "'$HOME/'*) __CODEX_START_DIR=\"$HOME/${__CODEX_START_DIR#\\$HOME/}\" ;; "
+            f"__VIGIL_START_DIR={quoted_directory}; "
+            "__VIGIL_LOGIN_HOME=\"$(getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f6)\"; "
+            "[ -n \"$__VIGIL_LOGIN_HOME\" ] || __VIGIL_LOGIN_HOME=\"$HOME\"; "
+            "case \"$__VIGIL_START_DIR\" in "
+            "'~') __VIGIL_START_DIR=\"$__VIGIL_LOGIN_HOME\" ;; "
+            "'~/'*) __VIGIL_START_DIR=\"$__VIGIL_LOGIN_HOME/${__VIGIL_START_DIR#~/}\" ;; "
+            "'$HOME') __VIGIL_START_DIR=\"$HOME\" ;; "
+            "'$HOME/'*) __VIGIL_START_DIR=\"$HOME/${__VIGIL_START_DIR#\\$HOME/}\" ;; "
             "esac; "
-            "cd -- \"$__CODEX_START_DIR\""
+            "cd -- \"$__VIGIL_START_DIR\""
         )
         timeout = max(
             0.5,
@@ -401,7 +401,7 @@ class InteractiveShell:
     ) -> tuple[str, list[str]]:
         command_text = str(command or "").rstrip("\n")
         command_lines = command_text.split("\n") if command_text else [""]
-        exit_line = f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\""
+        exit_line = f"printf '\\n{exit_marker}%s\\n' \"$__VIGIL_AUTOMATION_STATUS\""
         done_line = f"printf '\\n{done_marker}\\n'"
         wrapper_lines = [
             "{",

@@ -1,7 +1,9 @@
-# Robot Maintenance
+# VIGIL
 
-Robot Maintenance is a fleet operations platform for SSH-managed robots.  
-It provides a FastAPI backend and a browser dashboard for diagnostics, terminal access, and recovery workflows.
+Continuous verification and guided recovery for mission-ready robot fleets.
+
+VIGIL is a fleet operations platform for SSH-managed robots built to maximize uptime and reduce incident recovery time.  
+It combines live runtime monitoring, per-robot terminal control, and definition-driven test/fix workflows so diagnostics stay repeatable and remediation stays fast.
 
 ## Overview
 
@@ -51,7 +53,7 @@ Definitions are validated at startup and on reload, including ID references and 
 ## System Architecture
 
 - Backend (`backend/`):
-  - FastAPI routers for robots, terminal, tests, fixes, monitor, definitions, and bug reports
+  - FastAPI routers for robots, terminal, jobs, monitor, definitions, and bug reports
   - orchestration and runtime control in `backend/terminal_manager/`
 - Frontend (`index.html`, `assets/js`, `assets/css`):
   - modular dashboard controllers, services, and UI primitives
@@ -74,7 +76,7 @@ Definitions are validated at startup and on reload, including ID references and 
 ./start.sh
 ```
 
-Startup flow (`scripts/start_robot_maintenance.sh`):
+Startup flow (`scripts/start_vigil.sh`):
 - optional safe git fast-forward update
 - virtual environment bootstrap when required
 - dependency installation from `backend/requirements.txt`
@@ -105,11 +107,11 @@ The frontend is already configured so opening `http://<server-ip>:5000` automati
 ```bash
 docker login <registry>
 
-docker build -f Dockerfile.backend -t <registry>/robot-maintenance-backend:<tag> .
-docker build -f Dockerfile.frontend -t <registry>/robot-maintenance-frontend:<tag> .
+docker build -f Dockerfile.backend -t <registry>/vigil-backend:<tag> .
+docker build -f Dockerfile.frontend -t <registry>/vigil-frontend:<tag> .
 
-docker push <registry>/robot-maintenance-backend:<tag>
-docker push <registry>/robot-maintenance-frontend:<tag>
+docker push <registry>/vigil-backend:<tag>
+docker push <registry>/vigil-frontend:<tag>
 ```
 
 ### Server Deployment (pull and run only)
@@ -118,8 +120,8 @@ docker push <registry>/robot-maintenance-frontend:<tag>
 2. Create `.env.server` on the server (or rename `.env.server.example`) with:
 
 ```bash
-BACKEND_IMAGE=<registry>/robot-maintenance-backend:<tag>
-FRONTEND_IMAGE=<registry>/robot-maintenance-frontend:<tag>
+BACKEND_IMAGE=<registry>/vigil-backend:<tag>
+FRONTEND_IMAGE=<registry>/vigil-frontend:<tag>
 ```
 
 3. Deploy:
@@ -172,12 +174,12 @@ Recommended workflow (file-based, version-controlled):
 2. Add any referenced primitives under `config/command-primitives/`.
 3. Add new check IDs to `testRefs` in `config/robot-types.config.json`.
 4. Reload definitions: `POST /api/definitions/reload`.
-5. Execute test run:
+5. Enqueue a manual test job:
 
 ```bash
-curl -X POST "http://localhost:8010/api/robots/<robot_id>/tests/run" \
+curl -X POST "http://localhost:8010/api/robots/<robot_id>/jobs" \
   -H "Content-Type: application/json" \
-  -d '{"pageSessionId":"manual-run","testIds":["<check_id>"],"dryRun":false}'
+  -d '{"kind":"test","pageSessionId":"manual-run","testIds":["<check_id>"]}'
 ```
 
 UI workflow is also supported through the Manage/Recorder flow builder for creating and mapping generated checks.
@@ -187,22 +189,23 @@ Auto connection retry behavior:
 - If any selected check fails, it retries every `2.5` seconds for up to `60` seconds from reconnect.
 - Retries stop immediately on manual activity or disconnect.
 
-Manual/API test-run online precheck:
-- `POST /api/robots/{robot_id}/tests/run` performs a forced online probe before running any non-`online` checks.
-- If the robot is offline, the endpoint returns `200` with structured results: current `online` status plus skipped non-online checks (`reason=OFFLINE_PRECHECK`, `skipped=true`).
-- `online`-only runs remain allowed.
+Manual/API queue flow:
+- `POST /api/robots/{robot_id}/jobs` is the only supported manual run entrypoint (`kind: test|fix`).
+- `GET /api/robots/{robot_id}/jobs` returns `{ activeJob, queuedJobs, jobQueueVersion }`.
+- `POST /api/robots/{robot_id}/jobs/active/stop` requests interruption of the active user job.
+- Legacy manual routes return `410 Gone` with: `Manual runs moved to /api/robots/{robotId}/jobs`.
 
 ## Adding New Fixes
 
 1. Create `config/fixes/<name>.fix.json` (`id`, `label`, `description`, `enabled`, `execute[]`, optional `postTestIds`).
 2. Add fix IDs to `fixRefs` in `config/robot-types.config.json`.
 3. Reload definitions: `POST /api/definitions/reload`.
-4. Start a fix run:
+4. Enqueue a fix job:
 
 ```bash
-curl -X POST "http://localhost:8010/api/robots/<robot_id>/fixes/<fix_id>/runs" \
+curl -X POST "http://localhost:8010/api/robots/<robot_id>/jobs" \
   -H "Content-Type: application/json" \
-  -d '{"pageSessionId":"manual-fix","params":{}}'
+  -d '{"kind":"fix","fixId":"<fix_id>","pageSessionId":"manual-fix","params":{}}'
 ```
 
 ## Configuration Reference

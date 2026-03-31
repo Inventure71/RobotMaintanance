@@ -22,6 +22,7 @@ from .routers import (
     create_definitions_router,
     create_fixes_router,
     create_health_router,
+    create_jobs_router,
     create_monitor_router,
     create_robots_router,
     create_terminal_router,
@@ -72,7 +73,7 @@ def create_app() -> FastAPI:
         fixes_dir=fixes_dir,
     )
 
-    app = FastAPI(title="Robot Maintenance SSH API v2", version="2.2")
+    app = FastAPI(title="VIGIL SSH API v2", version="2.2")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(create_terminal_router(terminal_manager))
     app.include_router(create_tests_router(terminal_manager))
     app.include_router(create_fixes_router(terminal_manager))
+    app.include_router(create_jobs_router(terminal_manager))
     app.include_router(create_definitions_router(definition_service))
     app.include_router(create_bug_reports_router(logs_path))
 

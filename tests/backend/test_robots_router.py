@@ -178,6 +178,29 @@ def test_fleet_runtime_endpoint_uses_versioned_snapshot_provider():
                             "searching": False,
                             "testing": False,
                             "phase": None,
+                            "jobQueueVersion": 2,
+                            "activeJob": {
+                                "id": "job-1",
+                                "kind": "test",
+                                "status": "running",
+                                "source": "manual",
+                                "label": "Run tests",
+                                "enqueuedAt": 9.0,
+                                "startedAt": 10.0,
+                                "updatedAt": 10.0,
+                            },
+                            "queuedJobs": [
+                                {
+                                    "id": "job-2",
+                                    "kind": "fix",
+                                    "status": "queued",
+                                    "source": "manual",
+                                    "label": "Run fix",
+                                    "enqueuedAt": 10.0,
+                                    "startedAt": 0.0,
+                                    "updatedAt": 10.0,
+                                }
+                            ],
                             "updatedAt": 10.0,
                         },
                     }
@@ -195,6 +218,16 @@ def test_fleet_runtime_endpoint_uses_versioned_snapshot_provider():
     assert payload["robots"][0]["id"] == "r1"
     assert payload["robots"][0]["version"] == 12
     assert payload["robots"][0]["tests"]["online"]["status"] == "ok"
+    assert payload["robots"][0]["activity"]["jobQueueVersion"] == 2
+    assert payload["robots"][0]["activity"]["activeJob"]["status"] == "running"
+    assert payload["robots"][0]["activity"]["queuedJobs"][0]["status"] == "queued"
+
+    compact_response = client.get("/api/fleet/runtime?since=7&compact=true")
+    assert compact_response.status_code == 200
+    compact_payload = compact_response.json()
+    assert compact_payload["robots"][0]["activity"]["jobQueueVersion"] == 2
+    assert compact_payload["robots"][0]["activity"]["activeJob"]["id"] == "job-1"
+    assert compact_payload["robots"][0]["activity"]["queuedJobs"][0]["id"] == "job-2"
 
 
 def test_robot_types_endpoint_keeps_owner_and_platform_tags_for_tests_and_fixes():

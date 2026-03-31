@@ -11,19 +11,6 @@ from backend.routers.tests import create_tests_router
 
 def test_tests_run_rejects_duplicate_active_robot_session():
     class FakeManager:
-        def start_test_run(self, robot_id, page_session_id):
-            _ = robot_id
-            _ = page_session_id
-            return False
-
-        def finish_test_run(self, robot_id, page_session_id):
-            _ = robot_id
-            _ = page_session_id
-            return None
-
-        def run_tests(self, *_args, **_kwargs):
-            return []
-
         def check_online(self, *_args, **_kwargs):
             return {
                 "status": "ok",
@@ -42,32 +29,8 @@ def test_tests_run_rejects_duplicate_active_robot_session():
         "/api/robots/r1/tests/run",
         json={"pageSessionId": "p1", "testIds": ["general"]},
     )
-    assert response.status_code == 409
-    assert "already active" in response.json()["detail"]
-
-
-def test_tests_run_rejects_explicit_empty_selection():
-    class FakeManager:
-        def start_test_run(self, *_args, **_kwargs):
-            return True
-
-        def finish_test_run(self, *_args, **_kwargs):
-            return None
-
-        def run_tests(self, *_args, **_kwargs):
-            raise AssertionError("run_tests should not be called for an empty selection")
-
-    app = FastAPI()
-    app.include_router(create_tests_router(FakeManager()))
-    client = TestClient(app)
-
-    response = client.post(
-        "/api/robots/r1/tests/run",
-        json={"pageSessionId": "p1", "testIds": []},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "No tests selected."
+    assert response.status_code == 410
+    assert response.json()["detail"] == "Manual runs moved to /api/robots/{robotId}/jobs"
 
 
 def test_online_batch_uses_safe_parallelism_cap(monkeypatch):

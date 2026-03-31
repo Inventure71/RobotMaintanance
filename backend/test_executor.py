@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from .connectors import OrchestrateConnector, ReadConnector, WriteConnector
 from .normalization import normalize_status, normalize_text
 from .ssh_client import AutomationCommandResult, InteractiveShell
+from .terminal_manager.job_scheduler.cancel import JobInterrupted
 
 
 class AutomationRunProtocol(Protocol):
@@ -342,7 +343,10 @@ class TestExecutor:
         run_scope: str,
         run_context: AutomationRunProtocol | None,
         default_execute_timeout_sec: float,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
+        if callable(should_cancel) and bool(should_cancel()):
+            raise JobInterrupted("Test execution interrupted before definition run.")
         definition = self._test_definitions_by_id.get(definition_id)
         if not isinstance(definition, dict):
             raise HTTPException(status_code=400, detail=f"Unknown definition '{definition_id}'")
@@ -351,6 +355,8 @@ class TestExecutor:
         shared_execution_id = f"def-{definition_id}-{uuid.uuid4().hex[:8]}"
 
         if mode == "online_probe":
+            if callable(should_cancel) and bool(should_cancel()):
+                raise JobInterrupted("Test execution interrupted during online probe.")
             check_ids = [
                 normalize_text(check.get("id"), "")
                 for check in (definition.get("checks") or [])
@@ -407,6 +413,8 @@ class TestExecutor:
         _, _, password, _ = self._resolve_credentials(robot_id)
 
         def _run_command(command: str, timeout_sec: float | None) -> AutomationCommandResult:
+            if callable(should_cancel) and bool(should_cancel()):
+                raise JobInterrupted("Test execution interrupted before command execution.")
             if run_context is None:
                 raise RuntimeError("Automation run context is not available")
             timeout = default_execute_timeout_sec if timeout_sec is None else float(timeout_sec)
@@ -423,6 +431,7 @@ class TestExecutor:
             params=merged_params,
             dry_run=dry_run,
             command_cache=command_output_cache,
+            should_cancel=should_cancel,
         )
         total_ms = max(0, int(time.time() * 1000 - started))
 
@@ -442,8 +451,11 @@ class TestExecutor:
         queue_timeout_sec: float | None = None,
         connect_timeout_sec: float | None = None,
         execute_timeout_sec: float | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> list[dict[str, Any]]:
         run_started = time.time()
+        if callable(should_cancel) and bool(should_cancel()):
+            raise JobInterrupted("Test execution interrupted before run.")
         if test_ids is not None and not [normalize_text(test_id, "") for test_id in test_ids if normalize_text(test_id, "")]:
             raise HTTPException(status_code=400, detail="No tests selected.")
         tests, resolution_errors, unknown_requested = self._resolve_tests(robot_id, test_ids)
@@ -483,6 +495,8 @@ class TestExecutor:
                 requires_automation_shell = (mode != "online_probe") and not dry_run
                 definition_context: AutomationRunProtocol | None = None
                 try:
+                    if callable(should_cancel) and bool(should_cancel()):
+                        raise JobInterrupted("Test execution interrupted before definition setup.")
                     if requires_automation_shell:
                         definition_context = self._open_automation_context(
                             robot_id=robot_id,
@@ -493,6 +507,8 @@ class TestExecutor:
                             execute_timeout_sec=effective_execute_timeout_sec,
                         )
                 except Exception as exc:
+                    if isinstance(exc, JobInterrupted):
+                        raise
                     for spec in grouped_specs:
                         results.append(
                             {
@@ -518,6 +534,7 @@ class TestExecutor:
                         run_scope=run_scope,
                         run_context=definition_context,
                         default_execute_timeout_sec=effective_execute_timeout_sec,
+                        should_cancel=should_cancel,
                     )
                 except HTTPException as exc:
                     for spec in grouped_specs:
@@ -535,6 +552,8 @@ class TestExecutor:
                         )
                     continue
                 except Exception as exc:
+                    if isinstance(exc, JobInterrupted):
+                        raise
                     for spec in grouped_specs:
                         results.append(
                             {

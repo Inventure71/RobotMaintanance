@@ -92,6 +92,23 @@ def test_parse_battery_output_handles_ros_battery_with_present_false():
     assert result["status"] == "ok"
 
 
+def test_auto_monitor_skips_robot_when_user_queue_has_pending_work():
+    manager = _manager()
+    check_calls: list[str] = []
+    manager.has_pending_user_work = lambda robot_id: robot_id == "r1"
+    manager.check_online = lambda **_kwargs: check_calls.append("called") or {
+        "status": "ok",
+        "value": "reachable",
+        "details": "ok",
+        "ms": 1,
+        "checkedAt": time.time(),
+        "source": "auto-monitor",
+    }
+
+    manager._run_auto_monitor_tick()
+    assert check_calls == []
+
+
 def test_reload_definitions_prunes_runtime_tests_not_in_robot_type_catalog():
     manager = _manager()
     manager._record_runtime_tests(

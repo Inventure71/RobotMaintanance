@@ -57,6 +57,8 @@ class ActivityGuardMixin:
         normalized_robot_id = normalize_text(robot_id, "")
         if not normalized_robot_id:
             return False
+        if hasattr(self, "has_pending_user_work") and bool(self.has_pending_user_work(normalized_robot_id)):
+            return False
         with self._lock:
             if self._has_foreground_robot_activity_locked(normalized_robot_id):
                 return False
@@ -102,6 +104,8 @@ class ActivityGuardMixin:
         return (now - last_activity_at) <= self.MANUAL_ACTIVITY_DEFER_SEC or now <= defer_until
 
     def _is_robot_busy(self, robot_id: str) -> bool:
+        if hasattr(self, "has_pending_user_work") and bool(self.has_pending_user_work(robot_id)):
+            return True
         with self._lock:
             if self._has_foreground_robot_activity_locked(robot_id):
                 return True

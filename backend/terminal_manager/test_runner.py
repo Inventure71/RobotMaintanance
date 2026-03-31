@@ -343,6 +343,7 @@ class TestRunnerMixin:
         queue_timeout_sec: float | None = None,
         connect_timeout_sec: float | None = None,
         execute_timeout_sec: float | None = None,
+        should_cancel: Any = None,
     ) -> list[dict[str, Any]]:
         def _selected_configured_test_ids() -> list[str]:
             configured = self._configured_test_ids(robot_id)
@@ -438,6 +439,7 @@ class TestRunnerMixin:
             queue_timeout_sec=queue_timeout_sec,
             connect_timeout_sec=connect_timeout_sec,
             execute_timeout_sec=execute_timeout_sec,
+            should_cancel=should_cancel,
         )
         if hasattr(self._executor, "get_last_run_metadata"):
             metadata = self._executor.get_last_run_metadata()

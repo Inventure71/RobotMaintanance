@@ -1,3 +1,173 @@
+function createRobotJobsApi({ buildApiUrl, fetchImpl } = {}) {
+  function resolveFetchImpl() {
+    if (typeof fetchImpl === 'function') return fetchImpl;
+    if (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function') {
+      return globalThis.fetch.bind(globalThis);
+    }
+    throw new Error('Fetch API is unavailable for /jobs requests.');
+  }
+
+  async function readErrorDetail(response) {
+    try {
+      const payload = await response.json();
+      if (payload && typeof payload.detail === 'string' && payload.detail.trim()) {
+        return payload.detail.trim();
+      }
+    } catch (_error) {
+      // Fallback to text below.
+    }
+    try {
+      const text = await response.text();
+      if (text && text.trim()) return text.trim();
+    } catch (_error) {
+      // Ignore.
+    }
+    return `Request failed (${response.status})`;
+  }
+
+  async function enqueueJob(robotId, body) {
+    const doFetch = resolveFetchImpl();
+    const response = await doFetch(buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/jobs`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    if (!response.ok) {
+      throw new Error(await readErrorDetail(response));
+    }
+    return response.json();
+  }
+
+  async function stopActiveJob(robotId) {
+    const doFetch = resolveFetchImpl();
+    const response = await doFetch(buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/jobs/active/stop`), {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(await readErrorDetail(response));
+    }
+    return {
+      status: response.status,
+      body: await response.json(),
+    };
+  }
+
+  return {
+    enqueueJob,
+    stopActiveJob,
+  };
+}
+
+function createRobotJobQueueStore({ normalizeText, jobQueueActivity }) {
+  const snapshotsByRobotId = new Map();
+  if (!jobQueueActivity || typeof jobQueueActivity.normalizeJobQueueSnapshot !== 'function') {
+    throw new Error('JOB_QUEUE_ACTIVITY helper is required.');
+  }
+  const normalizeSnapshot = (raw) => jobQueueActivity.normalizeJobQueueSnapshot(raw);
+
+  function remember(robotId, snapshot) {
+    const normalizedRobotId = normalizeText(robotId, '');
+    if (!normalizedRobotId) return normalizeSnapshot(snapshot);
+    const normalizedSnapshot = normalizeSnapshot(snapshot);
+    snapshotsByRobotId.set(normalizedRobotId, normalizedSnapshot);
+    return normalizedSnapshot;
+  }
+
+  function applySnapshotToRobot(robot, snapshot) {
+    if (!robot || typeof robot !== 'object') return robot;
+    const normalizedSnapshot = normalizeSnapshot(snapshot);
+    const previousActivity = robot.activity && typeof robot.activity === 'object' ? robot.activity : {};
+    const mergedActivity = {
+      ...previousActivity,
+      jobQueueVersion: normalizedSnapshot.jobQueueVersion,
+      activeJob: normalizedSnapshot.activeJob,
+      queuedJobs: normalizedSnapshot.queuedJobs,
+      updatedAt: Math.max(
+        Number(previousActivity.updatedAt || 0),
+        Number(normalizedSnapshot.activeJob?.updatedAt || 0),
+        ...normalizedSnapshot.queuedJobs.map((item) => Number(item?.updatedAt || 0)),
+      ),
+    };
+
+    return {
+      ...robot,
+      activity: mergedActivity,
+    };
+  }
+
+  return {
+    remember,
+    applySnapshotToRobot,
+  };
+}
+
+function createRobotJobQueueRenderer({ normalizeText }) {
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function renderJobChip(prefix, job) {
+    if (!job || typeof job !== 'object') return '';
+    const label = escapeHtml(normalizeText(job.label, normalizeText(job.id, 'job')) || 'job');
+    const status = escapeHtml(normalizeText(job.status, 'queued'));
+    return `<span class="pill robot-job-chip">${prefix}: ${label} (${status})</span>`;
+  }
+
+  function renderQueueStrip(activity, options = {}) {
+    const payload = activity && typeof activity === 'object' ? activity : {};
+    const activeJob = payload.activeJob && typeof payload.activeJob === 'object' ? payload.activeJob : null;
+    const queuedJobs = Array.isArray(payload.queuedJobs) ? payload.queuedJobs : [];
+    const maxQueued = Number.isFinite(Number(options.maxQueued)) ? Math.max(0, Math.trunc(Number(options.maxQueued))) : 3;
+    const includeEmpty = options.includeEmpty === true;
+
+    const chips = [];
+    if (activeJob) {
+      chips.push(renderJobChip('Active', activeJob));
+    }
+    queuedJobs.slice(0, maxQueued).forEach((job, index) => {
+      chips.push(renderJobChip(`Q${index + 1}`, job));
+    });
+    if (queuedJobs.length > maxQueued) {
+      chips.push(`<span class="pill robot-job-chip">+${queuedJobs.length - maxQueued} more</span>`);
+    }
+
+    if (!chips.length && !includeEmpty) return '';
+    if (!chips.length) {
+      chips.push('<span class="pill robot-job-chip">No queued manual jobs</span>');
+    }
+
+    return `<div class="robot-job-queue-strip" data-role="job-queue-strip">${chips.join('')}</div>`;
+  }
+
+  function hasStoppableActiveJob(activity) {
+    const active = activity && typeof activity === 'object' ? activity.activeJob : null;
+    const status = normalizeText(active?.status, '');
+    return status === 'running' || status === 'interrupting';
+  }
+
+  function renderStopCurrentJobButton(activity, robotId) {
+    if (!hasStoppableActiveJob(activity)) return '';
+    const status = normalizeText(activity?.activeJob?.status, 'running');
+    const normalizedRobotId = escapeHtml(normalizeText(robotId, ''));
+    const label = status === 'interrupting' ? 'Stopping current job...' : 'Stop current job';
+    const disabled = status === 'interrupting' ? ' disabled' : '';
+    return (
+      `<button class="button stop-current-job-btn" type="button" data-button-intent="danger" `
+      + `data-action="stop-current-job" data-robot-id="${normalizedRobotId}"${disabled}>${label}</button>`
+    );
+  }
+
+  return {
+    renderQueueStrip,
+    renderStopCurrentJobButton,
+  };
+}
+
 export function createFixTestsFeature(context, maybeEnv) {
   const runtime = maybeEnv ? context : context?.bridge || context?.runtime || context?.services || {};
   const env = maybeEnv || context?.env || context;
@@ -8,7 +178,7 @@ export function createFixTestsFeature(context, maybeEnv) {
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
     DETAIL_TERMINAL_PRESET_IDS,
-    FIX_JOB_POLL_INTERVAL_MS,
+    JOB_QUEUE_ACTIVITY,
     FIX_MODE_CONTEXT_DASHBOARD,
     FIX_MODE_CONTEXT_DETAIL,
     FLEET_PARALLELISM_DEFAULT,
@@ -404,6 +574,56 @@ export function createFixTestsFeature(context, maybeEnv) {
   const updateTestMappings = (...args) => runtime.updateTestMappings(...args);
   const matchesDefinitionFilters = (...args) => runtime.matchesDefinitionFilters(...args);
 
+  const robotJobsApi = createRobotJobsApi({ buildApiUrl });
+  const robotJobQueueStore = createRobotJobQueueStore({
+    normalizeText,
+    jobQueueActivity: JOB_QUEUE_ACTIVITY,
+  });
+  const robotJobQueueRenderer = createRobotJobQueueRenderer({ normalizeText });
+
+  function renderRobotJobQueueStrip(activity, options = {}) {
+        return robotJobQueueRenderer.renderQueueStrip(activity, options);
+      }
+
+  function renderRobotStopCurrentJobButton(activity, robotIdValue) {
+        return robotJobQueueRenderer.renderStopCurrentJobButton(activity, robotIdValue);
+      }
+
+  function applyRobotJobQueueSnapshot(robotIdValue, snapshot, { repaint = true } = {}) {
+        const normalizedRobotId = robotId(robotIdValue);
+        if (!normalizedRobotId) return null;
+        const normalizedSnapshot = robotJobQueueStore.remember(normalizedRobotId, snapshot);
+        mapRobots((item) =>
+          robotId(item) === normalizedRobotId
+            ? robotJobQueueStore.applySnapshotToRobot(item, normalizedSnapshot)
+            : item,
+        );
+        if (repaint) {
+          applyRuntimeRobotPatches(new Set([normalizedRobotId]));
+        }
+        return normalizedSnapshot;
+      }
+
+  async function enqueueRobotJob(robotIdValue, body) {
+        const normalizedRobotId = robotId(robotIdValue);
+        if (!normalizedRobotId) {
+          throw new Error('Robot id is required');
+        }
+        const payload = await robotJobsApi.enqueueJob(normalizedRobotId, body || {});
+        applyRobotJobQueueSnapshot(normalizedRobotId, payload, { repaint: true });
+        return payload;
+      }
+
+  async function stopCurrentJob(robotIdValue) {
+        const normalizedRobotId = robotId(robotIdValue);
+        if (!normalizedRobotId) {
+          throw new Error('Robot id is required');
+        }
+        const response = await robotJobsApi.stopActiveJob(normalizedRobotId);
+        applyRobotJobQueueSnapshot(normalizedRobotId, response?.body, { repaint: true });
+        return response;
+      }
+
   function setModelContainerFaultClasses(modelContainer, robot, isOffline, includeDetailClass = false) {
         if (!modelContainer) return;
         const failureClasses = nonBatteryTestEntries(robot)
@@ -461,6 +681,14 @@ export function createFixTestsFeature(context, maybeEnv) {
         const lastFullTestPill = card.querySelector('[data-role="last-full-test-pill"]');
         if (lastFullTestPill) {
           lastFullTestPill.textContent = buildLastFullTestPillLabel(robot);
+        }
+        const queueStripHost = card.querySelector('[data-role="card-job-queue-strip"]');
+        if (queueStripHost) {
+          queueStripHost.innerHTML = renderRobotJobQueueStrip(robot?.activity, { maxQueued: 2 });
+        }
+        const stopJobHost = card.querySelector('[data-role="card-stop-current-job"]');
+        if (stopJobHost) {
+          stopJobHost.innerHTML = renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId);
         }
   
         const summaryBatteryHost = card.querySelector('[data-role="summary-battery-pill"]');
@@ -914,10 +1142,6 @@ export function createFixTestsFeature(context, maybeEnv) {
   async function runAutoFixForRobot(robot, candidate) {
         if (!robot || !candidate) return;
         const normalizedRobotId = robotId(robot);
-        const configuredPostTestIds = getRobotDefinitionsForType(robot.typeId)
-          .filter((definition) => definition?.enabled !== false)
-          .map((definition) => normalizeText(definition?.id, ''))
-          .filter(Boolean);
   
         const currentOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
         if (currentOnlineStatus !== 'ok') {
@@ -953,91 +1177,23 @@ export function createFixTestsFeature(context, maybeEnv) {
             throw new Error(`Robot is offline (${onlineStatus.details}).`);
           }
         }
-  
-        setRobotFixing(normalizedRobotId, true, TEST_STEP_TIMEOUT_MS * 2);
-        setRobotTesting(normalizedRobotId, false);
-  
-        let runId = '';
-        let cursor = 0;
-        let finalPayload = null;
-        try {
-          const startResponse = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/${encodeURIComponent(candidate.id)}/runs`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pageSessionId: state.pageSessionId,
-            }),
-          });
-          if (!startResponse.ok) {
-            const message = await startResponse.text();
-            throw new Error(message || `HTTP ${startResponse.status}`);
-          }
-          const startPayload = await startResponse.json();
-          runId = normalizeText(startPayload?.runId, '');
-          if (!runId) {
-            throw new Error('Fix run did not return a runId');
-          }
-  
-          appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name} (run ${runId}).`, 'warn');
-  
-          while (true) {
-            const response = await fetch(
-              buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/fixes/runs/${encodeURIComponent(runId)}`),
-              { method: 'GET' },
-            );
-            if (!response.ok) {
-              const message = await response.text();
-              throw new Error(message || `HTTP ${response.status}`);
-            }
-            const payload = await response.json();
-            finalPayload = payload;
-  
-            const events = Array.isArray(payload?.events) ? payload.events : [];
-            const unseen = events.slice(cursor);
-            cursor = events.length;
-            unseen.forEach((event) => {
-              const message = normalizeText(event?.message, '');
-              if (message) {
-                const tone = normalizeText(event?.type, '').includes('failed') ? 'err' : 'warn';
-                appendTerminalLine(message, tone);
-              }
-              const eventData = event?.data;
-              if (eventData && typeof eventData === 'object' && eventData.output !== undefined) {
-                appendTerminalPayload(eventData.output);
-              }
-              if (normalizeText(event?.type, '') === 'post_tests_started') {
-                setRobotFixing(normalizedRobotId, false);
-                setRobotTesting(
-                  normalizedRobotId,
-                  true,
-                  estimateTestCountdownMsFromBody({ testIds: configuredPostTestIds }),
-                );
-              }
-              if (normalizeText(event?.type, '') === 'post_tests_finished') {
-                setRobotTesting(normalizedRobotId, false);
-              }
-            });
-  
-            const status = normalizeText(payload?.status, '').toLowerCase();
-            if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
-              break;
-            }
-            await new Promise((resolve) => window.setTimeout(resolve, FIX_JOB_POLL_INTERVAL_MS));
-          }
-  
-          const status = normalizeText(finalPayload?.status, '').toLowerCase();
-          if (status !== 'succeeded') {
-            const errorMessage = normalizeText(finalPayload?.error, `Auto-fix failed with status: ${status || 'unknown'}`);
-            throw new Error(errorMessage);
-          }
-  
-          const testResults = Array.isArray(finalPayload?.testRun?.results) ? finalPayload.testRun.results : [];
-          if (testResults.length) {
-            updateRobotTestState(normalizedRobotId, testResults, finalPayload?.testRun || {});
-          }
-        } finally {
-          setRobotTesting(normalizedRobotId, false);
-          setRobotFixing(normalizedRobotId, false);
+
+        const payload = await enqueueRobotJob(normalizedRobotId, {
+          kind: 'fix',
+          fixId: normalizeText(candidate.id, ''),
+          pageSessionId: state.pageSessionId,
+          source: 'manual',
+          label: normalizeText(candidate.label, 'Run fix'),
+        });
+        const activeStatus = normalizeText(payload?.activeJob?.status, '').toLowerCase();
+        const queuedCount = Array.isArray(payload?.queuedJobs) ? payload.queuedJobs.length : 0;
+        if (activeStatus === 'running' || activeStatus === 'interrupting') {
+          appendTerminalLine(`Started auto-fix "${candidate.label}" on ${robot.name}.`, 'warn');
+        } else {
+          appendTerminalLine(
+            `Queued auto-fix "${candidate.label}" on ${robot.name} (${queuedCount} queued).`,
+            'warn',
+          );
         }
       }
 
@@ -1479,29 +1635,28 @@ export function createFixTestsFeature(context, maybeEnv) {
       }
 
   async function runRobotTestsForRobot(robotId, body) {
-        const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(robotId)}/tests/run`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...(body || {}),
-            pageSessionId: normalizeText(body?.pageSessionId, state.pageSessionId),
-          }),
+        const payload = await enqueueRobotJob(robotId, {
+          kind: 'test',
+          testIds: Array.isArray(body?.testIds) ? body.testIds : undefined,
+          pageSessionId: normalizeText(body?.pageSessionId, state.pageSessionId),
+          source: 'manual',
+          label: 'Run tests',
+          timeoutSec: body?.timeoutSec,
+          queueTimeoutSec: body?.queueTimeoutSec,
+          connectTimeoutSec: body?.connectTimeoutSec,
+          executeTimeoutSec: body?.executeTimeoutSec,
         });
-  
-        if (!response.ok) {
-          const message = await response.text();
-          throw new Error(message || 'Unable to execute tests');
-        }
-  
-        const payload = await response.json();
         return {
           robotId,
-          runId: normalizeText(payload?.runId, ''),
-          startedAt: Number.isFinite(Number(payload?.startedAt)) ? Number(payload.startedAt) : 0,
-          finishedAt: Number.isFinite(Number(payload?.finishedAt)) ? Number(payload.finishedAt) : 0,
-          session: normalizeDebugSession(payload?.session, normalizeText(payload?.runId, '')),
-          timing: normalizeDebugTiming(payload?.timing),
-          results: Array.isArray(payload?.results) ? payload.results : [],
+          runId: normalizeText(payload?.jobId, ''),
+          startedAt: Number.isFinite(Number(payload?.activeJob?.startedAt)) ? Number(payload.activeJob.startedAt) : 0,
+          finishedAt: 0,
+          session: {},
+          timing: {},
+          results: [],
+          activeJob: payload?.activeJob || null,
+          queuedJobs: Array.isArray(payload?.queuedJobs) ? payload.queuedJobs : [],
+          jobQueueVersion: Number.isFinite(Number(payload?.jobQueueVersion)) ? Number(payload.jobQueueVersion) : 0,
         };
       }
 
@@ -1550,6 +1705,17 @@ export function createFixTestsFeature(context, maybeEnv) {
               : 'tests';
         const activity = normalizeRobotActivity(robot?.activity);
         const phase = normalizeText(activity?.phase, '');
+        const hasQueuedUserWork = Boolean(activity?.activeJob)
+          || (Array.isArray(activity?.queuedJobs) && activity.queuedJobs.length > 0);
+
+        if (actionKind !== 'online' && hasQueuedUserWork) {
+          return {
+            allowed: true,
+            blocked: false,
+            preemptableAuto: false,
+            title: actionKind === 'fix' ? 'Queue fix job' : 'Queue test job',
+          };
+        }
 
         if (state.fixingRobotIds.has(id) || phase === 'fixing') {
           return {
@@ -1913,6 +2079,11 @@ export function createFixTestsFeature(context, maybeEnv) {
     runOnlineCheckForAllRobots,
     runOneRobotOnlineCheck,
     runRobotTestsForRobot,
+    enqueueRobotJob,
+    stopCurrentJob,
+    applyRobotJobQueueSnapshot,
+    renderRobotJobQueueStrip,
+    renderRobotStopCurrentJobButton,
     getRobotIdsForRun,
     getRobotActionAvailability,
     getConfiguredDefaultTestIds,

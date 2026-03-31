@@ -1,7 +1,7 @@
 services:
   backend:
     image: ${BACKEND_IMAGE}
-    container_name: robot-maintenance-backend
+    container_name: vigil-backend
     ports:
       - "5010:5010"
     environment:
@@ -21,7 +21,7 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE}
-    container_name: robot-maintenance-frontend
+    container_name: vigil-frontend
     ports:
       - "5000:80"
     depends_on:

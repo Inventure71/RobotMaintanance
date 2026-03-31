@@ -8,7 +8,7 @@ export function createMonitorConfigFeature(context, maybeEnv) {
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
     DETAIL_TERMINAL_PRESET_IDS,
-    FIX_JOB_POLL_INTERVAL_MS,
+    JOB_QUEUE_ACTIVITY,
     FIX_MODE_CONTEXT_DASHBOARD,
     FIX_MODE_CONTEXT_DETAIL,
     FLEET_PARALLELISM_DEFAULT,
@@ -752,6 +752,10 @@ export function createMonitorConfigFeature(context, maybeEnv) {
       }
 
   function normalizeRobotActivity(raw) {
+        if (!JOB_QUEUE_ACTIVITY || typeof JOB_QUEUE_ACTIVITY.normalizeJobQueueSnapshot !== 'function') {
+          throw new Error('JOB_QUEUE_ACTIVITY helper is required.');
+        }
+
         if (!raw || typeof raw !== 'object') {
           return {
             searching: false,
@@ -760,12 +764,16 @@ export function createMonitorConfigFeature(context, maybeEnv) {
             lastFullTestAt: 0,
             lastFullTestSource: null,
             updatedAt: 0,
+            jobQueueVersion: 0,
+            activeJob: null,
+            queuedJobs: [],
           };
         }
         const phase = normalizeText(raw.phase, '');
         const updatedAt = Number(raw.updatedAt);
         const lastFullTestAt = Number(raw.lastFullTestAt);
         const lastFullTestSource = normalizeText(raw.lastFullTestSource, '');
+        const queueSnapshot = JOB_QUEUE_ACTIVITY.normalizeJobQueueSnapshot(raw);
         return {
           searching: Boolean(raw.searching),
           testing: Boolean(raw.testing),
@@ -773,6 +781,9 @@ export function createMonitorConfigFeature(context, maybeEnv) {
           lastFullTestAt: Number.isFinite(lastFullTestAt) && lastFullTestAt > 0 ? lastFullTestAt : 0,
           lastFullTestSource: lastFullTestSource || null,
           updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
+          jobQueueVersion: queueSnapshot.jobQueueVersion,
+          activeJob: queueSnapshot.activeJob,
+          queuedJobs: queueSnapshot.queuedJobs,
         };
       }
 

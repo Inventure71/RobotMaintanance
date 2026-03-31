@@ -14,7 +14,6 @@ export function createDetailFeature(context, maybeEnv) {
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
     DETAIL_TERMINAL_PRESET_IDS,
-    FIX_JOB_POLL_INTERVAL_MS,
     FIX_MODE_CONTEXT_DASHBOARD,
     FIX_MODE_CONTEXT_DETAIL,
     FLEET_PARALLELISM_DEFAULT,
@@ -414,6 +413,9 @@ export function createDetailFeature(context, maybeEnv) {
   const runOnlineCheckForAllRobots = (...args) => runtime.runOnlineCheckForAllRobots(...args);
   const runRecorderCommandAndCapture = (...args) => runtime.runRecorderCommandAndCapture(...args);
   const runRobotTestsForRobot = (...args) => runtime.runRobotTestsForRobot(...args);
+  const stopCurrentJob = (...args) => runtime.stopCurrentJob?.(...args);
+  const renderRobotJobQueueStrip = (...args) => runtime.renderRobotJobQueueStrip?.(...args) || '';
+  const renderRobotStopCurrentJobButton = (...args) => runtime.renderRobotStopCurrentJobButton?.(...args) || '';
   const getDefinitionTagMeta = (...args) => runtime.getDefinitionTagMeta(...args);
   const matchesDefinitionFilters = (...args) => runtime.matchesDefinitionFilters(...args);
   const getScopedTestEntries = (...args) => runtime.getScopedTestEntries(...args);
@@ -562,7 +564,25 @@ export function createDetailFeature(context, maybeEnv) {
               size: 'small',
             })}
             <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-            <span class="detail-issue-count">${errorCount} issue(s)</span>`.trim().replace(/>\s+</g, '><');
+            <span class="detail-issue-count">${errorCount} issue(s)</span>
+            ${renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId)}
+            ${renderRobotJobQueueStrip(robot?.activity, { maxQueued: 4, includeEmpty: true })}`.trim().replace(/>\s+</g, '><');
+          const stopButton = statusBar.querySelector('[data-action="stop-current-job"]');
+          if (stopButton) {
+            stopButton.addEventListener('click', async (event) => {
+              event.preventDefault();
+              const targetRobotId = normalizeText(stopButton.getAttribute('data-robot-id'), normalizedRobotId);
+              try {
+                await stopCurrentJob(targetRobotId);
+                appendTerminalLine(`Stop requested for ${robot.name || targetRobotId}.`, 'warn');
+              } catch (error) {
+                appendTerminalLine(
+                  `Failed to stop job for ${robot.name || targetRobotId}: ${error instanceof Error ? error.message : String(error)}`,
+                  'err',
+                );
+              }
+            });
+          }
         }
   
         const modelMarkup = buildRobotModelContainer(
@@ -837,22 +857,17 @@ export function createDetailFeature(context, maybeEnv) {
             try {
               const result = await runRobotTestsForRobot(robotId(robot), body);
               if (terminal && Array.isArray(body.testIds) && body.testIds.length) {
-                appendTerminalLine(`Executed test IDs: ${body.testIds.join(', ')}`, 'ok');
+                appendTerminalLine(`Requested test IDs: ${body.testIds.join(', ')}`, 'ok');
               }
-  
-              const results = Array.isArray(result?.results) ? result.results : [];
-              if (!results.length) {
-                failureCount += 1;
-                if (terminal) {
-                  appendTerminalLine(`No test results returned for ${robotId(robot)}.`, 'err');
-                }
-                return;
-              }
-  
-              updateRobotTestState(robotId(robot), results, result);
               successCount += 1;
+              const activeStatus = normalizeText(result?.activeJob?.status, '').toLowerCase();
+              const queuedCount = Array.isArray(result?.queuedJobs) ? result.queuedJobs.length : 0;
               if (terminal) {
-                appendTerminalLine(`Completed tests for ${robotId(robot)}.`, 'ok');
+                if (activeStatus === 'running' || activeStatus === 'interrupting') {
+                  appendTerminalLine(`Started tests for ${robotId(robot)}.`, 'ok');
+                } else {
+                  appendTerminalLine(`Queued tests for ${robotId(robot)} (${queuedCount} queued).`, 'ok');
+                }
               }
               renderDashboard();
   

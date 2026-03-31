@@ -121,6 +121,8 @@ class AutoMonitorWorkerMixin:
     def _run_auto_monitor_for_robot(self, robot_id: str, now: float) -> None:
         if self._auto_monitor_stop.is_set():
             return
+        if hasattr(self, "has_pending_user_work") and bool(self.has_pending_user_work(robot_id)):
+            return
         if self._has_foreground_robot_activity(robot_id):
             return
         if self._is_manual_activity_recent(robot_id, now):

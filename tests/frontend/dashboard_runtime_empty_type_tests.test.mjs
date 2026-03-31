@@ -32,6 +32,53 @@ function normalizeTypeId(value) {
   return normalizeText(value, '').toLowerCase();
 }
 
+function createJobQueueActivityHelpers() {
+  const normalizeJobSummary = (job) => {
+    if (!job || typeof job !== 'object') return null;
+    const id = normalizeText(job.id, '');
+    if (!id) return null;
+    const status = normalizeText(job.status, '').toLowerCase();
+    const kind = normalizeText(job.kind, '').toLowerCase();
+    const enqueuedAt = Number(job.enqueuedAt);
+    const startedAt = Number(job.startedAt);
+    const updatedAt = Number(job.updatedAt);
+    return {
+      id,
+      kind: kind === 'fix' ? 'fix' : 'test',
+      status,
+      source: normalizeText(job.source, 'manual') || 'manual',
+      label: normalizeText(job.label, id),
+      enqueuedAt: Number.isFinite(enqueuedAt) && enqueuedAt > 0 ? enqueuedAt : 0,
+      startedAt: Number.isFinite(startedAt) && startedAt > 0 ? startedAt : 0,
+      updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
+    };
+  };
+  const normalizeQueuedJobs = (jobs) =>
+    Array.isArray(jobs)
+      ? jobs
+          .map((item) => normalizeJobSummary(item))
+          .filter((item) => item && normalizeText(item.status, '') === 'queued')
+      : [];
+  const normalizeJobQueueSnapshot = (raw) => {
+    const payload = raw && typeof raw === 'object' ? raw : {};
+    const activeJob = normalizeJobSummary(payload.activeJob);
+    const version = Number(payload.jobQueueVersion);
+    return {
+      activeJob:
+        activeJob && (activeJob.status === 'running' || activeJob.status === 'interrupting')
+          ? activeJob
+          : null,
+      queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+      jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
+    };
+  };
+  return {
+    normalizeJobSummary,
+    normalizeQueuedJobs,
+    normalizeJobQueueSnapshot,
+  };
+}
+
 function makeClassList() {
   const values = new Set();
   return {
@@ -129,6 +176,7 @@ function makeEnv(overrides = {}) {
     normalizeStatus,
     normalizeText,
     normalizeTypeId,
+    JOB_QUEUE_ACTIVITY: createJobQueueActivityHelpers(),
     buildApiUrl: (route) => `http://localhost${route}`,
     state: {
       pageSessionId: 'test-session',
@@ -330,23 +378,29 @@ test('updateRobotTestState preserves extended debug metadata for Info modal rend
   assert.equal(robot.testDebug.general.timing.totalMs, 320);
 });
 
-test('runAutoFixForRobot clears local fixing state when the backend reports a terminal failure', async () => {
+test('runAutoFixForRobot enqueues via /jobs and does not toggle local fix/test flags', async () => {
   const fetchCalls = [];
   const fetchMock = async (url, options = {}) => {
-    fetchCalls.push({ url, method: options.method || 'GET' });
+    fetchCalls.push({ url, method: options.method || 'GET', body: options.body });
     if ((options.method || 'GET') === 'POST') {
       return {
         ok: true,
-        json: async () => ({ runId: 'fix-run-1' }),
+        json: async () => ({
+          jobId: 'job-fix-1',
+          activeJob: {
+            id: 'job-fix-1',
+            kind: 'fix',
+            status: 'running',
+            source: 'manual',
+            label: 'Flash fix',
+            enqueuedAt: 100,
+            startedAt: 110,
+            updatedAt: 110,
+          },
+          queuedJobs: [],
+          jobQueueVersion: 2,
+        }),
       };
-    }
-    return {
-      ok: true,
-      json: async () => ({
-        status: 'failed',
-        error: 'Command timed out after default seconds',
-        events: [],
-      }),
     };
   };
   const createFixTestsFeature = await loadNamedExport(
@@ -363,7 +417,6 @@ test('runAutoFixForRobot clears local fixing state when the backend reports a te
     },
   );
   const env = makeEnv({
-    FIX_JOB_POLL_INTERVAL_MS: 0,
     TEST_STEP_TIMEOUT_MS: 1000,
     state: {
       pageSessionId: 'test-session',
@@ -410,42 +463,32 @@ test('runAutoFixForRobot clears local fixing state when the backend reports a te
   });
   const api = createFixTestsFeature(runtime, env);
 
-  await assert.rejects(
-    api.runAutoFixForRobot(env.state.robots[0], { id: 'flash-fix', label: 'Flash fix' }),
-    /Command timed out after default seconds/,
-  );
+  await api.runAutoFixForRobot(env.state.robots[0], { id: 'flash-fix', label: 'Flash fix' });
 
   assert.equal(env.state.fixingRobotIds.has('robot-1'), false);
   assert.equal(env.state.testingRobotIds.has('robot-1'), false);
   assert.deepEqual(
     fetchCalls.map((entry) => entry.method),
-    ['POST', 'GET'],
+    ['POST'],
   );
+  const payload = JSON.parse(String(fetchCalls[0].body || '{}'));
+  assert.equal(payload.kind, 'fix');
+  assert.equal(payload.fixId, 'flash-fix');
 });
 
-test('runAutoFixForRobot clears both fixing and testing state if polling aborts after post-tests start', async () => {
-  let pollCount = 0;
+test('runAutoFixForRobot surfaces enqueue failures and preserves local fix/test flags', async () => {
   const transitions = [];
-  const fetchMock = async (_url, options = {}) => {
+  const fetchMock = async (url, options = {}) => {
+    assert.equal(options.method || 'GET', 'POST');
+    assert.equal(String(url).endsWith('/api/robots/robot-1/jobs'), true);
     if ((options.method || 'GET') === 'POST') {
       return {
-        ok: true,
-        json: async () => ({ runId: 'fix-run-2' }),
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: 'Robot has an active user job.' }),
+        text: async () => 'Robot has an active user job.',
       };
     }
-    pollCount += 1;
-    if (pollCount === 1) {
-      return {
-        ok: true,
-        json: async () => ({
-          status: 'running',
-          events: [
-            { type: 'post_tests_started', message: 'Post tests started.' },
-          ],
-        }),
-      };
-    }
-    throw new Error('poll disconnected');
   };
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
@@ -461,7 +504,6 @@ test('runAutoFixForRobot clears both fixing and testing state if polling aborts 
     },
   );
   const env = makeEnv({
-    FIX_JOB_POLL_INTERVAL_MS: 0,
     TEST_STEP_TIMEOUT_MS: 1000,
     state: {
       pageSessionId: 'test-session',
@@ -513,14 +555,14 @@ test('runAutoFixForRobot clears both fixing and testing state if polling aborts 
 
   await assert.rejects(
     api.runAutoFixForRobot(env.state.robots[0], { id: 'flash-fix', label: 'Flash fix' }),
-    /poll disconnected/,
+    /Robot has an active user job/,
   );
 
   assert.equal(env.state.fixingRobotIds.has('robot-1'), false);
   assert.equal(env.state.testingRobotIds.has('robot-1'), false);
   assert.equal(
-    transitions.some((entry) => entry.kind === 'test' && entry.value === true),
-    true,
+    transitions.length,
+    0,
   );
 });
 
@@ -943,4 +985,165 @@ test('normalizeTestDefinition preserves enabled manualOnly and runAtConnection m
   assert.equal(typeConfig.tests[0].enabled, false);
   assert.equal(typeConfig.tests[0].manualOnly, false);
   assert.equal(typeConfig.tests[0].runAtConnection, true);
+});
+
+test('normalizeRobotActivity keeps queue fields with safe defaults', async () => {
+  const createMonitorConfigFeature = await loadNamedExport(
+    MONITOR_MODULE_PATH,
+    'createMonitorConfigFeature',
+  );
+  const env = makeEnv();
+  const runtime = makeRuntime();
+  const api = createMonitorConfigFeature(runtime, env);
+
+  const empty = api.normalizeRobotActivity(null);
+  assert.equal(empty.jobQueueVersion, 0);
+  assert.equal(empty.activeJob, null);
+  assert.deepEqual(Array.from(empty.queuedJobs), []);
+
+  const normalized = api.normalizeRobotActivity({
+    jobQueueVersion: 3,
+    activeJob: {
+      id: 'job-1',
+      kind: 'test',
+      status: 'running',
+      source: 'manual',
+      label: 'Run tests',
+      enqueuedAt: 10,
+      startedAt: 11,
+      updatedAt: 12,
+    },
+    queuedJobs: [
+      {
+        id: 'job-2',
+        kind: 'fix',
+        status: 'queued',
+        source: 'manual',
+        label: 'Run fix',
+        enqueuedAt: 11,
+        startedAt: 0,
+        updatedAt: 12,
+      },
+    ],
+  });
+  assert.equal(normalized.jobQueueVersion, 3);
+  assert.equal(normalized.activeJob.id, 'job-1');
+  assert.equal(normalized.queuedJobs.length, 1);
+  assert.equal(normalized.queuedJobs[0].status, 'queued');
+});
+
+test('runRobotTestsForRobot enqueues through /jobs endpoint', async () => {
+  const calls = [];
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+    {
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init || {} });
+        return {
+          ok: true,
+          status: 202,
+          json: async () => ({
+            jobId: 'job-1',
+            activeJob: null,
+            queuedJobs: [],
+            jobQueueVersion: 1,
+          }),
+        };
+      },
+    },
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'session-1',
+      robots: [],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+    },
+  });
+  const runtime = makeRuntime({
+    mapRobots: () => {},
+    applyRuntimeRobotPatches: () => {},
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  await api.runRobotTestsForRobot('r1', { testIds: ['general'] });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/api\/robots\/r1\/jobs$/);
+  assert.equal(calls[0].init.method, 'POST');
+  const payload = JSON.parse(calls[0].init.body);
+  assert.equal(payload.kind, 'test');
+  assert.deepEqual(payload.testIds, ['general']);
+});
+
+test('runAutoFixForRobot enqueues fix through /jobs endpoint', async () => {
+  const calls = [];
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+    {
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init || {} });
+        return {
+          ok: true,
+          status: 202,
+          json: async () => ({
+            jobId: 'job-fix-1',
+            activeJob: null,
+            queuedJobs: [],
+            jobQueueVersion: 2,
+          }),
+        };
+      },
+    },
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'session-1',
+      robots: [],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(),
+      detailRobotId: null,
+    },
+  });
+  const runtime = makeRuntime({
+    appendTerminalLine: () => {},
+    updateOnlineCheckEstimateFromResults: () => {},
+    renderDashboard: () => {},
+    renderDetail: () => {},
+    mapRobots: () => {},
+    applyRuntimeRobotPatches: () => {},
+    runOneRobotOnlineCheck: async () => ({ status: 'ok', value: 'reachable', details: 'ok', ms: 1 }),
+    setRobotSearching: () => {},
+    setRobotTesting: () => {},
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+    getRobotDefinitionsForType: () => [],
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  await api.runAutoFixForRobot(
+    {
+      id: 'r1',
+      name: 'Robot 1',
+      typeId: 'type-a',
+      tests: { online: { status: 'ok', value: 'reachable', details: 'ok' } },
+    },
+    { id: 'flash_fix', label: 'Flash fix' },
+  );
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/api\/robots\/r1\/jobs$/);
+  const payload = JSON.parse(calls[0].init.body);
+  assert.equal(payload.kind, 'fix');
+  assert.equal(payload.fixId, 'flash_fix');
 });

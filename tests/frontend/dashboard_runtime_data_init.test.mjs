@@ -362,3 +362,82 @@ test('mergeRuntimeRobotsIntoList keeps auto-monitor battery out of live test row
   assert.equal(liveBatteryResult.merged[0].tests.battery?.value, 'needs_attention');
   assert.equal(liveBatteryResult.merged[0].tests.battery?.source, 'live');
 });
+
+test('mergeRuntimeRobotsIntoList applies queue deltas during local-priority activity', async () => {
+  const createDataInitFeature = await loadApi(async () => ({ ok: false }));
+  const state = {
+    fixingRobotIds: new Set(),
+    robots: [],
+    runtimeVersion: 0,
+    searchingRobotIds: new Set(),
+    testingRobotIds: new Set(['r-1']),
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(env);
+  runtime.normalizeRobotActivity = (raw = {}) => ({
+    searching: Boolean(raw?.searching),
+    testing: Boolean(raw?.testing),
+    phase: normalizeText(raw?.phase, ''),
+    lastFullTestAt: Number.isFinite(Number(raw?.lastFullTestAt)) ? Number(raw.lastFullTestAt) : 0,
+    lastFullTestSource: normalizeText(raw?.lastFullTestSource, ''),
+    updatedAt: Number.isFinite(Number(raw?.updatedAt)) ? Number(raw.updatedAt) : 0,
+    jobQueueVersion: Number.isFinite(Number(raw?.jobQueueVersion)) ? Number(raw.jobQueueVersion) : 0,
+    activeJob: raw?.activeJob && typeof raw.activeJob === 'object' ? raw.activeJob : null,
+    queuedJobs: Array.isArray(raw?.queuedJobs) ? raw.queuedJobs : [],
+  });
+  const api = createDataInitFeature(runtime, env);
+
+  const result = api.mergeRuntimeRobotsIntoList(
+    [
+      {
+        id: 'r-1',
+        typeId: 'picker',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'ok', source: 'live', checkedAt: 1 } },
+        activity: {
+          searching: true,
+          testing: true,
+          phase: 'testing',
+          lastFullTestAt: 0,
+          lastFullTestSource: '',
+          updatedAt: 1,
+          jobQueueVersion: 0,
+          activeJob: null,
+          queuedJobs: [],
+        },
+      },
+    ],
+    [
+      {
+        id: 'r-1',
+        tests: {},
+        activity: {
+          searching: false,
+          testing: false,
+          phase: null,
+          lastFullTestAt: 0,
+          lastFullTestSource: null,
+          updatedAt: 2,
+          jobQueueVersion: 4,
+          activeJob: {
+            id: 'job-1',
+            kind: 'test',
+            status: 'running',
+            source: 'manual',
+            label: 'Run tests',
+            enqueuedAt: 1,
+            startedAt: 2,
+            updatedAt: 2,
+          },
+          queuedJobs: [],
+        },
+      },
+    ],
+    { fullSnapshot: false, respectLocalPriority: true },
+  );
+
+  assert.equal(result.changedRobotIds.has('r-1'), true);
+  assert.equal(result.merged[0].activity.searching, true);
+  assert.equal(result.merged[0].activity.testing, true);
+  assert.equal(result.merged[0].activity.jobQueueVersion, 4);
+  assert.equal(result.merged[0].activity.activeJob?.id, 'job-1');
+});

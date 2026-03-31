@@ -172,8 +172,8 @@ def test_connect_sets_configured_initial_directory():
     try:
         shell.connect()
         command = str(observed["command"] or "")
-        assert "__CODEX_START_DIR='/home/robot/workspace'" in command
-        assert 'cd -- "$__CODEX_START_DIR"' in command
+        assert "__VIGIL_START_DIR='/home/robot/workspace'" in command
+        assert 'cd -- "$__VIGIL_START_DIR"' in command
     finally:
         shell.close()
 
@@ -232,9 +232,9 @@ def test_connect_expands_tilde_initial_directory_to_home():
     try:
         shell.connect()
         command = str(observed["command"] or "")
-        assert "__CODEX_START_DIR='~'" in command
-        assert "__CODEX_LOGIN_HOME" in command
-        assert "'~') __CODEX_START_DIR=\"$__CODEX_LOGIN_HOME\"" in command
+        assert "__VIGIL_START_DIR='~'" in command
+        assert "__VIGIL_LOGIN_HOME" in command
+        assert "'~') __VIGIL_START_DIR=\"$__VIGIL_LOGIN_HOME\"" in command
     finally:
         shell.close()
 
@@ -322,7 +322,7 @@ def test_run_command_returns_prompt_bound_output():
     assert len(fake_channel.sent) == 1
     assert fake_channel.sent[0].startswith("echo hi\nprintf '\\n%s\\n' '")
     assert "running" in output
-    assert "__CODEX_CMD_DONE__" not in output
+    assert "__VIGIL_CMD_DONE__" not in output
 
 
 def test_run_command_times_out_and_returns_partial_output():
@@ -382,7 +382,7 @@ def test_run_automation_command_wraps_markers_inside_single_shell_block():
 
     result = shell.run_automation_command("echo ok", timeout=1.0)
 
-    assert fake_channel.sent[0].startswith("{\necho ok\n__CODEX_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[0].startswith("{\necho ok\n__VIGIL_AUTOMATION_STATUS=$?\n")
     assert fake_channel.sent[0].endswith("}\n")
     assert result.output == "ok"
     assert result.exit_code == 0
@@ -416,7 +416,7 @@ def test_run_automation_command_supports_multiline_command_wrapper():
 
     result = shell.run_automation_command("printf 'line1\\n'\nprintf 'line2\\n'", timeout=1.0)
 
-    assert "{\nprintf 'line1\\n'\nprintf 'line2\\n'\n__CODEX_AUTOMATION_STATUS=$?\n" in fake_channel.sent[0]
+    assert "{\nprintf 'line1\\n'\nprintf 'line2\\n'\n__VIGIL_AUTOMATION_STATUS=$?\n" in fake_channel.sent[0]
     assert result.output == "line1\nline2"
     assert result.exit_code == 0
 
@@ -473,7 +473,7 @@ def test_run_automation_command_handles_flash_style_transcript():
 
     assert result.exit_code == 0
     assert result.output.endswith("done")
-    assert "__CODEX_AUTO_DONE__" not in result.output
+    assert "__VIGIL_AUTO_DONE__" not in result.output
 
 
 def test_run_command_waits_for_prompt_at_end_not_echoed_prompt():
@@ -510,7 +510,7 @@ def test_run_command_waits_for_prompt_at_end_not_echoed_prompt():
     assert fake_channel.sent[0].startswith("timeout 12s rostopic list\nprintf '\\n%s\\n' '")
     assert sleep_calls["count"] >= 1
     assert "/scan" in output
-    assert "__CODEX_CMD_DONE__" not in output
+    assert "__VIGIL_CMD_DONE__" not in output
 
 
 def test_run_command_ignores_late_prompt_noise_until_completion_marker():
@@ -546,7 +546,7 @@ def test_run_command_ignores_late_prompt_noise_until_completion_marker():
 
     assert sleep_calls["count"] >= 2
     assert "/scan" in output
-    assert "__CODEX_CMD_DONE__" not in output
+    assert "__VIGIL_CMD_DONE__" not in output
 
 
 def test_run_automation_command_returns_exit_code_and_strips_markers():
@@ -844,8 +844,8 @@ def test_run_automation_command_preserves_output_after_scaffold_echo():
                 "timeout 12s rostopic list\n"
                 "/scan\n"
                 "/odom\n"
-                "__CODEX_AUTOMATION_STATUS=$?\n"
-                f"printf '\\n{exit_marker}%s\\n' \"$__CODEX_AUTOMATION_STATUS\"\n"
+                "__VIGIL_AUTOMATION_STATUS=$?\n"
+                f"printf '\\n{exit_marker}%s\\n' \"$__VIGIL_AUTOMATION_STATUS\"\n"
                 f"printf '\\n{done_marker}\\n'\n"
                 "}\n"
                 f"{exit_marker}0\n"
@@ -893,17 +893,17 @@ def test_run_automation_command_preserves_shell_state_across_calls():
     first = shell.run_automation_command("cd /tmp/project", timeout=1.0)
     second = shell.run_automation_command("pwd", timeout=1.0)
 
-    assert fake_channel.sent[0].startswith("{\ncd /tmp/project\n__CODEX_AUTOMATION_STATUS=$?\n")
-    assert fake_channel.sent[1].startswith("{\npwd\n__CODEX_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[0].startswith("{\ncd /tmp/project\n__VIGIL_AUTOMATION_STATUS=$?\n")
+    assert fake_channel.sent[1].startswith("{\npwd\n__VIGIL_AUTOMATION_STATUS=$?\n")
     assert first.exit_code == 0
     assert second.output == "/tmp/project"
     assert second.exit_code == 0
 
 
 def test_strip_prompt_prefix_handles_tilde_subdirectories():
-    raw = "husarion@alexander:~/husarion_ws$ __CODEX_AUTOMATION_STATUS=$?"
+    raw = "husarion@alexander:~/husarion_ws$ __VIGIL_AUTOMATION_STATUS=$?"
 
-    assert InteractiveShell._strip_prompt_prefix(raw) == "__CODEX_AUTOMATION_STATUS=$?"
+    assert InteractiveShell._strip_prompt_prefix(raw) == "__VIGIL_AUTOMATION_STATUS=$?"
 
 
 def test_run_automation_command_rejects_repeated_sudo_prompt():

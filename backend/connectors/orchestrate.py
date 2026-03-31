@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ..terminal_manager.job_scheduler.cancel import JobInterrupted
 from .read import ReadConnector
 from .write import WriteConnector
 
@@ -30,6 +31,7 @@ class OrchestrateConnector:
         dry_run: bool = False,
         emit_event: Callable[[str, str, dict[str, Any] | None], None] | None = None,
         command_cache: dict[str, str] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         execute_steps = definition.get("execute") if isinstance(definition.get("execute"), list) else []
         checks = definition.get("checks") if isinstance(definition.get("checks"), list) else []
@@ -61,6 +63,8 @@ class OrchestrateConnector:
             }
 
         for index, raw_step in enumerate(execute_steps):
+            if callable(should_cancel) and bool(should_cancel()):
+                raise JobInterrupted("Execution interrupted before step execution.")
             if not isinstance(raw_step, dict):
                 continue
             step = dict(raw_step)
@@ -107,6 +111,8 @@ class OrchestrateConnector:
                 raise
 
         for raw_check in checks:
+            if callable(should_cancel) and bool(should_cancel()):
+                raise JobInterrupted("Execution interrupted before check evaluation.")
             if not isinstance(raw_check, dict):
                 continue
             check_id = str(raw_check.get("id") or "").strip()

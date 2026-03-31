@@ -123,6 +123,12 @@ class SessionStoreMixin:
             self._close_handle((page_session_id, robot_id))
 
     def close_all(self) -> None:
+        job_coordinator = getattr(self, "_job_coordinator", None)
+        if job_coordinator is not None:
+            try:
+                job_coordinator.close()
+            except Exception:
+                pass
         self._stop_auto_monitor()
         with self._lock:
             for key in list(self._handles.keys()):

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter
 from fastapi import HTTPException
 
@@ -11,25 +9,11 @@ from ..terminal_manager import TerminalManager
 
 def create_fixes_router(terminal_manager: TerminalManager) -> APIRouter:
     router = APIRouter()
+    manual_runs_moved_detail = "Manual runs moved to /api/robots/{robotId}/jobs"
 
     @router.post("/api/robots/{robot_id}/fixes/{fix_id}/runs")
-    def start_fix_run(robot_id: str, fix_id: str, body: FixRunRequest) -> dict[str, Any]:
-        if not hasattr(terminal_manager, "start_fix_job"):
-            raise HTTPException(status_code=501, detail="Fix jobs are not supported by this backend.")
-        return terminal_manager.start_fix_job(
-            robot_id=robot_id,
-            fix_id=fix_id,
-            page_session_id=body.pageSessionId,
-            params=body.params,
-            queue_timeout_sec=body.queueTimeoutSec,
-            connect_timeout_sec=body.connectTimeoutSec,
-            execute_timeout_sec=body.executeTimeoutSec or body.timeoutSec,
-        )
-
-    @router.get("/api/robots/{robot_id}/fixes/runs/{run_id}")
-    def get_fix_run(robot_id: str, run_id: str) -> dict[str, Any]:
-        if not hasattr(terminal_manager, "get_fix_job"):
-            raise HTTPException(status_code=501, detail="Fix jobs are not supported by this backend.")
-        return terminal_manager.get_fix_job(robot_id=robot_id, run_id=run_id)
+    def start_fix_run(robot_id: str, fix_id: str, body: FixRunRequest) -> dict[str, str]:
+        _ = terminal_manager, robot_id, fix_id, body
+        raise HTTPException(status_code=410, detail=manual_runs_moved_detail)
 
     return router

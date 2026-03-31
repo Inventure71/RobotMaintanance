@@ -94,7 +94,7 @@ Contract:
 - fixes do not declare post-test ids; after a fix finishes the robot reruns its assigned test suite
 
 Behavior:
-- fixes run via async fix-job endpoints.
+- fixes run only through per-robot user job queue (`POST /api/robots/{robotId}/jobs` with `kind=fix`).
 - post-tests run once after execute steps complete.
 - if `execute[].timeoutSec` is omitted, runtime uses the default 20-second command timeout.
 - the UI labels this as `Expected timeout (sec)` but still saves it as `timeoutSec`.
@@ -127,7 +127,8 @@ Validation:
 ## Runtime behavior
 
 - Backend loads directories at startup and validates IDs/tokens.
-- `POST /api/robots/{robotId}/tests/run` returns flat `results[]` by check id.
-- `POST /api/robots/{robotId}/fixes/{fixId}/runs` starts async fix jobs.
-- `GET /api/robots/{robotId}/fixes/runs/{runId}` polls job state/events/results.
+- `POST /api/robots/{robotId}/jobs` enqueues manual test/fix work and returns queue snapshot.
+- `GET /api/robots/{robotId}/jobs` returns `{ activeJob, queuedJobs, jobQueueVersion }`.
+- `POST /api/robots/{robotId}/jobs/active/stop` marks the active user job as interrupting.
+- Legacy manual routes (`/tests/run`, `/fixes/{fixId}/runs`) return `410 Gone` with `Manual runs moved to /api/robots/{robotId}/jobs`.
 - On `offline -> online`, backend runs checks flagged `runAtConnection=true`; retries every 2.5s for up to 60s, and cancels on manual activity or disconnect.

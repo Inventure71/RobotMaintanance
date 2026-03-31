@@ -92,9 +92,58 @@ function loadPersistedActiveOwnerProfile() {
       finding: 'Finding',
       fixing: 'Fixing',
     };
+    const createJobQueueActivityHelpers = () => {
+      const normalizeJobSummary = (job) => {
+        if (!job || typeof job !== 'object') return null;
+        const id = normalizeText(job.id, '');
+        if (!id) return null;
+        const status = normalizeText(job.status, '').toLowerCase();
+        const kind = normalizeText(job.kind, '').toLowerCase();
+        const enqueuedAt = Number(job.enqueuedAt);
+        const startedAt = Number(job.startedAt);
+        const updatedAt = Number(job.updatedAt);
+        return {
+          id,
+          kind: kind === 'fix' ? 'fix' : 'test',
+          status,
+          source: normalizeText(job.source, 'manual') || 'manual',
+          label: normalizeText(job.label, id),
+          enqueuedAt: Number.isFinite(enqueuedAt) && enqueuedAt > 0 ? enqueuedAt : 0,
+          startedAt: Number.isFinite(startedAt) && startedAt > 0 ? startedAt : 0,
+          updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
+        };
+      };
+
+      const normalizeQueuedJobs = (jobs) =>
+        Array.isArray(jobs)
+          ? jobs
+              .map((item) => normalizeJobSummary(item))
+              .filter((item) => item && normalizeText(item.status, '') === 'queued')
+          : [];
+
+      const normalizeJobQueueSnapshot = (raw) => {
+        const payload = raw && typeof raw === 'object' ? raw : {};
+        const version = Number(payload.jobQueueVersion);
+        const activeJob = normalizeJobSummary(payload.activeJob);
+        return {
+          activeJob:
+            activeJob && (activeJob.status === 'running' || activeJob.status === 'interrupting')
+              ? activeJob
+              : null,
+          queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+          jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
+        };
+      };
+
+      return {
+        normalizeJobSummary,
+        normalizeQueuedJobs,
+        normalizeJobQueueSnapshot,
+      };
+    };
+    const JOB_QUEUE_ACTIVITY = createJobQueueActivityHelpers();
     const FIX_MODE_CONTEXT_DASHBOARD = 'dashboard';
     const FIX_MODE_CONTEXT_DETAIL = 'detail';
-    const FIX_JOB_POLL_INTERVAL_MS = 1000;
     const MODAL_SCROLL_LOCK_CLASS = 'modal-scroll-lock';
     const MANAGE_VIEW_HASH = 'manage-robots';
     const MANAGE_TABS = ['robots', 'definitions', 'recorder'];
@@ -506,7 +555,7 @@ const runtimeEnv = {
   DEFAULT_ROBOT_MODEL_URL,
   DEFAULT_TEST_DEFINITIONS,
   DETAIL_TERMINAL_PRESET_IDS,
-  FIX_JOB_POLL_INTERVAL_MS,
+  JOB_QUEUE_ACTIVITY,
   FIX_MODE_CONTEXT_DASHBOARD,
   FIX_MODE_CONTEXT_DETAIL,
   FLEET_PARALLELISM_DEFAULT,

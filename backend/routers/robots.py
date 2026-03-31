@@ -442,6 +442,25 @@ def create_robots_router(
 
     def _compact_runtime_activity_payload(raw_activity: dict[str, Any] | None) -> dict[str, Any]:
         activity = raw_activity if isinstance(raw_activity, dict) else {}
+        active_job = activity.get("activeJob") if isinstance(activity.get("activeJob"), dict) else None
+        queued_jobs = activity.get("queuedJobs") if isinstance(activity.get("queuedJobs"), list) else []
+
+        def _compact_job(raw_job: dict[str, Any] | None) -> dict[str, Any] | None:
+            payload = raw_job if isinstance(raw_job, dict) else {}
+            job_id = normalize_text(payload.get("id"), "")
+            if not job_id:
+                return None
+            return {
+                "id": job_id,
+                "kind": normalize_text(payload.get("kind"), ""),
+                "status": normalize_text(payload.get("status"), ""),
+                "source": normalize_text(payload.get("source"), "manual"),
+                "label": normalize_text(payload.get("label"), job_id),
+                "enqueuedAt": int(payload.get("enqueuedAt") or 0),
+                "startedAt": int(payload.get("startedAt") or 0),
+                "updatedAt": int(payload.get("updatedAt") or 0),
+            }
+
         return {
             "searching": bool(activity.get("searching")),
             "testing": bool(activity.get("testing")),
@@ -449,6 +468,9 @@ def create_robots_router(
             "lastFullTestAt": int(activity.get("lastFullTestAt") or 0),
             "lastFullTestSource": normalize_text(activity.get("lastFullTestSource"), "") or None,
             "updatedAt": int(activity.get("updatedAt") or 0),
+            "jobQueueVersion": int(activity.get("jobQueueVersion") or 0),
+            "activeJob": _compact_job(active_job),
+            "queuedJobs": [item for item in (_compact_job(job) for job in queued_jobs) if item is not None],
         }
 
     def _robot_override_model_file_name(robot_id: str, suffix: str) -> str:

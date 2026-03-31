@@ -10,7 +10,6 @@ export function createFleetFeature(context, maybeEnv) {
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
     DETAIL_TERMINAL_PRESET_IDS,
-    FIX_JOB_POLL_INTERVAL_MS,
     FIX_MODE_CONTEXT_DASHBOARD,
     FIX_MODE_CONTEXT_DETAIL,
     FLEET_PARALLELISM_DEFAULT,
@@ -347,6 +346,9 @@ export function createFleetFeature(context, maybeEnv) {
   const runOnlineCheckForAllRobots = (...args) => runtime.runOnlineCheckForAllRobots(...args);
   const runRecorderCommandAndCapture = (...args) => runtime.runRecorderCommandAndCapture(...args);
   const runRobotTestsForRobot = (...args) => runtime.runRobotTestsForRobot(...args);
+  const stopCurrentJob = (...args) => runtime.stopCurrentJob?.(...args);
+  const renderRobotJobQueueStrip = (...args) => runtime.renderRobotJobQueueStrip?.(...args) || '';
+  const renderRobotStopCurrentJobButton = (...args) => runtime.renderRobotStopCurrentJobButton?.(...args) || '';
   const runtimeActivityHasSignal = (...args) => runtime.runtimeActivityHasSignal(...args);
   const saveManageFixDefinition = (...args) => runtime.saveManageFixDefinition(...args);
   const saveManageTestDefinition = (...args) => runtime.saveManageTestDefinition(...args);
@@ -2211,9 +2213,31 @@ export function createFleetFeature(context, maybeEnv) {
               reason: descriptor.batteryState.reason,
               size: 'default',
             })}</span>
+            <span data-role="card-stop-current-job">${renderRobotStopCurrentJobButton(robot?.activity, descriptor.normalizedRobotId)}</span>
           </div>`.trim().replace(/>\s+</g, '><');
+        const queueStripMarkup = renderRobotJobQueueStrip(robot?.activity, { maxQueued: 2 });
+        if (queueStripMarkup) {
+          const queueNode = document.createElement('div');
+          queueNode.setAttribute('data-role', 'card-job-queue-strip');
+          queueNode.innerHTML = queueStripMarkup;
+          card.appendChild(queueNode);
+        } else {
+          const emptyQueueNode = document.createElement('div');
+          emptyQueueNode.setAttribute('data-role', 'card-job-queue-strip');
+          card.appendChild(emptyQueueNode);
+        }
   
         card.addEventListener('click', (event) => {
+          const stopButton = event.target.closest('[data-action="stop-current-job"]');
+          if (stopButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            stopCurrentJob(stopButton.getAttribute('data-robot-id') || descriptor.normalizedRobotId).catch((error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              appendTerminalLine(`Failed to stop job for ${descriptor.normalizedRobotId}: ${message}`, 'err');
+            });
+            return;
+          }
           const selectButton = event.target.closest('[data-action="select-robot"]');
           if (selectButton) {
             event.preventDefault();

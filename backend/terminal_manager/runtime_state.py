@@ -9,6 +9,55 @@ _ACTIVITY_UNSET = object()
 
 
 class RuntimeStateMixin:
+    def _normalize_runtime_job_summary(self, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(payload, dict):
+            return None
+        job_id = normalize_text(payload.get("id"), "")
+        if not job_id:
+            return None
+        kind = normalize_text(payload.get("kind"), "").lower()
+        status = normalize_text(payload.get("status"), "").lower()
+        if kind not in {"test", "fix"}:
+            return None
+        if status not in {"queued", "running", "interrupting", "succeeded", "failed", "interrupted"}:
+            return None
+
+        try:
+            enqueued_at = float(payload.get("enqueuedAt") or 0.0)
+        except Exception:
+            enqueued_at = 0.0
+        try:
+            started_at = float(payload.get("startedAt") or 0.0)
+        except Exception:
+            started_at = 0.0
+        try:
+            updated_at = float(payload.get("updatedAt") or 0.0)
+        except Exception:
+            updated_at = 0.0
+
+        return {
+            "id": job_id,
+            "kind": kind,
+            "status": status,
+            "source": normalize_text(payload.get("source"), "manual") or "manual",
+            "label": normalize_text(payload.get("label"), job_id) or job_id,
+            "enqueuedAt": enqueued_at if enqueued_at > 0 else 0.0,
+            "startedAt": started_at if started_at > 0 else 0.0,
+            "updatedAt": updated_at if updated_at > 0 else 0.0,
+        }
+
+    def _normalize_runtime_queued_jobs(self, payload: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        raw = payload if isinstance(payload, list) else []
+        normalized: list[dict[str, Any]] = []
+        for item in raw:
+            normalized_item = self._normalize_runtime_job_summary(item)
+            if not normalized_item:
+                continue
+            if normalize_text(normalized_item.get("status"), "") != "queued":
+                continue
+            normalized.append(normalized_item)
+        return normalized
+
     def _mark_runtime_robot_dirty_locked(self, robot_id: str) -> int:
         normalized_robot_id = normalize_text(robot_id, "")
         if not normalized_robot_id:
@@ -105,6 +154,13 @@ class RuntimeStateMixin:
             last_full_test_at = float(existing.get("lastFullTestAt") or 0.0)
         except Exception:
             last_full_test_at = 0.0
+        try:
+            job_queue_version = int(existing.get("jobQueueVersion") or 0)
+        except Exception:
+            job_queue_version = 0
+        active_job = self._normalize_runtime_job_summary(existing.get("activeJob"))
+        if active_job and normalize_text(active_job.get("status"), "") not in {"running", "interrupting"}:
+            active_job = None
         return {
             "searching": bool(existing.get("searching", False)),
             "testing": bool(existing.get("testing", False)),
@@ -112,6 +168,9 @@ class RuntimeStateMixin:
             "lastFullTestAt": last_full_test_at if last_full_test_at > 0 else 0.0,
             "lastFullTestSource": normalize_text(existing.get("lastFullTestSource"), "") or None,
             "updatedAt": float(existing.get("updatedAt") or 0.0),
+            "jobQueueVersion": max(0, job_queue_version),
+            "activeJob": active_job,
+            "queuedJobs": self._normalize_runtime_queued_jobs(existing.get("queuedJobs")),
         }
 
     def _set_runtime_activity(
@@ -131,6 +190,9 @@ class RuntimeStateMixin:
             current["searching"] = bool(current.get("searching", False))
             current["testing"] = bool(current.get("testing", False))
             current["phase"] = normalize_text(current.get("phase"), "") or None
+            current["jobQueueVersion"] = max(0, int(current.get("jobQueueVersion") or 0))
+            current["activeJob"] = self._normalize_runtime_job_summary(current.get("activeJob"))
+            current["queuedJobs"] = self._normalize_runtime_queued_jobs(current.get("queuedJobs"))
             if searching is not None:
                 current["searching"] = bool(searching)
             if testing is not None:
@@ -166,8 +228,44 @@ class RuntimeStateMixin:
             current["searching"] = bool(current.get("searching", False))
             current["testing"] = bool(current.get("testing", False))
             current["phase"] = normalize_text(current.get("phase"), "") or None
+            current["jobQueueVersion"] = max(0, int(current.get("jobQueueVersion") or 0))
+            current["activeJob"] = self._normalize_runtime_job_summary(current.get("activeJob"))
+            current["queuedJobs"] = self._normalize_runtime_queued_jobs(current.get("queuedJobs"))
             current["lastFullTestAt"] = resolved_checked_at
             current["lastFullTestSource"] = normalize_text(source, "") or None
+            current["updatedAt"] = now
+            if self._runtime_activity.get(normalized_robot_id) != current:
+                self._runtime_activity[normalized_robot_id] = current
+                self._mark_runtime_robot_dirty_locked(normalized_robot_id)
+
+    def _set_runtime_job_queue_snapshot(
+        self,
+        robot_id: str,
+        *,
+        active_job: dict[str, Any] | None,
+        queued_jobs: list[dict[str, Any]] | None,
+        queue_version: int,
+    ) -> None:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return
+        now = time.time()
+        normalized_active_job = self._normalize_runtime_job_summary(active_job)
+        if normalized_active_job and normalize_text(normalized_active_job.get("status"), "") not in {
+            "running",
+            "interrupting",
+        }:
+            normalized_active_job = None
+        normalized_queued_jobs = self._normalize_runtime_queued_jobs(queued_jobs)
+        safe_queue_version = max(0, int(queue_version or 0))
+        with self._lock:
+            current = dict(self._runtime_activity.get(normalized_robot_id, {}))
+            current["searching"] = bool(current.get("searching", False))
+            current["testing"] = bool(current.get("testing", False))
+            current["phase"] = normalize_text(current.get("phase"), "") or None
+            current["activeJob"] = normalized_active_job
+            current["queuedJobs"] = normalized_queued_jobs
+            current["jobQueueVersion"] = safe_queue_version
             current["updatedAt"] = now
             if self._runtime_activity.get(normalized_robot_id) != current:
                 self._runtime_activity[normalized_robot_id] = current

@@ -8,7 +8,6 @@ export function createDataInitFeature(context, maybeEnv) {
     DEFAULT_ROBOT_MODEL_URL,
     DEFAULT_TEST_DEFINITIONS,
     DETAIL_TERMINAL_PRESET_IDS,
-    FIX_JOB_POLL_INTERVAL_MS,
     FIX_MODE_CONTEXT_DASHBOARD,
     FIX_MODE_CONTEXT_DETAIL,
     FLEET_PARALLELISM_DEFAULT,
@@ -530,7 +529,10 @@ export function createDataInitFeature(context, maybeEnv) {
             normalizeText(normalized.phase, '') ||
             Number(normalized.lastFullTestAt) > 0 ||
             normalizeText(normalized.lastFullTestSource, '') ||
-            Number(normalized.updatedAt) > 0,
+            Number(normalized.updatedAt) > 0 ||
+            Number(normalized.jobQueueVersion) > 0 ||
+            Boolean(normalized.activeJob) ||
+            (Array.isArray(normalized.queuedJobs) && normalized.queuedJobs.length > 0),
         );
       }
 
@@ -637,11 +639,32 @@ export function createDataInitFeature(context, maybeEnv) {
                 : fullSnapshot
                   ? null
                   : previousBattery;
-          const nextActivity = hasLocalPriorityActivity
-            ? previousActivity
-            : shouldClearRuntime
-              ? normalizeRobotActivity({})
+          const nextActivity = shouldClearRuntime
+            ? normalizeRobotActivity({})
+            : hasLocalPriorityActivity
+              ? {
+                  ...runtimeEntry.activity,
+                  searching: previousActivity.searching,
+                  testing: previousActivity.testing,
+                  phase: previousActivity.phase,
+                }
               : runtimeEntry.activity;
+
+          const previousActiveJob = previousActivity?.activeJob || null;
+          const nextActiveJob = nextActivity?.activeJob || null;
+          const previousQueuedJobs = Array.isArray(previousActivity?.queuedJobs) ? previousActivity.queuedJobs : [];
+          const nextQueuedJobs = Array.isArray(nextActivity?.queuedJobs) ? nextActivity.queuedJobs : [];
+          const jobSummaryChanged = (prior, nextValue) =>
+            normalizeText(prior?.id, '') !== normalizeText(nextValue?.id, '')
+            || normalizeText(prior?.kind, '') !== normalizeText(nextValue?.kind, '')
+            || normalizeText(prior?.status, '') !== normalizeText(nextValue?.status, '')
+            || normalizeText(prior?.source, '') !== normalizeText(nextValue?.source, '')
+            || normalizeText(prior?.label, '') !== normalizeText(nextValue?.label, '')
+            || Number(prior?.enqueuedAt || 0) !== Number(nextValue?.enqueuedAt || 0)
+            || Number(prior?.startedAt || 0) !== Number(nextValue?.startedAt || 0)
+            || Number(prior?.updatedAt || 0) !== Number(nextValue?.updatedAt || 0);
+          const queuedJobsChanged = previousQueuedJobs.length !== nextQueuedJobs.length
+            || nextQueuedJobs.some((job, index) => jobSummaryChanged(previousQueuedJobs[index], job));
   
           const activityChanged =
             previousActivity.searching !== nextActivity.searching ||
@@ -649,7 +672,10 @@ export function createDataInitFeature(context, maybeEnv) {
             normalizeText(previousActivity.phase, '') !== normalizeText(nextActivity.phase, '') ||
             Number(previousActivity.lastFullTestAt) !== Number(nextActivity.lastFullTestAt) ||
             normalizeText(previousActivity.lastFullTestSource, '') !== normalizeText(nextActivity.lastFullTestSource, '') ||
-            Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt);
+            Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt) ||
+            Number(previousActivity.jobQueueVersion || 0) !== Number(nextActivity.jobQueueVersion || 0) ||
+            jobSummaryChanged(previousActiveJob, nextActiveJob) ||
+            queuedJobsChanged;
           const testsChanged = haveRuntimeTestsChanged(currentRobot?.tests || {}, nextTests);
           const batteryChanged =
             normalizeStatus(previousBattery?.status) !== normalizeStatus(nextBattery?.status) ||

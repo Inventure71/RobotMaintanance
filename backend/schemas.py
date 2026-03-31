@@ -73,6 +73,41 @@ class FixRunRequest(BaseModel):
     executeTimeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
 
 
+class JobEnqueueRequest(BaseModel):
+    kind: Literal["test", "fix"]
+    source: str | None = None
+    label: str | None = None
+    pageSessionId: str | None = None
+    testIds: list[str] | None = None
+    fixId: str | None = None
+    params: dict[str, Any] | None = None
+    timeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
+    queueTimeoutSec: float | None = Field(default=None, ge=0.0, le=3600.0)
+    connectTimeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
+    executeTimeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
+
+
+class JobSummaryResponse(BaseModel):
+    id: str
+    kind: Literal["test", "fix"]
+    status: Literal["queued", "running", "interrupting", "succeeded", "failed", "interrupted"]
+    source: str
+    label: str
+    enqueuedAt: float
+    startedAt: float
+    updatedAt: float
+
+
+class JobSnapshotResponse(BaseModel):
+    activeJob: JobSummaryResponse | None = None
+    queuedJobs: list[JobSummaryResponse] = Field(default_factory=list)
+    jobQueueVersion: int = 0
+
+
+class JobEnqueueResponse(JobSnapshotResponse):
+    jobId: str
+
+
 class OnlineBatchRequest(BaseModel):
     robotIds: list[str] = Field(min_length=1)
     pageSessionId: str | None = None
