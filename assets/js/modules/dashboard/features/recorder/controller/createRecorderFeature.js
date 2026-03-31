@@ -1,5 +1,6 @@
 import { renderRecorderLlmPromptTemplate, renderRecorderLlmPromptText } from '../../../templates/recorderLlmPromptTemplate.js';
 import { buildRecorderLlmPromptPayload as buildRecorderLlmPromptPayloadValue, parseRecorderLlmImportPayload as parseRecorderLlmImportPayloadValue, stripRecorderLlmJsonWrapperNoise as stripRecorderLlmJsonWrapperNoiseValue, validateRecorderImportedDefinition as validateRecorderImportedDefinitionValue } from '../domain/recorderLlm.js';
+import { createRecorderRuntimeBridge } from '../domain/recorderRuntimeBridge.js';
 
 export function createRecorderFeature(context, maybeEnv) {
   const runtime = maybeEnv ? context : context?.bridge || context?.runtime || context?.services || {};
@@ -300,214 +301,216 @@ export function createRecorderFeature(context, maybeEnv) {
     ? globalThis.clearTimeout.bind(globalThis)
     : null;
 
-  const addRobotIdsToSelection = (...args) => runtime.addRobotIdsToSelection(...args);
-  const appendTerminalLine = (...args) => runtime.appendTerminalLine(...args);
-  const appendTerminalPayload = (...args) => runtime.appendTerminalPayload(...args);
-  const applyDashboardMetaFromVisible = (...args) => runtime.applyDashboardMetaFromVisible(...args);
-  const applyFilters = (...args) => runtime.applyFilters(...args);
-  const applyMonitorConfig = (...args) => runtime.applyMonitorConfig(...args);
-  const applyMonitorConfigFromPayload = (...args) => runtime.applyMonitorConfigFromPayload(...args);
-  const applyRuntimeRobotPatches = (...args) => runtime.applyRuntimeRobotPatches(...args);
-  const areAllRobotIdsSelected = (...args) => runtime.areAllRobotIdsSelected(...args);
-  const batteryReasonText = (...args) => runtime.batteryReasonText(...args);
-  const buildConnectionCornerIconMarkup = (...args) => runtime.buildConnectionCornerIconMarkup(...args);
-  const buildFixButtonLabel = (...args) => runtime.buildFixButtonLabel(...args);
-  const buildGlobalTestDefinitions = (...args) => runtime.buildGlobalTestDefinitions(...args);
-  const buildLastFullTestPillLabel = (...args) => runtime.buildLastFullTestPillLabel(...args);
-  const buildManageHash = (...args) => runtime.buildManageHash(...args);
-  const buildRobotModelContainer = (...args) => runtime.buildRobotModelContainer(...args);
-  const buildRobotModelMarkup = (...args) => runtime.buildRobotModelMarkup(...args);
-  const buildScanOverlayMarkup = (...args) => runtime.buildScanOverlayMarkup(...args);
-  const buildTestPreviewText = (...args) => runtime.buildTestPreviewText(...args);
-  const buildTestPreviewTextForResult = (...args) => runtime.buildTestPreviewTextForResult(...args);
-  const clampFleetParallelism = (...args) => runtime.clampFleetParallelism(...args);
-  const clampMonitorBatteryInterval = (...args) => runtime.clampMonitorBatteryInterval(...args);
-  const clampMonitorOnlineInterval = (...args) => runtime.clampMonitorOnlineInterval(...args);
-  const clampMonitorTopicsInterval = (...args) => runtime.clampMonitorTopicsInterval(...args);
-  const clampOnlineCountdownMs = (...args) => runtime.clampOnlineCountdownMs(...args);
-  const closeBugReportModal = (...args) => runtime.closeBugReportModal(...args);
-  const closeRecorderTerminalSession = (...args) => runtime.closeRecorderTerminalSession(...args);
-  const closeTerminalSession = (...args) => runtime.closeTerminalSession(...args);
-  const closeTestDebugModal = (...args) => runtime.closeTestDebugModal(...args);
-  const createRobotFromForm = (...args) => runtime.createRobotFromForm(...args);
-  const cycleOnlineSortMode = (...args) => runtime.cycleOnlineSortMode(...args);
-  const estimateTestCountdownMsFromBody = (...args) => runtime.estimateTestCountdownMsFromBody(...args);
-  const formatConsoleLine = (...args) => runtime.formatConsoleLine(...args);
-  const formatDurationMs = (...args) => runtime.formatDurationMs(...args);
-  const formatEpochSeconds = (...args) => runtime.formatEpochSeconds(...args);
-  const formatLastFullTestTimestamp = (...args) => runtime.formatLastFullTestTimestamp(...args);
-  const formatRawOutput = (...args) => runtime.formatRawOutput(...args);
-  const formatTestValue = (...args) => runtime.formatTestValue(...args);
-  const getAutoFixesForType = (...args) => runtime.getAutoFixesForType(...args);
-  const getConfiguredDefaultTestIds = (...args) => runtime.getConfiguredDefaultTestIds(...args);
-  const getCountdownLabel = (...args) => runtime.getCountdownLabel(...args);
-  const getCountdownNodes = (...args) => runtime.getCountdownNodes(...args);
-  const getDashboardFixCandidates = (...args) => runtime.getDashboardFixCandidates(...args);
-  const getDefinitionLabel = (...args) => runtime.getDefinitionLabel(...args);
-  const getDetailFixCandidates = (...args) => runtime.getDetailFixCandidates(...args);
-  const getDetailTerminalPresets = (...args) => runtime.getDetailTerminalPresets(...args);
-  const getFallbackTestIconText = (...args) => runtime.getFallbackTestIconText(...args);
-  const getFixModeElements = (...args) => runtime.getFixModeElements(...args);
-  const getFleetParallelism = (...args) => runtime.getFleetParallelism(...args);
-  const getMonitorBatteryIntervalMs = (...args) => runtime.getMonitorBatteryIntervalMs(...args);
-  const getMonitorOnlineIntervalMs = (...args) => runtime.getMonitorOnlineIntervalMs(...args);
-  const getMonitorTopicsIntervalMs = (...args) => runtime.getMonitorTopicsIntervalMs(...args);
-  const getOnlineCheckCountdownMs = (...args) => runtime.getOnlineCheckCountdownMs(...args);
-  const getPersistedManageTab = (...args) => runtime.getPersistedManageTab(...args);
-  const getReachableRobotIds = (...args) => runtime.getReachableRobotIds(...args);
-  const getRobotById = (...args) => runtime.getRobotById(...args);
-  const getRobotDefinitionsForType = (...args) => runtime.getRobotDefinitionsForType(...args);
-  const getRobotIdsForRun = (...args) => runtime.getRobotIdsForRun(...args);
-  const getRobotTypeConfig = (...args) => runtime.getRobotTypeConfig(...args);
-  const getRunSelectedButtonIdleLabel = (...args) => runtime.getRunSelectedButtonIdleLabel(...args);
-  const getSelectedRobotIds = (...args) => runtime.getSelectedRobotIds(...args);
-  const getStatusChipTone = (...args) => runtime.getStatusChipTone(...args);
-  const getTestIconPresentation = (...args) => runtime.getTestIconPresentation(...args);
-  const getTestingCountdownText = (...args) => runtime.getTestingCountdownText(...args);
-  const getTimestamp = (...args) => runtime.getTimestamp(...args);
-  const getVisibleOfflineRobotIds = (...args) => runtime.getVisibleOfflineRobotIds(...args);
-  const getVisibleOnlineRobotIds = (...args) => runtime.getVisibleOnlineRobotIds(...args);
-  const haveRuntimeTestsChanged = (...args) => runtime.haveRuntimeTestsChanged(...args);
-  const hideRecorderReadPopover = (...args) => runtime.hideRecorderReadPopover(...args);
-  const initAddRobotPasswordToggle = (...args) => runtime.initAddRobotPasswordToggle(...args);
-  const initDashboardController = (...args) => runtime.initDashboardController(...args);
-  const initFleetParallelism = (...args) => runtime.initFleetParallelism(...args);
-  const initMonitorConfigControls = (...args) => runtime.initMonitorConfigControls(...args);
-  const initRobotTerminal = (...args) => runtime.initRobotTerminal(...args);
-  const initThemeControls = (...args) => runtime.initThemeControls(...args);
-  const invalidateCountdownNodeCache = (...args) => runtime.invalidateCountdownNodeCache(...args);
-  const isManageViewActive = (...args) => runtime.isManageViewActive(...args);
-  const isRobotAutoSearching = (...args) => runtime.isRobotAutoSearching(...args);
-  const isRobotBusyForOnlineRefresh = (...args) => runtime.isRobotBusyForOnlineRefresh(...args);
-  const isRobotFixing = (...args) => runtime.isRobotFixing(...args);
-  const isRobotSearching = (...args) => runtime.isRobotSearching(...args);
-  const isRobotSelected = (...args) => runtime.isRobotSelected(...args);
-  const isRobotTesting = (...args) => runtime.isRobotTesting(...args);
-  const isTopicsMonitorMode = (...args) => runtime.isTopicsMonitorMode(...args);
-  const issueSummary = (...args) => runtime.issueSummary(...args);
-  const loadFleetRuntimeDelta = (...args) => runtime.loadFleetRuntimeDelta(...args);
-  const loadFleetStaticState = (...args) => runtime.loadFleetStaticState(...args);
-  const loadMonitorConfig = (...args) => runtime.loadMonitorConfig(...args);
-  const loadRobotConfig = (...args) => runtime.loadRobotConfig(...args);
-  const loadRobotTypeConfig = (...args) => runtime.loadRobotTypeConfig(...args);
-  const loadRobotsFromBackend = (...args) => runtime.loadRobotsFromBackend(...args);
-  const mapRobots = (...args) => runtime.mapRobots(...args);
-  const mergeRuntimeRobotsIntoList = (...args) => runtime.mergeRuntimeRobotsIntoList(...args);
-  const nonBatteryTestEntries = (...args) => runtime.nonBatteryTestEntries(...args);
-  const normalizeAutoFixDefinition = (...args) => runtime.normalizeAutoFixDefinition(...args);
-  const normalizeBatteryPercentForSort = (...args) => runtime.normalizeBatteryPercentForSort(...args);
-  const normalizeBatteryReason = (...args) => runtime.normalizeBatteryReason(...args);
-  const normalizeCheckedAtMs = (...args) => runtime.normalizeCheckedAtMs(...args);
-  const normalizeCountdownMs = (...args) => runtime.normalizeCountdownMs(...args);
-  const normalizeManageTab = (...args) => runtime.normalizeManageTab(...args);
-  const normalizePossibleResult = (...args) => runtime.normalizePossibleResult(...args);
-  const normalizeRobotActivity = (...args) => runtime.normalizeRobotActivity(...args);
-  const normalizeRobotData = (...args) => runtime.normalizeRobotData(...args);
-  const normalizeRobotTests = (...args) => runtime.normalizeRobotTests(...args);
-  const normalizeRobotTypeConfig = (...args) => runtime.normalizeRobotTypeConfig(...args);
-  const normalizeRuntimeRobotEntry = (...args) => runtime.normalizeRuntimeRobotEntry(...args);
-  const normalizeRuntimeTestUpdate = (...args) => runtime.normalizeRuntimeTestUpdate(...args);
-  const normalizeStepDebug = (...args) => runtime.normalizeStepDebug(...args);
-  const normalizeTestDebugCollection = (...args) => runtime.normalizeTestDebugCollection(...args);
-  const normalizeTestDebugResult = (...args) => runtime.normalizeTestDebugResult(...args);
-  const normalizeTestDefinition = (...args) => runtime.normalizeTestDefinition(...args);
-  const onlineRobotComparator = (...args) => runtime.onlineRobotComparator(...args);
-  const openBugReportModal = (...args) => runtime.openBugReportModal(...args);
-  const openDetail = (...args) => runtime.openDetail(...args);
-  const openTestDebugModal = (...args) => runtime.openTestDebugModal(...args);
-  const parseManageRoute = (...args) => runtime.parseManageRoute(...args);
-  const patchDetailRuntimeContent = (...args) => runtime.patchDetailRuntimeContent(...args);
-  const persistManageTab = (...args) => runtime.persistManageTab(...args);
-  const populateAddRobotTypeOptions = (...args) => runtime.populateAddRobotTypeOptions(...args);
-  const populateFilters = (...args) => runtime.populateFilters(...args);
-  const queryCardByRobotId = (...args) => runtime.queryCardByRobotId(...args);
-  const readRobotField = (...args) => runtime.readRobotField(...args);
-  const rebuildRobotIndex = (...args) => runtime.rebuildRobotIndex(...args);
-  const refreshRobotsFromBackendSnapshot = (...args) => runtime.refreshRobotsFromBackendSnapshot(...args);
-  const refreshRuntimeStateFromBackend = (...args) => runtime.refreshRuntimeStateFromBackend(...args);
-  const refreshTestingCountdowns = (...args) => runtime.refreshTestingCountdowns(...args);
-  const removeRobotIdsFromSelection = (...args) => runtime.removeRobotIdsFromSelection(...args);
-  const renderCard = (...args) => runtime.renderCard(...args);
-  const renderDashboard = (...args) => runtime.renderDashboard(...args);
-  const renderDetail = (...args) => runtime.renderDetail(...args);
-  const renderFixModeActionsForContext = (...args) => runtime.renderFixModeActionsForContext(...args);
-  const resolveManageTab = (...args) => runtime.resolveManageTab(...args);
-  const resolveRobotModelUrl = (...args) => runtime.resolveRobotModelUrl(...args);
-  const robotId = (...args) => runtime.robotId(...args);
-  const robotModelMarkup = (...args) => runtime.robotModelMarkup(...args);
-  const routeFromHash = (...args) => runtime.routeFromHash(...args);
-  const runAutoFixCandidate = (...args) => runtime.runAutoFixCandidate(...args);
-  const runAutoFixForRobot = (...args) => runtime.runAutoFixForRobot(...args);
-  const runFallbackChecks = (...args) => runtime.runFallbackChecks(...args);
-  const runFallbackCommandSimulation = (...args) => runtime.runFallbackCommandSimulation(...args);
-  const runManualTests = (...args) => runtime.runManualTests(...args);
-  const runOneRobotOnlineCheck = (...args) => runtime.runOneRobotOnlineCheck(...args);
-  const runOnlineCheckForAllRobots = (...args) => runtime.runOnlineCheckForAllRobots(...args);
-  const runRobotTestsForRobot = (...args) => runtime.runRobotTestsForRobot(...args);
-  const runtimeActivityHasSignal = (...args) => runtime.runtimeActivityHasSignal(...args);
-  const scheduleMonitorParallelismSync = (...args) => runtime.scheduleMonitorParallelismSync(...args);
-  const selectAllOfflineRobots = (...args) => runtime.selectAllOfflineRobots(...args);
-  const selectAllOnlineRobots = (...args) => runtime.selectAllOnlineRobots(...args);
-  const selectAllRobots = (...args) => runtime.selectAllRobots(...args);
-  const selectRobotIds = (...args) => runtime.selectRobotIds(...args);
-  const setAddRobotMessage = (...args) => runtime.setAddRobotMessage(...args);
-  const setAddRobotPasswordVisibility = (...args) => runtime.setAddRobotPasswordVisibility(...args);
-  const setBugReportStatus = (...args) => runtime.setBugReportStatus(...args);
-  const setFixModeStatus = (...args) => runtime.setFixModeStatus(...args);
-  const setFleetOnlineButtonIdleLabel = (...args) => runtime.setFleetOnlineButtonIdleLabel(...args);
-  const setFleetOnlineButtonState = (...args) => runtime.setFleetOnlineButtonState(...args);
-  const setFleetParallelism = (...args) => runtime.setFleetParallelism(...args);
-  const setLocationHash = (...args) => runtime.setLocationHash(...args);
-  const setModelContainerFaultClasses = (...args) => runtime.setModelContainerFaultClasses(...args);
-  const setMonitorConfigStatus = (...args) => runtime.setMonitorConfigStatus(...args);
-  const setRecorderTerminalActive = (...args) => runtime.setRecorderTerminalActive(...args);
-  const setRobotFixing = (...args) => runtime.setRobotFixing(...args);
-  const setRobotSearching = (...args) => runtime.setRobotSearching(...args);
-  const setRobotSearchingBulk = (...args) => runtime.setRobotSearchingBulk(...args);
-  const setRobotSelection = (...args) => runtime.setRobotSelection(...args);
-  const setRobotTesting = (...args) => runtime.setRobotTesting(...args);
-  const setRobotTypeDefinitions = (...args) => runtime.setRobotTypeDefinitions(...args);
-  const setRobots = (...args) => runtime.setRobots(...args);
-  const setRunningButtonState = (...args) => runtime.setRunningButtonState(...args);
-  const setTerminalActive = (...args) => runtime.setTerminalActive(...args);
-  const setTerminalInactive = (...args) => runtime.setTerminalInactive(...args);
-  const shouldUseCompactAutoSearchIndicator = (...args) => runtime.shouldUseCompactAutoSearchIndicator(...args);
-  const showAddRobotPage = (...args) => runtime.showAddRobotPage(...args);
-  const showDashboard = (...args) => runtime.showDashboard(...args);
-  const sortOnlineRobots = (...args) => runtime.sortOnlineRobots(...args);
-  const startOnlineRefreshStatusTimer = (...args) => runtime.startOnlineRefreshStatusTimer(...args);
-  const startRuntimeStateSync = (...args) => runtime.startRuntimeStateSync(...args);
-  const startTestingCountdowns = (...args) => runtime.startTestingCountdowns(...args);
-  const statusChip = (...args) => runtime.statusChip(...args);
-  const statusFromScore = (...args) => runtime.statusFromScore(...args);
-  const statusSortRank = (...args) => runtime.statusSortRank(...args);
-  const stopOnlineRefreshStatusTimer = (...args) => runtime.stopOnlineRefreshStatusTimer(...args);
-  const stopRuntimeStateSync = (...args) => runtime.stopRuntimeStateSync(...args);
-  const stopTestingCountdowns = (...args) => runtime.stopTestingCountdowns(...args);
-  const submitBugReport = (...args) => runtime.submitBugReport(...args);
-  const syncAutoMonitorRefreshState = (...args) => runtime.syncAutoMonitorRefreshState(...args);
-  const syncAutomatedRobotActivityFromState = (...args) => runtime.syncAutomatedRobotActivityFromState(...args);
-  const syncFixModePanels = (...args) => runtime.syncFixModePanels(...args);
-  const syncFixModeToggleButton = (...args) => runtime.syncFixModeToggleButton(...args);
-  const syncFleetParallelismUi = (...args) => runtime.syncFleetParallelismUi(...args);
-  const syncGlobalSelectionButton = (...args) => runtime.syncGlobalSelectionButton(...args);
-  const syncModalScrollLock = (...args) => runtime.syncModalScrollLock(...args);
-  const syncModelViewerRotationForContainer = (...args) => runtime.syncModelViewerRotationForContainer(...args);
-  const syncMonitorConfigUi = (...args) => runtime.syncMonitorConfigUi(...args);
-  const syncMonitorParallelismWithFleet = (...args) => runtime.syncMonitorParallelismWithFleet(...args);
-  const syncOnlineSortButton = (...args) => runtime.syncOnlineSortButton(...args);
-  const syncRecorderReadPopoverVisibility = (...args) => runtime.syncRecorderReadPopoverVisibility(...args);
-  const syncRunSelectedButtonLabel = (...args) => runtime.syncRunSelectedButtonLabel(...args);
-  const syncSectionToggleButtons = (...args) => runtime.syncSectionToggleButtons(...args);
-  const syncSelectionUi = (...args) => runtime.syncSelectionUi(...args);
-  const toggleFixMode = (...args) => runtime.toggleFixMode(...args);
-  const updateCardRuntimeContent = (...args) => runtime.updateCardRuntimeContent(...args);
-  const updateFleetOnlineRefreshStatus = (...args) => runtime.updateFleetOnlineRefreshStatus(...args);
-  const updateFleetOnlineSummary = (...args) => runtime.updateFleetOnlineSummary(...args);
-  const updateKPIs = (...args) => runtime.updateKPIs(...args);
-  const updateOnlineCheckEstimateFromResults = (...args) => runtime.updateOnlineCheckEstimateFromResults(...args);
-  const updateRobotTestState = (...args) => runtime.updateRobotTestState(...args);
-  const updateSelectionSummary = (...args) => runtime.updateSelectionSummary(...args);
+  const {
+    addRobotIdsToSelection,
+    appendTerminalLine,
+    appendTerminalPayload,
+    applyDashboardMetaFromVisible,
+    applyFilters,
+    applyMonitorConfig,
+    applyMonitorConfigFromPayload,
+    applyRuntimeRobotPatches,
+    areAllRobotIdsSelected,
+    batteryReasonText,
+    buildConnectionCornerIconMarkup,
+    buildFixButtonLabel,
+    buildGlobalTestDefinitions,
+    buildLastFullTestPillLabel,
+    buildManageHash,
+    buildRobotModelContainer,
+    buildRobotModelMarkup,
+    buildScanOverlayMarkup,
+    buildTestPreviewText,
+    buildTestPreviewTextForResult,
+    clampFleetParallelism,
+    clampMonitorBatteryInterval,
+    clampMonitorOnlineInterval,
+    clampMonitorTopicsInterval,
+    clampOnlineCountdownMs,
+    closeBugReportModal,
+    closeRecorderTerminalSession,
+    closeTerminalSession,
+    closeTestDebugModal,
+    createRobotFromForm,
+    cycleOnlineSortMode,
+    estimateTestCountdownMsFromBody,
+    formatConsoleLine,
+    formatDurationMs,
+    formatEpochSeconds,
+    formatLastFullTestTimestamp,
+    formatRawOutput,
+    formatTestValue,
+    getAutoFixesForType,
+    getConfiguredDefaultTestIds,
+    getCountdownLabel,
+    getCountdownNodes,
+    getDashboardFixCandidates,
+    getDefinitionLabel,
+    getDetailFixCandidates,
+    getDetailTerminalPresets,
+    getFallbackTestIconText,
+    getFixModeElements,
+    getFleetParallelism,
+    getMonitorBatteryIntervalMs,
+    getMonitorOnlineIntervalMs,
+    getMonitorTopicsIntervalMs,
+    getOnlineCheckCountdownMs,
+    getPersistedManageTab,
+    getReachableRobotIds,
+    getRobotById,
+    getRobotDefinitionsForType,
+    getRobotIdsForRun,
+    getRobotTypeConfig,
+    getRunSelectedButtonIdleLabel,
+    getSelectedRobotIds,
+    getStatusChipTone,
+    getTestIconPresentation,
+    getTestingCountdownText,
+    getTimestamp,
+    getVisibleOfflineRobotIds,
+    getVisibleOnlineRobotIds,
+    haveRuntimeTestsChanged,
+    hideRecorderReadPopover,
+    initAddRobotPasswordToggle,
+    initDashboardController,
+    initFleetParallelism,
+    initMonitorConfigControls,
+    initRobotTerminal,
+    initThemeControls,
+    invalidateCountdownNodeCache,
+    isManageViewActive,
+    isRobotAutoSearching,
+    isRobotBusyForOnlineRefresh,
+    isRobotFixing,
+    isRobotSearching,
+    isRobotSelected,
+    isRobotTesting,
+    isTopicsMonitorMode,
+    issueSummary,
+    loadFleetRuntimeDelta,
+    loadFleetStaticState,
+    loadMonitorConfig,
+    loadRobotConfig,
+    loadRobotTypeConfig,
+    loadRobotsFromBackend,
+    mapRobots,
+    mergeRuntimeRobotsIntoList,
+    nonBatteryTestEntries,
+    normalizeAutoFixDefinition,
+    normalizeBatteryPercentForSort,
+    normalizeBatteryReason,
+    normalizeCheckedAtMs,
+    normalizeCountdownMs,
+    normalizeManageTab,
+    normalizePossibleResult,
+    normalizeRobotActivity,
+    normalizeRobotData,
+    normalizeRobotTests,
+    normalizeRobotTypeConfig,
+    normalizeRuntimeRobotEntry,
+    normalizeRuntimeTestUpdate,
+    normalizeStepDebug,
+    normalizeTestDebugCollection,
+    normalizeTestDebugResult,
+    normalizeTestDefinition,
+    onlineRobotComparator,
+    openBugReportModal,
+    openDetail,
+    openTestDebugModal,
+    parseManageRoute,
+    patchDetailRuntimeContent,
+    persistManageTab,
+    populateAddRobotTypeOptions,
+    populateFilters,
+    queryCardByRobotId,
+    readRobotField,
+    rebuildRobotIndex,
+    refreshRobotsFromBackendSnapshot,
+    refreshRuntimeStateFromBackend,
+    refreshTestingCountdowns,
+    removeRobotIdsFromSelection,
+    renderCard,
+    renderDashboard,
+    renderDetail,
+    renderFixModeActionsForContext,
+    resolveManageTab,
+    resolveRobotModelUrl,
+    robotId,
+    robotModelMarkup,
+    routeFromHash,
+    runAutoFixCandidate,
+    runAutoFixForRobot,
+    runFallbackChecks,
+    runFallbackCommandSimulation,
+    runManualTests,
+    runOneRobotOnlineCheck,
+    runOnlineCheckForAllRobots,
+    runRobotTestsForRobot,
+    runtimeActivityHasSignal,
+    scheduleMonitorParallelismSync,
+    selectAllOfflineRobots,
+    selectAllOnlineRobots,
+    selectAllRobots,
+    selectRobotIds,
+    setAddRobotMessage,
+    setAddRobotPasswordVisibility,
+    setBugReportStatus,
+    setFixModeStatus,
+    setFleetOnlineButtonIdleLabel,
+    setFleetOnlineButtonState,
+    setFleetParallelism,
+    setLocationHash,
+    setModelContainerFaultClasses,
+    setMonitorConfigStatus,
+    setRecorderTerminalActive,
+    setRobotFixing,
+    setRobotSearching,
+    setRobotSearchingBulk,
+    setRobotSelection,
+    setRobotTesting,
+    setRobotTypeDefinitions,
+    setRobots,
+    setRunningButtonState,
+    setTerminalActive,
+    setTerminalInactive,
+    shouldUseCompactAutoSearchIndicator,
+    showAddRobotPage,
+    showDashboard,
+    sortOnlineRobots,
+    startOnlineRefreshStatusTimer,
+    startRuntimeStateSync,
+    startTestingCountdowns,
+    statusChip,
+    statusFromScore,
+    statusSortRank,
+    stopOnlineRefreshStatusTimer,
+    stopRuntimeStateSync,
+    stopTestingCountdowns,
+    submitBugReport,
+    syncAutoMonitorRefreshState,
+    syncAutomatedRobotActivityFromState,
+    syncFixModePanels,
+    syncFixModeToggleButton,
+    syncFleetParallelismUi,
+    syncGlobalSelectionButton,
+    syncModalScrollLock,
+    syncModelViewerRotationForContainer,
+    syncMonitorConfigUi,
+    syncMonitorParallelismWithFleet,
+    syncOnlineSortButton,
+    syncRecorderReadPopoverVisibility,
+    syncRunSelectedButtonLabel,
+    syncSectionToggleButtons,
+    syncSelectionUi,
+    toggleFixMode,
+    updateCardRuntimeContent,
+    updateFleetOnlineRefreshStatus,
+    updateFleetOnlineSummary,
+    updateKPIs,
+    updateOnlineCheckEstimateFromResults,
+    updateRobotTestState,
+    updateSelectionSummary,
+  } = createRecorderRuntimeBridge(runtime);
 
   function setManageTabStatus(message = '', tone = '') {
         if (!manageTabStatus) return;

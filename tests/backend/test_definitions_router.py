@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from backend.config_loader import RobotCatalog
 from backend.definition_service import DefinitionService
 from backend.routers.definitions import create_definitions_router
+from backend.routers.jobs import create_jobs_router
 from backend.routers.tests import create_tests_router
 from backend.terminal_manager import TerminalManager
 
@@ -157,6 +158,7 @@ def _build_client(tmp_path: Path) -> tuple[TestClient, Path]:
     app = FastAPI()
     app.include_router(create_definitions_router(definition_service))
     app.include_router(create_tests_router(terminal_manager))
+    app.include_router(create_jobs_router(terminal_manager))
     return TestClient(app), robot_types_path
 
 
@@ -486,7 +488,7 @@ def test_patch_robot_type_mapping_updates_only_target_type(tmp_path: Path):
     assert untouched.get("testRefs") == ["online"]
 
 
-def test_publish_and_mapping_make_test_immediately_runnable(tmp_path: Path):
+def test_publish_and_mapping_make_test_immediately_queueable(tmp_path: Path):
     client, _ = _build_client(tmp_path)
     create_response = client.post(
         "/api/definitions/tests",
@@ -524,14 +526,18 @@ def test_publish_and_mapping_make_test_immediately_runnable(tmp_path: Path):
     )
     assert map_response.status_code == 200
 
-    run_response = client.post(
-        "/api/robots/r1/tests/run",
-        json={"pageSessionId": "p1", "testIds": ["ping_check"], "dryRun": True},
+    enqueue_response = client.post(
+        "/api/robots/r1/jobs",
+        json={
+            "kind": "test",
+            "pageSessionId": "p1",
+            "testIds": ["ping_check"],
+        },
     )
-    assert run_response.status_code == 200
-    results = run_response.json().get("results", [])
-    assert len(results) == 1
-    assert results[0]["id"] == "ping_check"
+    assert enqueue_response.status_code == 202
+    payload = enqueue_response.json()
+    assert isinstance(payload.get("jobId"), str)
+    assert payload["jobId"]
 
 
 def test_update_test_mappings_uses_check_ids_and_supports_unmap(tmp_path: Path):

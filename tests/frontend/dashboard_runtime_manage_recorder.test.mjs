@@ -327,6 +327,14 @@ async function loadApi() {
       };`,
     )
     .replace(
+      "import { createRecorderRuntimeBridge } from '../domain/recorderRuntimeBridge.js';",
+      `const createRecorderRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
+    )
+    .replace(
       "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",
       'const renderManageEntityList = () => {};',
     )
