@@ -9,11 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MONITOR_MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/monitor-config/controller/createMonitorConfigFeature.js',
+  '../../assets/js/modules/dashboard/features/monitor-config/runtime/createMonitorConfigFeatureRuntime.js',
 );
 const FIX_TESTS_MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/fix-tests/controller/createFixTestsFeature.js',
+  '../../assets/js/modules/dashboard/features/fix-tests/runtime/createFixTestsFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -119,10 +119,27 @@ function makeButton(label = '') {
 
 async function loadNamedExport(modulePath, exportName, extraContext = {}) {
   const source = await fs.readFile(modulePath, 'utf8');
-  const transformed = `${source.replace(
-    `export function ${exportName}`,
-    `function ${exportName}`,
-  )}\nmodule.exports = { ${exportName} };\n`;
+  const transformed = `${source
+    .replace(
+      "import { createMonitorConfigRuntimeBridge } from '../domain/monitorConfigRuntimeBridge.js';",
+      `const createMonitorConfigRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
+    )
+    .replace(
+      "import { createFixTestsRuntimeBridge } from '../domain/fixTestsRuntimeBridge.js';",
+      `const createFixTestsRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
+    )
+    .replace(
+      `export function ${exportName}`,
+      `function ${exportName}`,
+    )}\nmodule.exports = { ${exportName} };\n`;
   const defaultWindow = {
     addEventListener: () => {},
     clearInterval,

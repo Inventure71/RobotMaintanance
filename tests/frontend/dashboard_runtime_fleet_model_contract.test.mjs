@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/fleet/controller/createFleetFeature.js',
+  '../../assets/js/modules/dashboard/features/fleet/runtime/createFleetFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -206,6 +206,14 @@ async function loadApi() {
     .replace(
       "import { createModelAssetResolver } from '../../../primitives/model-viewer/modelAssetResolver.js';",
       "const createModelAssetResolver = () => ({ getInitialModelUrl: (url) => url, bindModelViewerSource: () => {} });",
+    )
+    .replace(
+      "import { createFleetRuntimeBridge } from '../domain/fleetRuntimeBridge.js';",
+      `const createFleetRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
     )
     .replace(
       'export function createFleetFeature',

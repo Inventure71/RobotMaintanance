@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/detail/controller/createDetailFeature.js',
+  '../../assets/js/modules/dashboard/features/detail/runtime/createDetailFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -120,6 +120,14 @@ async function loadApi(fetchImpl, options = {}) {
         if (normalized === 'new-robot-type' || normalized === 'add-type' || normalized === 'new-type') return 'new-robot-type';
         return 'existing-robots';
       };`,
+    )
+    .replace(
+      "import { createDetailRuntimeBridge } from '../domain/detailRuntimeBridge.js';",
+      `const createDetailRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
     )
     .replace(
       "import { renderRobotRegistryPanel } from '../view/robotRegistryView.js';",

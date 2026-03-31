@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const INDEX_PATH = path.resolve(__dirname, '../../index.html');
 const DETAIL_FEATURE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/detail/controller/createDetailFeature.js',
+  '../../assets/js/modules/dashboard/features/detail/runtime/createDetailFeatureRuntime.js',
 );
 
 function collapseWhitespace(value) {

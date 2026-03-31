@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/data-init/controller/createDataInitFeature.js',
+  '../../assets/js/modules/dashboard/features/data-init/runtime/createDataInitFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -90,10 +90,19 @@ function makeEnv(state) {
 
 async function loadApi(fetchImpl) {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source.replace(
-    'export function createDataInitFeature',
-    'function createDataInitFeature',
-  )}\nmodule.exports = { createDataInitFeature };\n`;
+  const transformed = `${source
+    .replace(
+      "import { createDataInitRuntimeBridge } from '../domain/dataInitRuntimeBridge.js';",
+      `const createDataInitRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
+    )
+    .replace(
+      'export function createDataInitFeature',
+      'function createDataInitFeature',
+    )}\nmodule.exports = { createDataInitFeature };\n`;
   const context = {
     console,
     fetch: fetchImpl,

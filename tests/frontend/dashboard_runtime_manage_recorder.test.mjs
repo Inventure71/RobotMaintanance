@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/recorder/controller/createRecorderFeature.js',
+  '../../assets/js/modules/dashboard/features/recorder/runtime/createRecorderFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {

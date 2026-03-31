@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODULE_PATH = path.resolve(
   __dirname,
-  '../../assets/js/modules/dashboard/features/fix-tests/controller/createFixTestsFeature.js',
+  '../../assets/js/modules/dashboard/features/fix-tests/runtime/createFixTestsFeatureRuntime.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -88,10 +88,19 @@ function makeNode() {
 
 async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source.replace(
-    'export function createFixTestsFeature',
-    'function createFixTestsFeature',
-  )}\nmodule.exports = { createFixTestsFeature };\n`;
+  const transformed = `${source
+    .replace(
+      "import { createFixTestsRuntimeBridge } from '../domain/fixTestsRuntimeBridge.js';",
+      `const createFixTestsRuntimeBridge = (runtime) => new Proxy({}, {
+        get(_target, prop) {
+          return (...args) => runtime[prop](...args);
+        },
+      });`,
+    )
+    .replace(
+      'export function createFixTestsFeature',
+      'function createFixTestsFeature',
+    )}\nmodule.exports = { createFixTestsFeature };\n`;
   const context = {
     console,
     module: { exports: {} },
