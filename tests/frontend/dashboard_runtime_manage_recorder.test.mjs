@@ -11,6 +11,62 @@ const MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/recorder/runtime/createRecorderFeatureRuntime.js',
 );
+const MANAGE_DEFINITIONS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderManageDefinitionsApi.js',
+);
+const DEFINITION_MUTATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderDefinitionMutationApi.js',
+);
+const LLM_FLOW_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderLlmFlowApi.js',
+);
+const TYPE_TARGETS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderTypeTargetsApi.js',
+);
+const WORKFLOW_BINDINGS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderWorkflowBindingsApi.js',
+);
+const DRAFT_MUTATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderDraftMutationApi.js',
+);
+const PREVIEW_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderPreviewApi.js',
+);
+const EXPERIENCE_STATE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderExperienceStateApi.js',
+);
+const LIFECYCLE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderLifecycleApi.js',
+);
+const TERMINAL_PRESET_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderTerminalPresetApi.js',
+);
+const UI_HELPERS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderUiHelpersApi.js',
+);
+const CELEBRATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderCelebrationApi.js',
+);
+const MANAGE_TAB_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderManageTabApi.js',
+);
+const DRAFT_LIFECYCLE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/recorder/domain/createRecorderDraftLifecycleApi.js',
+);
 
 function normalizeText(value, fallback = '') {
   if (value === null || value === undefined) return String(fallback ?? '');
@@ -146,7 +202,106 @@ function makeFetchResponse({ ok = true, status = 200, body = {} } = {}) {
 
 async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source
+  let prelude = '';
+  if (source.includes("import { createRecorderManageDefinitionsApi } from '../domain/createRecorderManageDefinitionsApi.js';")) {
+    const manageDefinitionsApiSource = await fs.readFile(MANAGE_DEFINITIONS_API_PATH, 'utf8');
+    prelude += `${manageDefinitionsApiSource.replace(
+      'export function createRecorderManageDefinitionsApi',
+      'function createRecorderManageDefinitionsApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderDefinitionMutationApi } from '../domain/createRecorderDefinitionMutationApi.js';")) {
+    const definitionMutationApiSource = await fs.readFile(DEFINITION_MUTATION_API_PATH, 'utf8');
+    prelude += `${definitionMutationApiSource.replace(
+      'export function createRecorderDefinitionMutationApi',
+      'function createRecorderDefinitionMutationApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderLlmFlowApi } from '../domain/createRecorderLlmFlowApi.js';")) {
+    const llmFlowApiSource = await fs.readFile(LLM_FLOW_API_PATH, 'utf8');
+    prelude += `${llmFlowApiSource.replace(
+      'export function createRecorderLlmFlowApi',
+      'function createRecorderLlmFlowApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderTypeTargetsApi } from '../domain/createRecorderTypeTargetsApi.js';")) {
+    const typeTargetsApiSource = await fs.readFile(TYPE_TARGETS_API_PATH, 'utf8');
+    prelude += `${typeTargetsApiSource.replace(
+      'export function createRecorderTypeTargetsApi',
+      'function createRecorderTypeTargetsApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderWorkflowBindingsApi } from '../domain/createRecorderWorkflowBindingsApi.js';")) {
+    const workflowBindingsApiSource = await fs.readFile(WORKFLOW_BINDINGS_API_PATH, 'utf8');
+    prelude += `${workflowBindingsApiSource.replace(
+      'export function createRecorderWorkflowBindingsApi',
+      'function createRecorderWorkflowBindingsApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderDraftMutationApi } from '../domain/createRecorderDraftMutationApi.js';")) {
+    const draftMutationApiSource = await fs.readFile(DRAFT_MUTATION_API_PATH, 'utf8');
+    prelude += `${draftMutationApiSource.replace(
+      'export function createRecorderDraftMutationApi',
+      'function createRecorderDraftMutationApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderPreviewApi } from '../domain/createRecorderPreviewApi.js';")) {
+    const previewApiSource = await fs.readFile(PREVIEW_API_PATH, 'utf8');
+    prelude += `${previewApiSource.replace(
+      'export function createRecorderPreviewApi',
+      'function createRecorderPreviewApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderExperienceStateApi } from '../domain/createRecorderExperienceStateApi.js';")) {
+    const experienceStateApiSource = await fs.readFile(EXPERIENCE_STATE_API_PATH, 'utf8');
+    prelude += `${experienceStateApiSource.replace(
+      'export function createRecorderExperienceStateApi',
+      'function createRecorderExperienceStateApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderLifecycleApi } from '../domain/createRecorderLifecycleApi.js';")) {
+    const lifecycleApiSource = await fs.readFile(LIFECYCLE_API_PATH, 'utf8');
+    prelude += `${lifecycleApiSource.replace(
+      'export function createRecorderLifecycleApi',
+      'function createRecorderLifecycleApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderTerminalPresetApi } from '../domain/createRecorderTerminalPresetApi.js';")) {
+    const terminalPresetApiSource = await fs.readFile(TERMINAL_PRESET_API_PATH, 'utf8');
+    prelude += `${terminalPresetApiSource.replace(
+      'export function createRecorderTerminalPresetApi',
+      'function createRecorderTerminalPresetApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderUiHelpersApi } from '../domain/createRecorderUiHelpersApi.js';")) {
+    const uiHelpersApiSource = await fs.readFile(UI_HELPERS_API_PATH, 'utf8');
+    prelude += `${uiHelpersApiSource.replace(
+      'export function createRecorderUiHelpersApi',
+      'function createRecorderUiHelpersApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderCelebrationApi } from '../domain/createRecorderCelebrationApi.js';")) {
+    const celebrationApiSource = await fs.readFile(CELEBRATION_API_PATH, 'utf8');
+    prelude += `${celebrationApiSource.replace(
+      'export function createRecorderCelebrationApi',
+      'function createRecorderCelebrationApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderManageTabApi } from '../domain/createRecorderManageTabApi.js';")) {
+    const manageTabApiSource = await fs.readFile(MANAGE_TAB_API_PATH, 'utf8');
+    prelude += `${manageTabApiSource.replace(
+      'export function createRecorderManageTabApi',
+      'function createRecorderManageTabApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRecorderDraftLifecycleApi } from '../domain/createRecorderDraftLifecycleApi.js';")) {
+    const draftLifecycleApiSource = await fs.readFile(DRAFT_LIFECYCLE_API_PATH, 'utf8');
+    prelude += `${draftLifecycleApiSource.replace(
+      'export function createRecorderDraftLifecycleApi',
+      'function createRecorderDraftLifecycleApi',
+    )}\n`;
+  }
+  const transformed = `${prelude}${source
     .replace(
       "import { renderRecorderLlmPromptTemplate, renderRecorderLlmPromptText } from '../../../templates/recorderLlmPromptTemplate.js';",
       `const RECORDER_LLM_RESPONSE_EXAMPLE = {
@@ -327,12 +482,210 @@ async function loadApi() {
       };`,
     )
     .replace(
-      "import { createRecorderRuntimeBridge } from '../domain/recorderRuntimeBridge.js';",
-      `const createRecorderRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      /import\s*\{[\s\S]*?\}\s*from\s*'\.\.\/domain\/recorderDefinitionHelpers\.js';/,
+      `const normalizeIdListValue = ({ normalizeText, values }) => {
+        const list = Array.isArray(values) ? values : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((item) => {
+          const normalized = normalizeText(item, '');
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          out.push(normalized);
+        });
+        return out;
+      };
+      const normalizeTagListValue = ({ normalizeText, values, ownerDefault = false }) => {
+        const list = Array.isArray(values) ? values : typeof values === 'string' ? values.split(/[\\n,]+/g) : [];
+        const seen = new Set();
+        const out = [];
+        list.forEach((item) => {
+          const normalized = normalizeText(item, '').toLowerCase();
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          out.push(normalized);
+        });
+        if (ownerDefault && !out.length) return ['global'];
+        return out;
+      };
+      const parseTagInputValue = ({ normalizeTagList, inputElement, ownerDefault = false }) => {
+        if (!inputElement) return ownerDefault ? ['global'] : [];
+        return normalizeTagList(inputElement.value, { ownerDefault });
+      };
+      const formatTagInputValueValue = ({ normalizeTagList, tags, ownerDefault = false, hideGlobalDefault = true }) => {
+        const normalized = normalizeTagList(tags, { ownerDefault });
+        if (hideGlobalDefault && normalized.length === 1 && normalized[0] === 'global') return '';
+        return normalized.join(', ');
+      };
+      const resolveCheckRunAtConnectionValue = (check, fallback = true) => {
+        if (typeof check?.runAtConnection === 'boolean') return check.runAtConnection;
+        if (typeof check?.metadata?.runAtConnection === 'boolean') return check.metadata.runAtConnection;
+        return Boolean(fallback);
+      };
+      const applyRunAtConnectionValue = (entries, runAtConnection) => {
+        const list = Array.isArray(entries) ? entries : [];
+        const value = Boolean(runAtConnection);
+        return list.map((entry) => ({ ...(entry && typeof entry === 'object' ? entry : {}), runAtConnection: value }));
+      };
+      const inferUniformRunAtConnectionValue = ({ entries, fallback = true, resolveCheckRunAtConnectionFn = resolveCheckRunAtConnectionValue }) => {
+        const list = Array.isArray(entries) ? entries : [];
+        if (!list.length) return Boolean(fallback);
+        const values = list.map((entry) => resolveCheckRunAtConnectionFn(entry, fallback));
+        const first = values[0];
+        return values.some((value) => value !== first) ? null : first;
+      };
+      const slugifyRecorderValueValue = ({ normalizeText, value, fallback = '' }) => {
+        const slug = normalizeText(value, '').toLowerCase().replace(/[^a-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '');
+        return slug || fallback;
+      };
+      const normalizeRecorderModeValue = ({ normalizeText, mode = '' }) => {
+        const normalized = normalizeText(mode, '').toLowerCase();
+        return normalized === 'simple' || normalized === 'advanced' ? normalized : '';
+      };
+      const normalizeRecorderSimpleStepValue = ({ normalizeText, recorderSimpleSteps, step = '' }) => {
+        const normalized = normalizeText(step, '').toLowerCase();
+        return recorderSimpleSteps.includes(normalized) ? normalized : 'terminal';
+      };
+      const normalizeRecorderGenericInfoConfigValue = ({ normalizeText, rawConfig }) => {
+        const config = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+        const commands = Array.isArray(config.commands) ? config.commands : [];
+        const normalizedCommands = commands.map((entry, index) => {
+          const label = normalizeText(entry?.label, \`Command \${index + 1}\`);
+          const command = normalizeText(entry?.command, '');
+          const timeoutSec = Number(entry?.timeoutSec);
+          if (!command) return null;
+          return { label, command, timeoutSec: Number.isFinite(timeoutSec) && timeoutSec > 0 ? Math.floor(timeoutSec) : 10 };
+        }).filter(Boolean);
+        if (!normalizedCommands.length) throw new Error('Recorder generic info config has no runnable commands.');
+        return {
+          id: normalizeText(config.id, 'recorder_generic_info'),
+          label: normalizeText(config.label, 'Recorder generic info'),
+          commands: normalizedCommands,
+        };
+      };
+      const quoteRecorderShellValue = (value) => \`'\${String(value ?? '').replace(/'/g, \`"'"'"'\`)}'\`;
+      const buildRecorderGenericInfoBundleCommandValue = ({ normalizeRecorderGenericInfoConfig, rawConfig }) => {
+        const config = normalizeRecorderGenericInfoConfig(rawConfig);
+        const scriptLines = [
+          'set +e',
+          \`printf '%s\\\\n' \${quoteRecorderShellValue(\`=== \${config.label} ===\`)}\`,
+          \`printf '%s\\\\n' \${quoteRecorderShellValue('Read-only diagnostics for recorder and external LLM context.')}\`,
+          'run_block() {',
+          '  local label="$1"',
+          '  local timeout_sec="$2"',
+          '  local command="$3"',
+          \`  printf '\\\\n===== %s =====\\\\n' "$label"\`,
+          '  timeout "\${timeout_sec}s" bash -lc "$command"',
+          '  local status=$?',
+          '  if [ "$status" -eq 124 ]; then',
+          \`    printf '[timeout after %ss]\\\\n' "$timeout_sec"\`,
+          '  elif [ "$status" -ne 0 ]; then',
+          \`    printf '[exit %s]\\\\n' "$status"\`,
+          '  fi',
+          '}',
+          ...config.commands.map((entry) => (
+            \`run_block \${quoteRecorderShellValue(entry.label)} \${quoteRecorderShellValue(entry.timeoutSec)} \${quoteRecorderShellValue(entry.command)}\`
+          )),
+        ];
+        return \`bash -lc \${quoteRecorderShellValue(scriptLines.join('\\\\n'))}\`;
+      };
+      const createRecorderDefinitionHelpers = ({ normalizeText, recorderSimpleSteps }) => {
+        const normalizeIdList = (values) => normalizeIdListValue({ normalizeText, values });
+        const normalizeTagList = (values, options = {}) =>
+          normalizeTagListValue({ normalizeText, values, ownerDefault: options.ownerDefault === true });
+        const parseTagInput = (inputElement, options = {}) =>
+          parseTagInputValue({ normalizeTagList, inputElement, ownerDefault: options.ownerDefault === true });
+        const formatTagInputValue = (tags, options = {}) =>
+          formatTagInputValueValue({
+            normalizeTagList,
+            tags,
+            ownerDefault: options.ownerDefault === true,
+            hideGlobalDefault: options.hideGlobalDefault !== false,
+          });
+        const resolveCheckRunAtConnection = (check, fallback = true) => resolveCheckRunAtConnectionValue(check, fallback);
+        const applyRunAtConnection = (entries, runAtConnection) => applyRunAtConnectionValue(entries, runAtConnection);
+        const inferUniformRunAtConnection = (entries, fallback = true) =>
+          inferUniformRunAtConnectionValue({ entries, fallback, resolveCheckRunAtConnectionFn: resolveCheckRunAtConnection });
+        const slugifyRecorderValue = (value, fallback = '') =>
+          slugifyRecorderValueValue({ normalizeText, value, fallback });
+        const normalizeRecorderMode = (mode = '') => normalizeRecorderModeValue({ normalizeText, mode });
+        const normalizeRecorderSimpleStep = (step = '') =>
+          normalizeRecorderSimpleStepValue({ normalizeText, recorderSimpleSteps, step });
+        const normalizeRecorderGenericInfoConfig = (rawConfig) =>
+          normalizeRecorderGenericInfoConfigValue({ normalizeText, rawConfig });
+        const buildRecorderGenericInfoBundleCommand = (rawConfig) =>
+          buildRecorderGenericInfoBundleCommandValue({ normalizeRecorderGenericInfoConfig, rawConfig });
+        return {
+          normalizeIdList,
+          normalizeTagList,
+          parseTagInput,
+          formatTagInputValue,
+          resolveCheckRunAtConnection,
+          applyRunAtConnection,
+          inferUniformRunAtConnection,
+          slugifyRecorderValue,
+          normalizeRecorderMode,
+          normalizeRecorderSimpleStep,
+          normalizeRecorderGenericInfoConfig,
+          buildRecorderGenericInfoBundleCommand,
+        };
+      };`,
+    )
+        .replace(
+      "import { createRecorderManageDefinitionsApi } from '../domain/createRecorderManageDefinitionsApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderDefinitionMutationApi } from '../domain/createRecorderDefinitionMutationApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderLlmFlowApi } from '../domain/createRecorderLlmFlowApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderTypeTargetsApi } from '../domain/createRecorderTypeTargetsApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderWorkflowBindingsApi } from '../domain/createRecorderWorkflowBindingsApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderDraftMutationApi } from '../domain/createRecorderDraftMutationApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderPreviewApi } from '../domain/createRecorderPreviewApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderExperienceStateApi } from '../domain/createRecorderExperienceStateApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderLifecycleApi } from '../domain/createRecorderLifecycleApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderTerminalPresetApi } from '../domain/createRecorderTerminalPresetApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderUiHelpersApi } from '../domain/createRecorderUiHelpersApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderCelebrationApi } from '../domain/createRecorderCelebrationApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderManageTabApi } from '../domain/createRecorderManageTabApi.js';",
+      '',
+    )
+    .replace(
+      "import { createRecorderDraftLifecycleApi } from '../domain/createRecorderDraftLifecycleApi.js';",
+      '',
     )
     .replace(
       "import { renderManageEntityList } from '../../features/manage/manageEntityList.js';",

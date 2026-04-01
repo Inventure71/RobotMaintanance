@@ -11,6 +11,10 @@ const MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/data-init/runtime/createDataInitFeatureRuntime.js',
 );
+const RUNTIME_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/data-init/domain/createDataInitRuntimeApi.js',
+);
 
 function normalizeText(value, fallback = '') {
   if (value === null || value === undefined) return String(fallback ?? '');
@@ -90,14 +94,15 @@ function makeEnv(state) {
 
 async function loadApi(fetchImpl) {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source
+  const runtimeApiSource = await fs.readFile(RUNTIME_API_PATH, 'utf8');
+  const transformed = `${runtimeApiSource
     .replace(
-      "import { createDataInitRuntimeBridge } from '../domain/dataInitRuntimeBridge.js';",
-      `const createDataInitRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      'export function createDataInitRuntimeApi',
+      'function createDataInitRuntimeApi',
+    )}\n${source
+        .replace(
+      "import { createDataInitRuntimeApi } from '../domain/createDataInitRuntimeApi.js';",
+      '',
     )
     .replace(
       'export function createDataInitFeature',

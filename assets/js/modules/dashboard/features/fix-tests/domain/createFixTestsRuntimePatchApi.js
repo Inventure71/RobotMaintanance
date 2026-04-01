@@ -1,0 +1,320 @@
+export function createFixTestsRuntimePatchApi({
+  $,
+  detail,
+  state,
+  normalizeStatus,
+  normalizeText,
+  patchDashboardForChangedRobots,
+  renderDashboard,
+  getRobotById,
+  robotId,
+  nonBatteryTestEntries,
+  statusFromScore,
+  isRobotTesting,
+  isRobotSearching,
+  isRobotFixing,
+  shouldUseCompactAutoSearchIndicator,
+  getTestingCountdownText,
+  getRobotBatteryState,
+  issueSummary,
+  getStatusChipTone,
+  renderRobotJobQueueStrip,
+  renderRobotStopCurrentJobButton,
+  renderBatteryPill,
+  buildLastFullTestPillLabel,
+  syncModelViewerRotationForContainer,
+  buildConnectionCornerIconMarkup,
+  buildScanOverlayMarkup,
+  invalidateCountdownNodeCache,
+  buildTestPreviewTextForResult,
+  statusChip,
+  setActionButtonLoading,
+  updateFleetOnlineRefreshStatus,
+}) {
+  function setModelContainerFaultClasses(modelContainer, robot, isOffline, includeDetailClass = false) {
+    if (!modelContainer) return;
+    const failureClasses = nonBatteryTestEntries(robot)
+      .filter(([, test]) => normalizeStatus(test?.status) !== 'ok')
+      .map(([id]) => `fault-${id}`)
+      .join(' ');
+    const baseClass = modelContainer.classList.contains('robot-model-slot') ? 'robot-model-slot' : 'robot-3d';
+    const detailClass = includeDetailClass ? 'detail-model' : '';
+    modelContainer.className = `${baseClass} ${detailClass} ${failureClasses} ${isOffline ? 'offline' : ''}`.trim();
+  }
+
+  function updateCardRuntimeContent(card, robot) {
+    if (!card || !robot) return;
+    const stateKey = statusFromScore(robot);
+    const isCritical = stateKey === 'critical';
+    const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
+    const normalizedRobotId = robotId(robot);
+    const isTesting = isRobotTesting(normalizedRobotId);
+    const isSearching = isRobotSearching(normalizedRobotId);
+    const isFixing = isRobotFixing(normalizedRobotId);
+    const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
+    const isCountingDown = isTesting || isSearching || isFixing;
+    const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
+    const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
+    const issues = issueSummary(robot);
+    const issueText = issues.join(', ') || 'No active errors';
+
+    card.classList.remove('state-ok', 'state-warning', 'state-critical', 'state-offline');
+    card.classList.add(isOffline ? 'state-offline' : `state-${stateKey}`);
+    card.classList.toggle('error', isCritical);
+    card.classList.toggle('offline', isOffline);
+    card.classList.toggle('testing', isTesting || isSearching || isFixing);
+
+    const statusChipNode = card.querySelector('[data-role="card-status-chip"]');
+    if (statusChipNode) {
+      const tone = getStatusChipTone(stateKey);
+      statusChipNode.className = `status-chip ${tone.css}`;
+      statusChipNode.textContent = tone.text;
+    }
+
+    const badgeStrip = card.querySelector('[data-role="badge-strip"]');
+    if (badgeStrip) {
+      badgeStrip.innerHTML = issues.map((item) => `<span class="error-badge">${item}</span>`).join('');
+    }
+
+    const issuesPill = card.querySelector('[data-role="issues-pill"]');
+    if (issuesPill) {
+      issuesPill.textContent = `Issue cluster: ${issueText}`;
+    }
+
+    const movementPill = card.querySelector('[data-role="movement-pill"]');
+    if (movementPill) {
+      movementPill.textContent = `Movement: ${robot?.tests?.movement?.value || 'n/a'}`;
+    }
+    const lastFullTestPill = card.querySelector('[data-role="last-full-test-pill"]');
+    if (lastFullTestPill) {
+      lastFullTestPill.textContent = buildLastFullTestPillLabel(robot);
+    }
+    const queueStripHost = card.querySelector('[data-role="card-job-queue-strip"]');
+    if (queueStripHost) {
+      queueStripHost.innerHTML = renderRobotJobQueueStrip(robot?.activity, { maxQueued: 2 });
+    }
+    const stopJobHost = card.querySelector('[data-role="card-stop-current-job"]');
+    if (stopJobHost) {
+      stopJobHost.innerHTML = renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId);
+    }
+
+    const summaryBatteryHost = card.querySelector('[data-role="summary-battery-pill"]');
+    if (summaryBatteryHost) {
+      summaryBatteryHost.innerHTML = renderBatteryPill({
+        value: batteryState.value,
+        status: batteryState.status,
+        reason: batteryState.reason,
+        size: 'default',
+      });
+    }
+
+    const modelContainer = card.querySelector('.model-wrap .robot-model-slot, .model-wrap .robot-3d');
+    setModelContainerFaultClasses(modelContainer, robot, isOffline);
+
+    const modelWrap = card.querySelector('.model-wrap');
+    syncModelViewerRotationForContainer(modelWrap, isOffline);
+    if (modelWrap) {
+      const existingConnectionIcon = modelWrap.querySelector('[data-role="connection-corner-icon"]');
+      if (existingConnectionIcon) {
+        existingConnectionIcon.remove();
+      }
+      modelWrap.insertAdjacentHTML('afterbegin', buildConnectionCornerIconMarkup(isOffline, compactAutoSearch));
+    }
+
+    if (modelWrap) {
+      const existingCountdown = modelWrap.querySelector('.scan-countdown');
+      if (isCountingDown) {
+        if (existingCountdown) {
+          existingCountdown.setAttribute('data-robot-id', normalizedRobotId);
+          existingCountdown.textContent = testCountdown;
+        } else {
+          modelWrap.insertAdjacentHTML(
+            'beforeend',
+            `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>`,
+          );
+        }
+      } else if (existingCountdown) {
+        existingCountdown.remove();
+      }
+
+      const existingOverlay = modelWrap.querySelector('[data-role="activity-overlay"]');
+      const nextOverlayMarkup = buildScanOverlayMarkup({
+        isSearching,
+        isTesting,
+        isFixing,
+        compactAutoSearch,
+      });
+      if (nextOverlayMarkup) {
+        if (existingOverlay) {
+          existingOverlay.remove();
+        }
+        modelWrap.insertAdjacentHTML('beforeend', nextOverlayMarkup);
+      } else if (existingOverlay) {
+        existingOverlay.remove();
+      }
+    }
+    invalidateCountdownNodeCache();
+  }
+
+  function patchDetailRuntimeContent(robot) {
+    if (!robot || !detail.classList.contains('active')) return;
+    if (robotId(robot) !== state.detailRobotId) return;
+
+    const statusBar = $('#detailStatusBar');
+    const testList = $('#testList');
+    const modelHost = $('#detailModel');
+    const stateKey = statusFromScore(robot);
+    const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
+    const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => normalizeStatus(t?.status) !== 'ok').length;
+    const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
+    const normalizedRobotId = robotId(robot);
+    const isTesting = isRobotTesting(normalizedRobotId);
+    const isSearching = isRobotSearching(normalizedRobotId);
+    const isFixing = isRobotFixing(normalizedRobotId);
+    const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
+    const isCountingDown = isTesting || isSearching || isFixing;
+    const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
+
+    if (statusBar) {
+      statusBar.innerHTML = `
+            ${statusChip(stateKey, 'detail-status-chip')}
+            ${renderBatteryPill({
+              value: batteryState.value,
+              status: batteryState.status,
+              reason: batteryState.reason,
+              size: 'small',
+            })}
+            <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
+            <span class="detail-issue-count">${errorCount} issue(s)</span>`.trim().replace(/>\s+</g, '><');
+    }
+
+    const modelContainer = modelHost?.querySelector('.robot-model-slot, .robot-3d') || null;
+    setModelContainerFaultClasses(modelContainer, robot, isOffline, true);
+    syncModelViewerRotationForContainer(modelHost, isOffline);
+
+    if (modelHost) {
+      const existingOverlay = modelHost.querySelector('[data-role="activity-overlay"]');
+      const nextOverlayMarkup = buildScanOverlayMarkup({
+        isSearching,
+        isTesting,
+        isFixing,
+        compactAutoSearch,
+      });
+      if (nextOverlayMarkup) {
+        if (existingOverlay) existingOverlay.remove();
+        modelHost.insertAdjacentHTML('beforeend', nextOverlayMarkup);
+      } else if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
+      const existingCountdown = modelHost.querySelector('.scan-countdown');
+      if (isCountingDown) {
+        if (existingCountdown) {
+          existingCountdown.setAttribute('data-robot-id', normalizedRobotId);
+          existingCountdown.textContent = testCountdown;
+        } else {
+          modelHost.insertAdjacentHTML(
+            'beforeend',
+            `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>`,
+          );
+        }
+      } else if (existingCountdown) {
+        existingCountdown.remove();
+      }
+
+      const existingConnectionIcon = modelHost.querySelector('[data-role="connection-corner-icon"]');
+      if (existingConnectionIcon) {
+        existingConnectionIcon.remove();
+      }
+      modelHost.insertAdjacentHTML('afterbegin', buildConnectionCornerIconMarkup(isOffline, compactAutoSearch));
+    }
+    invalidateCountdownNodeCache();
+
+    if (testList) {
+      Object.entries(robot.tests || {}).forEach(([testId, result]) => {
+        const escaped =
+          typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+            ? CSS.escape(testId)
+            : testId.replace(/"/g, '\\"');
+        const row = testList.querySelector(`.test-row[data-test-id="${escaped}"]`);
+        if (!row) return;
+        const status = normalizeStatus(result?.status);
+        const statusPill = row.querySelector('[data-role="detail-test-status-pill"]');
+        if (statusPill) {
+          statusPill.textContent = status.toUpperCase();
+        }
+        const valueNode = row.querySelector('[data-role="detail-test-value"]');
+        if (valueNode) {
+          const previewText = buildTestPreviewTextForResult(testId, result);
+          valueNode.textContent = previewText;
+          valueNode.title = previewText;
+        }
+        const statusChipNode = row.querySelector('[data-role="detail-test-status-chip"]');
+        if (statusChipNode) {
+          statusChipNode.className = `status-chip ${status === 'ok' ? 'ok' : status === 'warning' ? 'warn' : 'err'}`;
+          statusChipNode.textContent = status;
+        }
+      });
+    }
+    invalidateCountdownNodeCache();
+  }
+
+  function applyRuntimeRobotPatches(changedRobotIds) {
+    const changedIds = Array.from(changedRobotIds || []).map((id) => robotId(id)).filter(Boolean);
+    if (!changedIds.length) return;
+
+    const patched = Boolean(patchDashboardForChangedRobots(changedIds));
+    if (!patched) {
+      renderDashboard();
+    }
+    if (state.detailRobotId) {
+      const activeRobot = getRobotById(state.detailRobotId);
+      patchDetailRuntimeContent(activeRobot);
+    }
+  }
+
+  function updateFleetOnlineSummary(onlineNames, offlineNames, skippedNames = []) {
+    const summary = $('#fleetOnlineSummary');
+    if (!summary) return;
+
+    const total = state.robots.length;
+    const skippedCount = Array.isArray(skippedNames) ? skippedNames.length : 0;
+    summary.style.display = 'block';
+    summary.innerHTML = `
+          <div style="font-size: 0.92rem; margin-bottom: 0.35rem; opacity: 0.9;">
+            Online check complete • ${onlineNames.length} reachable / ${Math.max(0, total - skippedCount)} checked
+          </div>
+          <div><strong>Reachable:</strong> ${onlineNames.length ? onlineNames.join(', ') : 'none'}</div>
+          <div><strong>Unreachable:</strong> ${offlineNames.length ? offlineNames.join(', ') : 'none'}</div>
+          <div><strong>Skipped (busy):</strong> ${skippedCount ? skippedNames.join(', ') : 'none'}</div>
+        `.trim().replace(/>\s+</g, '><');
+    state.onlineRefreshSummary = {
+      onlineCount: onlineNames.length,
+      offlineCount: offlineNames.length,
+      skippedCount,
+      totalCount: total,
+    };
+  }
+
+  function setFleetOnlineButtonState(isRunning) {
+    const runAllButton = $('#runFleetOnline');
+    if (!runAllButton) return;
+    const idleLabel = normalizeText(runAllButton.dataset.idleLabel, 'Refresh online');
+    setActionButtonLoading(runAllButton, isRunning, {
+      loadingLabel: 'Refreshing...',
+      idleLabel,
+    });
+    if (!isRunning) {
+      updateFleetOnlineRefreshStatus();
+    }
+  }
+
+  return {
+    setModelContainerFaultClasses,
+    updateCardRuntimeContent,
+    patchDetailRuntimeContent,
+    applyRuntimeRobotPatches,
+    updateFleetOnlineSummary,
+    setFleetOnlineButtonState,
+  };
+}

@@ -11,6 +11,46 @@ const MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/detail/runtime/createDetailFeatureRuntime.js',
 );
+const MANAGE_ENTITIES_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailManageEntitiesApi.js',
+);
+const ROBOT_MUTATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailRobotMutationApi.js',
+);
+const TEST_AND_RENDER_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailTestAndRenderApi.js',
+);
+const TERMINAL_DEBUG_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailTerminalDebugApi.js',
+);
+const MODEL_CONTROLS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailModelControlsApi.js',
+);
+const FILTERS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailFiltersApi.js',
+);
+const DEFINITION_OWNER_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailDefinitionOwnerApi.js',
+);
+const MANAGE_NAVIGATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailManageNavigationApi.js',
+);
+const REFRESH_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailRefreshApi.js',
+);
+const SESSION_NAVIGATION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/detail/domain/createDetailSessionNavigationApi.js',
+);
 
 function normalizeText(value, fallback = '') {
   if (value === null || value === undefined) return String(fallback ?? '');
@@ -71,7 +111,78 @@ function makeNode({
 
 async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source
+  let prelude = '';
+  if (source.includes("import { createDetailManageEntitiesApi } from '../domain/createDetailManageEntitiesApi.js';")) {
+    const manageEntitiesApiSource = await fs.readFile(MANAGE_ENTITIES_API_PATH, 'utf8');
+    prelude += `${manageEntitiesApiSource.replace(
+      'export function createDetailManageEntitiesApi',
+      'function createDetailManageEntitiesApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailRobotMutationApi } from '../domain/createDetailRobotMutationApi.js';")) {
+    const robotMutationApiSource = await fs.readFile(ROBOT_MUTATION_API_PATH, 'utf8');
+    prelude += `${robotMutationApiSource.replace(
+      'export function createDetailRobotMutationApi',
+      'function createDetailRobotMutationApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailTestAndRenderApi } from '../domain/createDetailTestAndRenderApi.js';")) {
+    const testAndRenderApiSource = await fs.readFile(TEST_AND_RENDER_API_PATH, 'utf8');
+    prelude += `${testAndRenderApiSource.replace(
+      'export function createDetailTestAndRenderApi',
+      'function createDetailTestAndRenderApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailTerminalDebugApi } from '../domain/createDetailTerminalDebugApi.js';")) {
+    const terminalDebugApiSource = await fs.readFile(TERMINAL_DEBUG_API_PATH, 'utf8');
+    prelude += `${terminalDebugApiSource.replace(
+      'export function createDetailTerminalDebugApi',
+      'function createDetailTerminalDebugApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailModelControlsApi } from '../domain/createDetailModelControlsApi.js';")) {
+    const modelControlsApiSource = await fs.readFile(MODEL_CONTROLS_API_PATH, 'utf8');
+    prelude += `${modelControlsApiSource.replace(
+      'export function createDetailModelControlsApi',
+      'function createDetailModelControlsApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailFiltersApi } from '../domain/createDetailFiltersApi.js';")) {
+    const filtersApiSource = await fs.readFile(FILTERS_API_PATH, 'utf8');
+    prelude += `${filtersApiSource.replace(
+      'export function createDetailFiltersApi',
+      'function createDetailFiltersApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailDefinitionOwnerApi } from '../domain/createDetailDefinitionOwnerApi.js';")) {
+    const definitionOwnerApiSource = await fs.readFile(DEFINITION_OWNER_API_PATH, 'utf8');
+    prelude += `${definitionOwnerApiSource.replace(
+      'export function createDetailDefinitionOwnerApi',
+      'function createDetailDefinitionOwnerApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailManageNavigationApi } from '../domain/createDetailManageNavigationApi.js';")) {
+    const manageNavigationApiSource = await fs.readFile(MANAGE_NAVIGATION_API_PATH, 'utf8');
+    prelude += `${manageNavigationApiSource.replace(
+      'export function createDetailManageNavigationApi',
+      'function createDetailManageNavigationApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailRefreshApi } from '../domain/createDetailRefreshApi.js';")) {
+    const refreshApiSource = await fs.readFile(REFRESH_API_PATH, 'utf8');
+    prelude += `${refreshApiSource.replace(
+      'export function createDetailRefreshApi',
+      'function createDetailRefreshApi',
+    )}\n`;
+  }
+  if (source.includes("import { createDetailSessionNavigationApi } from '../domain/createDetailSessionNavigationApi.js';")) {
+    const sessionNavigationApiSource = await fs.readFile(SESSION_NAVIGATION_API_PATH, 'utf8');
+    prelude += `${sessionNavigationApiSource.replace(
+      'export function createDetailSessionNavigationApi',
+      'function createDetailSessionNavigationApi',
+    )}\n`;
+  }
+  const transformed = `${prelude}${source
     .replace(
       "import { renderManageEntityList } from '../../manage/manageEntityList.js';",
       'const renderManageEntityList = globalThis.__renderManageEntityListStub;',
@@ -104,12 +215,155 @@ async function loadApi() {
       };`,
     )
     .replace(
-      "import { createDetailRuntimeBridge } from '../domain/detailRuntimeBridge.js';",
-      `const createDetailRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      /import\s*\{[\s\S]*?\}\s*from\s*'\.\.\/domain\/modelUploadHelpers\.js';/,
+      `const syncUploadDropzoneLabelValue = (input, labelNode, emptyLabel = 'No file selected') => {
+        if (!labelNode) return;
+        const file = input?.files?.[0] || null;
+        labelNode.textContent = file ? \`\${file.name} • \${(file.size / 1024 / 1024).toFixed(2)} MB\` : emptyLabel;
+      };
+      const normalizeAvailableQualitiesValue = ({ normalizeText, model }) => {
+        const raw = Array.isArray(model?.available_qualities)
+          ? model.available_qualities
+          : Array.isArray(model?.availableQualities)
+            ? model.availableQualities
+            : null;
+        if (!Array.isArray(raw)) return null;
+        return raw.map((quality) => normalizeText(quality, '').toLowerCase())
+          .filter((quality, index, list) => (quality === 'low' || quality === 'high') && list.indexOf(quality) === index);
+      };
+      const modelSupportsQualityValue = ({ normalizeText, normalizeAvailableQualities, model, quality }) => {
+        const fileName = normalizeText(model?.file_name, '');
+        if (!fileName) return false;
+        const availableQualities = normalizeAvailableQualities(model);
+        if (!Array.isArray(availableQualities)) return true;
+        return availableQualities.includes(quality);
+      };
+      const setSelectOptionLabelValue = ({ selectNode, normalizeText, value, label }) => {
+        if (!selectNode) return;
+        const option = Array.from(selectNode.options || []).find((entry) => normalizeText(entry.value, '') === value);
+        if (option) option.textContent = label;
+      };
+      const bindUploadDropzoneValue = ({ dropzone, input, labelNode, syncUploadDropzoneLabel, emptyLabel = 'No file selected' }) => {
+        if (!dropzone || !input) return;
+        input.addEventListener('change', () => {
+          syncUploadDropzoneLabel(input, labelNode, emptyLabel);
+        });
+        syncUploadDropzoneLabel(input, labelNode, emptyLabel);
+      };
+      const syncRobotModelOverrideVisibilityValue = ({ selectNode, fieldNode, inputNode, labelNode, syncUploadDropzoneLabel, normalizeText, emptyLabel }) => {
+        if (!selectNode || !fieldNode) return;
+        const shouldShow = normalizeText(selectNode.value, 'default') === 'override';
+        fieldNode.classList.toggle('hidden', !shouldShow);
+        if (!shouldShow && inputNode) {
+          inputNode.value = '';
+          syncUploadDropzoneLabel(inputNode, labelNode, emptyLabel);
+        }
+      };
+      const resetRobotOverrideControlsValue = ({
+        syncRobotModelOverrideVisibility,
+        syncUploadDropzoneLabel,
+        normalizeText,
+        lowSelect,
+        highSelect,
+        lowField,
+        highField,
+        lowInput,
+        highInput,
+        lowLabel,
+        highLabel,
+        lowEmptyLabel,
+        highEmptyLabel,
+        clearOverrideInput,
+        clearOverrideField,
+      }) => {
+        if (lowSelect) lowSelect.value = 'default';
+        if (highSelect) highSelect.value = 'default';
+        if (lowInput) lowInput.value = '';
+        if (highInput) highInput.value = '';
+        if (clearOverrideInput) clearOverrideInput.checked = false;
+        if (clearOverrideField) clearOverrideField.classList.add('hidden');
+        if (lowSelect) lowSelect.disabled = false;
+        if (highSelect) highSelect.disabled = false;
+        syncRobotModelOverrideVisibility({ selectNode: lowSelect, fieldNode: lowField, inputNode: lowInput, labelNode: lowLabel, syncUploadDropzoneLabel, normalizeText, emptyLabel: lowEmptyLabel });
+        syncRobotModelOverrideVisibility({ selectNode: highSelect, fieldNode: highField, inputNode: highInput, labelNode: highLabel, syncUploadDropzoneLabel, normalizeText, emptyLabel: highEmptyLabel });
+        syncUploadDropzoneLabel(lowInput, lowLabel, lowEmptyLabel);
+        syncUploadDropzoneLabel(highInput, highLabel, highEmptyLabel);
+      };
+      const createModelUploadHelpers = ({ normalizeText }) => {
+        const normalizeAvailableQualities = (model) => normalizeAvailableQualitiesValue({ normalizeText, model });
+        const modelSupportsQuality = (model, quality) =>
+          modelSupportsQualityValue({ normalizeText, normalizeAvailableQualities, model, quality });
+        const setSelectOptionLabel = (selectNode, value, label) =>
+          setSelectOptionLabelValue({ selectNode, normalizeText, value, label });
+        const bindUploadDropzone = (dropzone, input, labelNode, emptyLabel = 'No file selected') =>
+          bindUploadDropzoneValue({ dropzone, input, labelNode, syncUploadDropzoneLabel: syncUploadDropzoneLabelValue, emptyLabel });
+        const syncRobotModelOverrideVisibility = (selectNode, fieldNode, inputNode, labelNode, emptyLabel) =>
+          syncRobotModelOverrideVisibilityValue({
+            selectNode,
+            fieldNode,
+            inputNode,
+            labelNode,
+            syncUploadDropzoneLabel: syncUploadDropzoneLabelValue,
+            normalizeText,
+            emptyLabel,
+          });
+        const resetRobotOverrideControls = (options = {}) =>
+          resetRobotOverrideControlsValue({
+            syncRobotModelOverrideVisibility,
+            syncUploadDropzoneLabel: syncUploadDropzoneLabelValue,
+            normalizeText,
+            ...options,
+          });
+        return {
+          syncUploadDropzoneLabel: syncUploadDropzoneLabelValue,
+          normalizeAvailableQualities,
+          modelSupportsQuality,
+          setSelectOptionLabel,
+          bindUploadDropzone,
+          syncRobotModelOverrideVisibility,
+          resetRobotOverrideControls,
+        };
+      };`,
+    )
+        .replace(
+      "import { createDetailManageEntitiesApi } from '../domain/createDetailManageEntitiesApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailRobotMutationApi } from '../domain/createDetailRobotMutationApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailTestAndRenderApi } from '../domain/createDetailTestAndRenderApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailTerminalDebugApi } from '../domain/createDetailTerminalDebugApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailModelControlsApi } from '../domain/createDetailModelControlsApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailFiltersApi } from '../domain/createDetailFiltersApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailDefinitionOwnerApi } from '../domain/createDetailDefinitionOwnerApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailManageNavigationApi } from '../domain/createDetailManageNavigationApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailRefreshApi } from '../domain/createDetailRefreshApi.js';",
+      '',
+    )
+    .replace(
+      "import { createDetailSessionNavigationApi } from '../domain/createDetailSessionNavigationApi.js';",
+      '',
     )
     .replace(
       "import { renderRobotRegistryPanel } from '../view/robotRegistryView.js';",

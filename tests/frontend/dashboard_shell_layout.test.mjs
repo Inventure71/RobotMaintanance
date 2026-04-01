@@ -153,7 +153,7 @@ test('assignment sections expose inline help and live matrix keeps single status
   const detailFeatureSource = await fs.readFile(DETAIL_FEATURE_PATH, 'utf8');
   assert.doesNotMatch(detailFeatureSource, /data-role="detail-test-status-pill"/);
   assert.doesNotMatch(detailFeatureSource, /owner:\$\{escapeHtml\(tag\)\}/);
-  assert.match(detailFeatureSource, /firstOwnerTag/);
+  assert.match(detailFeatureSource, /createDetailDefinitionOwnerApi/);
 });
 
 test('owner scope options do not source robot ssh usernames', async () => {

@@ -11,6 +11,38 @@ const MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/fleet/runtime/createFleetFeatureRuntime.js',
 );
+const DERIVED_STATE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetDerivedStateApi.js',
+);
+const SELECTION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetSelectionApi.js',
+);
+const MONITOR_ACTIVITY_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetMonitorActivityApi.js',
+);
+const CARD_RENDERING_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetCardRenderingApi.js',
+);
+const RUNTIME_STATE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetRuntimeStateApi.js',
+);
+const MODEL_VIEWER_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetModelViewerApi.js',
+);
+const WINDOWING_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetWindowingApi.js',
+);
+const DASHBOARD_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fleet/domain/createFleetDashboardApi.js',
+);
 
 function normalizeText(value, fallback = '') {
   if (value === null || value === undefined) return String(fallback ?? '');
@@ -202,18 +234,99 @@ async function withFakeDocument(run) {
 
 async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source
+  let prelude = '';
+  if (source.includes("import { createFleetDerivedStateApi } from '../domain/createFleetDerivedStateApi.js';")) {
+    const derivedStateApiSource = await fs.readFile(DERIVED_STATE_API_PATH, 'utf8');
+    prelude = `${derivedStateApiSource.replace(
+      'export function createFleetDerivedStateApi',
+      'function createFleetDerivedStateApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetSelectionApi } from '../domain/createFleetSelectionApi.js';")) {
+    const selectionApiSource = await fs.readFile(SELECTION_API_PATH, 'utf8');
+    prelude += `${selectionApiSource.replace(
+      'export function createFleetSelectionApi',
+      'function createFleetSelectionApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetMonitorActivityApi } from '../domain/createFleetMonitorActivityApi.js';")) {
+    const monitorActivityApiSource = await fs.readFile(MONITOR_ACTIVITY_API_PATH, 'utf8');
+    prelude += `${monitorActivityApiSource.replace(
+      'export function createFleetMonitorActivityApi',
+      'function createFleetMonitorActivityApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetCardRenderingApi } from '../domain/createFleetCardRenderingApi.js';")) {
+    const cardRenderingApiSource = await fs.readFile(CARD_RENDERING_API_PATH, 'utf8');
+    prelude += `${cardRenderingApiSource.replace(
+      'export function createFleetCardRenderingApi',
+      'function createFleetCardRenderingApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetRuntimeStateApi } from '../domain/createFleetRuntimeStateApi.js';")) {
+    const runtimeStateApiSource = await fs.readFile(RUNTIME_STATE_API_PATH, 'utf8');
+    prelude += `${runtimeStateApiSource.replace(
+      'export function createFleetRuntimeStateApi',
+      'function createFleetRuntimeStateApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetModelViewerApi } from '../domain/createFleetModelViewerApi.js';")) {
+    const modelViewerApiSource = await fs.readFile(MODEL_VIEWER_API_PATH, 'utf8');
+    prelude += `${modelViewerApiSource.replace(
+      'export function createFleetModelViewerApi',
+      'function createFleetModelViewerApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetWindowingApi } from '../domain/createFleetWindowingApi.js';")) {
+    const windowingApiSource = await fs.readFile(WINDOWING_API_PATH, 'utf8');
+    prelude += `${windowingApiSource.replace(
+      'export function createFleetWindowingApi',
+      'function createFleetWindowingApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFleetDashboardApi } from '../domain/createFleetDashboardApi.js';")) {
+    const dashboardApiSource = await fs.readFile(DASHBOARD_API_PATH, 'utf8');
+    prelude += `${dashboardApiSource.replace(
+      'export function createFleetDashboardApi',
+      'function createFleetDashboardApi',
+    )}\n`;
+  }
+  const transformed = `${prelude}${source
     .replace(
       "import { createModelAssetResolver } from '../../../primitives/model-viewer/modelAssetResolver.js';",
       "const createModelAssetResolver = () => ({ getInitialModelUrl: (url) => url, bindModelViewerSource: () => {} });",
     )
+        .replace(
+      "import { createFleetDerivedStateApi } from '../domain/createFleetDerivedStateApi.js';",
+      '',
+    )
     .replace(
-      "import { createFleetRuntimeBridge } from '../domain/fleetRuntimeBridge.js';",
-      `const createFleetRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      "import { createFleetSelectionApi } from '../domain/createFleetSelectionApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetMonitorActivityApi } from '../domain/createFleetMonitorActivityApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetCardRenderingApi } from '../domain/createFleetCardRenderingApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetRuntimeStateApi } from '../domain/createFleetRuntimeStateApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetModelViewerApi } from '../domain/createFleetModelViewerApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetWindowingApi } from '../domain/createFleetWindowingApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFleetDashboardApi } from '../domain/createFleetDashboardApi.js';",
+      '',
     )
     .replace(
       'export function createFleetFeature',

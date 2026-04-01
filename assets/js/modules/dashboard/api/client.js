@@ -1,19 +1,38 @@
-export const API_BASE_URL = (() => {
-  const byWindow = typeof window.ROBOT_API_BASE_URL === 'string' ? window.ROBOT_API_BASE_URL.trim() : '';
-  const byQuery = new URLSearchParams(window.location.search).get('apiBase') || '';
+function isLikelyLocalFrontendDevPort(port) {
+  const normalized = String(port || '').trim();
+  if (!normalized) return false;
+
+  if (normalized === '3000' || normalized === '5500' || normalized === '5173') {
+    return true;
+  }
+
+  const numeric = Number.parseInt(normalized, 10);
+  return Number.isInteger(numeric) && numeric >= 8080 && numeric <= 8099;
+}
+
+function resolveApiBaseUrl(windowRef) {
+  const byWindow =
+    typeof windowRef?.ROBOT_API_BASE_URL === 'string' ? windowRef.ROBOT_API_BASE_URL.trim() : '';
+  const byQuery = new URLSearchParams(windowRef?.location?.search || '').get('apiBase') || '';
   const explicit = byWindow || byQuery;
   if (explicit) return explicit.replace(/\/+$/, '');
 
-  if (window.location.port === '3000' || window.location.port === '5500') {
+  const location = windowRef?.location || {};
+  const port = String(location.port || '').trim();
+
+  if (isLikelyLocalFrontendDevPort(port)) {
     return 'http://127.0.0.1:8010';
   }
 
-  if (window.location.port === '5000') {
-    return `${window.location.protocol}//${window.location.hostname}:5010`;
+  if (port === '5000') {
+    return `${location.protocol}//${location.hostname}:5010`;
   }
 
-  return `${window.location.protocol}//${window.location.host}`;
-})();
+  return `${location.protocol}//${location.host}`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(window);
+export { resolveApiBaseUrl };
 
 export function buildApiUrl(path) {
   const cleanPath = String(path || '').startsWith('/') ? path : `/${path}`;

@@ -1,3040 +1,651 @@
 import { renderManageEntityList } from '../../manage/manageEntityList.js';
 import { buildManageHashValue, normalizeManageTabValue, normalizeRobotRegistryPanelValue, parseManageRouteValue } from '../domain/manageNavigation.js';
-import { createDetailRuntimeBridge } from '../domain/detailRuntimeBridge.js';
+import { createModelUploadHelpers } from '../domain/modelUploadHelpers.js';
+import { createDetailManageEntitiesApi } from '../domain/createDetailManageEntitiesApi.js';
+import { createDetailRobotMutationApi } from '../domain/createDetailRobotMutationApi.js';
+import { createDetailTestAndRenderApi } from '../domain/createDetailTestAndRenderApi.js';
+import { createDetailTerminalDebugApi } from '../domain/createDetailTerminalDebugApi.js';
+import { createDetailModelControlsApi } from '../domain/createDetailModelControlsApi.js';
+import { createDetailFiltersApi } from '../domain/createDetailFiltersApi.js';
+import { createDetailDefinitionOwnerApi } from '../domain/createDetailDefinitionOwnerApi.js';
+import { createDetailManageNavigationApi } from '../domain/createDetailManageNavigationApi.js';
+import { createDetailRefreshApi } from '../domain/createDetailRefreshApi.js';
+import { createDetailSessionNavigationApi } from '../domain/createDetailSessionNavigationApi.js';
 import { renderRobotRegistryPanel } from '../view/robotRegistryView.js';
 
 export function createDetailFeature(context, maybeEnv) {
   const runtime = maybeEnv ? context : context?.bridge || context?.runtime || context?.services || {};
   const env = maybeEnv || context?.env || context;
   const POST_CONNECT_TEST_DELAY_MS = 5_000;
+    const {
+    $, $$, CAN_USE_MODEL_VIEWER, DEFAULT_ROBOT_MODEL_URL, DEFAULT_TEST_DEFINITIONS, DETAIL_TERMINAL_PRESET_IDS,
+    FIX_MODE_CONTEXT_DASHBOARD, FIX_MODE_CONTEXT_DETAIL, FLEET_PARALLELISM_DEFAULT, FLEET_PARALLELISM_MAX,
+    FLEET_PARALLELISM_MIN, FLEET_PARALLELISM_STORAGE_KEY, FLEET_RUNTIME_ENDPOINT, FLEET_STATIC_ENDPOINT,
+    FORCE_TEXT_TEST_ICONS, LOW_BATTERY_WARNING_PERCENT, MANAGE_TABS, MANAGE_TAB_STORAGE_KEY, MANAGE_VIEW_HASH,
+    MODAL_SCROLL_LOCK_CLASS, MONITOR_BATTERY_INTERVAL_DEFAULT_SEC, MONITOR_BATTERY_INTERVAL_MAX_SEC,
+    MONITOR_BATTERY_INTERVAL_MIN_SEC, MONITOR_MODE_ONLINE_BATTERY, MONITOR_MODE_ONLINE_BATTERY_TOPICS,
+    MONITOR_ONLINE_INTERVAL_DEFAULT_SEC, MONITOR_ONLINE_INTERVAL_MAX_SEC, MONITOR_ONLINE_INTERVAL_MIN_SEC, MONITOR_SOURCE,
+    MONITOR_TOPICS_INTERVAL_DEFAULT_SEC, MONITOR_TOPICS_INTERVAL_MAX_SEC, MONITOR_TOPICS_INTERVAL_MIN_SEC,
+    MONITOR_TOPICS_SOURCE, ONLINE_CHECK_ESTIMATE_ALPHA, ONLINE_CHECK_TIMEOUT_MS, ONLINE_CHECK_UI_BUFFER_MS,
+    ONLINE_CHECK_UI_MAX_MS, ONLINE_CHECK_UI_MIN_MS, ONLINE_SORT_BATTERY, ONLINE_SORT_LABELS, ONLINE_SORT_NAME,
+    ONLINE_SORT_ORDER, ONLINE_SORT_STATUS, PRESET_COMMANDS, ROBOTS_CONFIG_URL, ROBOT_TYPES, ROBOT_TYPES_CONFIG_URL,
+    ROBOT_TYPE_BY_ID, RUNTIME_ALLOWED_SOURCES, RUNTIME_SYNC_INTERVAL_MS, RobotTerminalComponent, TEST_COUNTDOWN_MAX_SECONDS,
+    TEST_COUNTDOWN_MIN_SECONDS, TEST_COUNTDOWN_MODE_LABELS, TEST_COUNTDOWN_TICK_MS, TEST_COUNTDOWN_WARNING_TEXT,
+    TEST_DEFINITIONS, TEST_ICON_TEXT_FALLBACKS, TEST_STEP_TIMEOUT_MS, WorkflowRecorderComponent,
+    activateRecorderTerminalButton, activateTerminalButton, addRobotForm, addRobotMessage, addRobotPasswordInput,
+    addRobotPasswordToggle, addRobotSavingHint, addRobotOverrideLowModelSelect, addRobotOverrideHighModelSelect,
+    addRobotLowModelField, addRobotLowModelDropzone, addRobotLowModelFileInput, addRobotLowModelFileName,
+    addRobotHighModelField, addRobotHighModelDropzone, addRobotHighModelFileInput, addRobotHighModelFileName,
+    addRobotTypeForm, addRobotTypeMessage, addRobotTypeNameInput, addRobotTypeBatteryCommandInput, addRobotIpInfoButton,
+    addRobotIpInfo, addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo, addRobotTypeLowModelDropzone,
+    addRobotTypeLowModelFileInput, addRobotTypeLowModelFileName, addRobotTypeHighModelDropzone,
+    addRobotTypeHighModelFileInput, addRobotTypeHighModelFileName, addRobotTypeSaveButton, addRobotTypeTopicsInput,
+    addRobotSection, addRobotTypeSelect, applyActionButton, bugReportMessageInput, bugReportModal, bugReportStatus,
+    buildApiUrl, cancelBugReportButton, createActionButton, createPageSessionId, cycleOnlineSortButton, dashboard,
+    dashboardFixModeActions, dashboardFixModePanel, dashboardFixModeStatus, dashboardFixModeSummary, detail,
+    editRobotDeleteButton, editRobotForm, editRobotList, editRobotIpInput, editRobotIpInfoButton, editRobotIpInfo,
+    editRobotOverrideLowModelSelect, editRobotOverrideHighModelSelect, editRobotLowModelField, editRobotLowModelDropzone,
+    editRobotLowModelFileInput, editRobotLowModelFileName, editRobotHighModelField, editRobotHighModelDropzone,
+    editRobotHighModelFileInput, editRobotHighModelFileName, editRobotModelStatus, editRobotClearOverrideField,
+    editRobotClearOverrideInput, editRobotNameInput, editRobotPasswordInput, editRobotSaveButton, editRobotSelect,
+    editRobotStatus, editRobotSummary, editRobotTypeSelect, editRobotTypeManageSelect, editRobotTypeList,
+    editRobotTypeSummary, editRobotTypeStatus, editRobotTypeForm, editRobotTypeIdInput, editRobotTypeNameInput,
+    editRobotTypeBatteryCommandInput, editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo, editRobotTypeLowModelDropzone,
+    editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, editRobotTypeHighModelDropzone,
+    editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, editRobotTypeModelStatus, editRobotTypeClearModelField,
+    editRobotTypeClearModelInput, editRobotTypeSaveButton, editRobotTypeDeleteButton, editRobotUsernameInput,
+    detailFixModeActions, detailFixModePanel, detailFixModeStatus, detailFixModeSummary, detailTerminalShell, emptyState,
+    filterError, filterActiveOwner, filterOwnerTags, filterPlatformTags, filterType, hydrateActionButtons, initThemeSwitcher,
+    initVisualFlows, manageDeleteFixButton, manageDeleteTestButton, manageFixDescriptionInput, manageFixEditorForm,
+    manageFixEditorStatus, manageFixExecuteJsonInput, manageFixIdInput, manageFixLabelInput, manageFixRobotTypeTargets,
+    manageFixesList, manageTabButtons, manageTabPanels, manageTabStatus, manageTestChecksJsonInput, manageTestEditorForm,
+    manageTestEditorStatus, manageTestExecuteJsonInput, manageTestIdInput, manageTestLabelInput, manageTestRobotTypeTargets,
+    manageTestsList, monitorApplyButton, monitorConfigStatus, monitorModeSelect, monitorTopicsIntervalInput, normalizeStatus,
+    normalizeText, normalizeTypeId, offlineGrid, offlineSectionTitle, onlineGrid, onlineSectionTitle, recorderAddOutputBtn,
+    recorderAddReadBtn, recorderCheckCountBadge, recorderCommandInput, recorderCreateNewTestButton, recorderDefinitionIdInput,
+    recorderDefinitionLabelInput, recorderFlowBlocks, recorderLastEditingOutputKey, recorderLastEditingReadBlockId,
+    recorderOutputCountBadge, recorderOutputFailDetailsInput, recorderOutputIconInput, recorderOutputKeyInput,
+    recorderOutputLabelInput, recorderOutputPassDetailsInput, recorderOutputs, recorderPublishStatus,
+    recorderPublishTestButton, recorderReadInputRefSelect, recorderReadKindSelect, recorderReadLinesInput,
+    recorderReadNeedleInput, recorderReadNeedlesInput, recorderReadOutputKeySelect, recorderReadRequireAllInput,
+    recorderRobotSelect, recorderRunCaptureButton, recorderStateBadge, recorderStatus, recorderStepCountBadge,
+    recorderTerminalActivationOverlay, recorderTerminalBadge, recorderTerminalDisplay, recorderTerminalHint,
+    recorderTerminalPopReadBtn, recorderTerminalShell, recorderTerminalToolbar, renderBatteryPill, robotRegistryPanelButtons,
+    robotRegistryPanels, setActionButtonLoading, state, submitBugReportButton, terminal, terminalBadge, terminalHint,
+    terminalToolbar, testDebugBody, testDebugClose, testDebugModal, testDebugSummary, testDebugTitle, themeSelect,
+    toggleDashboardFixModeButton, toggleDetailFixModeButton,
+  } = env;
 
   const {
-    $,
-    $$,
-    CAN_USE_MODEL_VIEWER,
-    DEFAULT_ROBOT_MODEL_URL,
-    DEFAULT_TEST_DEFINITIONS,
-    DETAIL_TERMINAL_PRESET_IDS,
-    FIX_MODE_CONTEXT_DASHBOARD,
-    FIX_MODE_CONTEXT_DETAIL,
-    FLEET_PARALLELISM_DEFAULT,
-    FLEET_PARALLELISM_MAX,
-    FLEET_PARALLELISM_MIN,
-    FLEET_PARALLELISM_STORAGE_KEY,
-    FLEET_RUNTIME_ENDPOINT,
-    FLEET_STATIC_ENDPOINT,
-    FORCE_TEXT_TEST_ICONS,
-    LOW_BATTERY_WARNING_PERCENT,
-    MANAGE_TABS,
+    addRecorderOutputVisual,
+    addRecorderReadVisual, addRobotIdsToSelection, applyDashboardMetaFromVisible, applyFilters, applyMonitorConfig,
+    applyMonitorConfigFromPayload, applyRecorderMappings, applyRuntimeRobotPatches, areAllRobotIdsSelected, batteryReasonText,
+    buildConnectionCornerIconMarkup, buildFixButtonLabel, buildGlobalTestDefinitions, buildLastFullTestPillLabel,
+    buildRobotModelContainer, buildRobotModelMarkup, buildScanOverlayMarkup, buildTestPreviewText,
+    buildTestPreviewTextForResult, clampFleetParallelism, clampMonitorBatteryInterval, clampMonitorOnlineInterval,
+    clampMonitorTopicsInterval, clampOnlineCountdownMs, clearRecorderOutputForm, clearRecorderReadForm, cycleOnlineSortMode,
+    deleteManageFixDefinition, deleteManageTestDefinition, estimateTestCountdownMsFromBody, formatDurationMs,
+    formatLastFullTestTimestamp, formatTestValue, getAutoFixesForType, getConfiguredDefaultTestIds, getCountdownLabel,
+    getCountdownNodes, getDashboardFixCandidates, getDefinitionLabel, getDetailFixCandidates, getFallbackTestIconText,
+    getFixModeElements, getFleetParallelism, getMonitorBatteryIntervalMs, getMonitorOnlineIntervalMs,
+    getMonitorTopicsIntervalMs, getOnlineCheckCountdownMs, getReachableRobotIds, getRobotBatteryState, getRobotById,
+    getRobotDefinitionsForType, getRobotIdsForRun, getRobotTypeConfig, getRunSelectedButtonIdleLabel,
+    getSelectedMappingTypeIds, getSelectedRecorderTypeIds, getSelectedRobotIds, getStatusChipTone, getTestIconPresentation,
+    getTestingCountdownText, getVisibleOfflineRobotIds, getVisibleOnlineRobotIds, hasMixedRobotTypesForIds,
+    haveRuntimeTestsChanged, initDashboardController, initFleetParallelism, initManageTabs, initMonitorConfigControls,
+    initThemeControls, initWorkflowRecorder, invalidateCountdownNodeCache, isRobotAutoSearching, isRobotBusyForOnlineRefresh,
+    isRobotFixing, isRobotSearching, isRobotSelected, isRobotTesting, isTopicsMonitorMode, issueSummary,
+    loadDefinitionsSummary, loadFleetRuntimeDelta, loadFleetStaticState, loadMonitorConfig, loadRobotConfig,
+    loadRobotTypeConfig, loadRobotsFromBackend, mapRobots, mergeRuntimeRobotsIntoList, nonBatteryTestEntries,
+    normalizeAutoFixDefinition, normalizeBatteryPercentForSort, normalizeBatteryReason, normalizeCheckedAtMs,
+    normalizeCountdownMs, normalizeDefinitionsSummary, normalizeIdList, normalizePossibleResult, normalizeRobotActivity,
+    normalizeRobotData, normalizeRobotTests, normalizeRobotTypeConfig, normalizeRuntimeRobotEntry, normalizeRuntimeTestUpdate,
+    normalizeStepDebug, normalizeTestDebugCollection, normalizeTestDebugResult, normalizeTestDefinition, onFilterChange,
+    onlineRobotComparator, parseJsonInput, patchDetailRuntimeContent, patchRobotTypeMapping, publishRecorderAsTest,
+    queryCardByRobotId, readRobotField, rebuildRobotIndex, refreshRuntimeStateFromBackend, refreshTestingCountdowns,
+    removeRobotIdsFromSelection, renderCard, renderDashboard, renderFixModeActionsForContext, renderFixRobotTypeTargets,
+    renderManageDefinitions, renderManageFixesList, renderManageTestsList, renderRecorderRobotOptions,
+    renderRecorderRobotTypeTargets, renderTestRobotTypeTargets, resolveRobotModelUrl, robotId, robotModelMarkup,
+    routeFromHash, runAutoFixCandidate, runAutoFixForRobot, runOneRobotOnlineCheck, runOnlineCheckForAllRobots,
+    runRecorderCommandAndCapture, runRobotTestsForRobot, stopCurrentJob, renderRobotJobQueueStrip,
+    renderRobotStopCurrentJobButton, getDefinitionTagMeta, getScopedTestEntries, runtimeActivityHasSignal,
+    saveManageFixDefinition, saveManageTestDefinition, scheduleMonitorParallelismSync, selectAllOfflineRobots,
+    selectAllOnlineRobots, selectAllRobots, selectRobotIds, setActiveManageTab, setFixModeStatus,
+    setFleetOnlineButtonIdleLabel, setFleetOnlineButtonState, setFleetParallelism, setManageEditorStatus, setManageTabStatus,
+    setModelContainerFaultClasses, setMonitorConfigStatus, setRobotFixing, setRobotSearching, setRobotSearchingBulk,
+    setRobotSelection, setRobotTesting, setRobotTypeDefinitions, setRobots, setRunningButtonState,
+    shouldUseCompactAutoSearchIndicator, slugifyRecorderValue, sortOnlineRobots, startOnlineRefreshStatusTimer,
+    startRuntimeStateSync, startTestingCountdowns, statusChip, statusFromScore, statusSortRank, stopOnlineRefreshStatusTimer,
+    stopRuntimeStateSync, stopTestingCountdowns, syncAutoMonitorRefreshState, syncAutomatedRobotActivityFromState,
+    syncFixModePanels, syncFixModeToggleButton, syncFleetParallelismUi, syncGlobalSelectionButton, syncModalScrollLock,
+    syncModelViewerRotationForContainer, syncMonitorConfigUi, syncMonitorParallelismWithFleet, syncOnlineSortButton,
+    syncRecorderReadKindFields, syncRecorderUiState, syncRunSelectedButtonLabel, syncSectionToggleButtons, syncSelectionUi,
+    toggleFixMode, updateCardRuntimeContent, updateFixMappings, updateFleetOnlineRefreshStatus, updateFleetOnlineSummary,
+    updateKPIs, updateOnlineCheckEstimateFromResults, updateRobotTestState, updateSelectionSummary, updateTestMappings
+  } = runtime;
+
+  const {
+    getOwnerTags,
+    populateFilters,
+    detailMatchesDefinitionFilters,
+  } = createDetailFiltersApi({
+    documentRef: document,
+    filterActiveOwner,
+    filterError,
+    filterOwnerTags,
+    filterPlatformTags,
+    filterType,
+    normalizeText,
+    state,
+  });
+  const { renderDefinitionOwnerInline } = createDetailDefinitionOwnerApi({
+    getDefinitionTagMeta,
+    getOwnerTags,
+    normalizeText,
+  });
+
+  let renderDetail = () => {};
+  let runManualTests = async () => {};
+
+  const {
+    normalizeManageTab,
+    getPersistedManageTab,
+    persistManageTab,
+    resolveManageTab,
+    buildManageHash,
+    parseManageRoute,
+    setLocationHash,
+    isManageViewActive,
+    normalizeRobotRegistryPanel,
+    setActiveRobotRegistryPanel,
+    initRobotRegistryPanels,
+  } = createDetailManageNavigationApi({
     MANAGE_TAB_STORAGE_KEY,
+    MANAGE_TABS,
     MANAGE_VIEW_HASH,
-    MODAL_SCROLL_LOCK_CLASS,
-    MONITOR_BATTERY_INTERVAL_DEFAULT_SEC,
-    MONITOR_BATTERY_INTERVAL_MAX_SEC,
-    MONITOR_BATTERY_INTERVAL_MIN_SEC,
-    MONITOR_MODE_ONLINE_BATTERY,
-    MONITOR_MODE_ONLINE_BATTERY_TOPICS,
-    MONITOR_ONLINE_INTERVAL_DEFAULT_SEC,
-    MONITOR_ONLINE_INTERVAL_MAX_SEC,
-    MONITOR_ONLINE_INTERVAL_MIN_SEC,
-    MONITOR_SOURCE,
-    MONITOR_TOPICS_INTERVAL_DEFAULT_SEC,
-    MONITOR_TOPICS_INTERVAL_MAX_SEC,
-    MONITOR_TOPICS_INTERVAL_MIN_SEC,
-    MONITOR_TOPICS_SOURCE,
-    ONLINE_CHECK_ESTIMATE_ALPHA,
-    ONLINE_CHECK_TIMEOUT_MS,
-    ONLINE_CHECK_UI_BUFFER_MS,
-    ONLINE_CHECK_UI_MAX_MS,
-    ONLINE_CHECK_UI_MIN_MS,
-    ONLINE_SORT_BATTERY,
-    ONLINE_SORT_LABELS,
-    ONLINE_SORT_NAME,
-    ONLINE_SORT_ORDER,
-    ONLINE_SORT_STATUS,
-    PRESET_COMMANDS,
-    ROBOTS_CONFIG_URL,
-    ROBOT_TYPES,
-    ROBOT_TYPES_CONFIG_URL,
-    ROBOT_TYPE_BY_ID,
-    RUNTIME_ALLOWED_SOURCES,
-    RUNTIME_SYNC_INTERVAL_MS,
-    RobotTerminalComponent,
-    TEST_COUNTDOWN_MAX_SECONDS,
-    TEST_COUNTDOWN_MIN_SECONDS,
-    TEST_COUNTDOWN_MODE_LABELS,
-    TEST_COUNTDOWN_TICK_MS,
-    TEST_COUNTDOWN_WARNING_TEXT,
-    TEST_DEFINITIONS,
-    TEST_ICON_TEXT_FALLBACKS,
-    TEST_STEP_TIMEOUT_MS,
-    WorkflowRecorderComponent,
-    activateRecorderTerminalButton,
-    activateTerminalButton,
-    addRobotForm,
-    addRobotMessage,
-    addRobotPasswordInput,
-    addRobotPasswordToggle,
-    addRobotSavingHint,
-    addRobotOverrideLowModelSelect,
-    addRobotOverrideHighModelSelect,
-    addRobotLowModelField,
-    addRobotLowModelDropzone,
-    addRobotLowModelFileInput,
-    addRobotLowModelFileName,
-    addRobotHighModelField,
+    addRobotSection,
+    buildManageHashValue,
+    normalizeManageTabValue,
+    normalizeRobotRegistryPanelValue,
+    normalizeText,
+    parseManageRouteValue,
+    renderRobotRegistryPanel,
+    robotRegistryPanelButtons,
+    robotRegistryPanels,
+    state,
+    windowRef: window,
+  });
+
+  function bindBatteryInfoToggleForModelControls(buttonNode, panelNode) {
+    if (!buttonNode || !panelNode || buttonNode.dataset.infoToggleBound === 'true') return;
+    buttonNode.dataset.infoToggleBound = 'true';
+    buttonNode.addEventListener('click', () => {
+      const expanded = buttonNode.getAttribute('aria-expanded') === 'true';
+      panelNode.classList.toggle('hidden', expanded);
+      buttonNode.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    });
+  }
+
+  function getRobotTypeByIdForModelControls(typeId) {
+    return ROBOT_TYPE_BY_ID.get(normalizeTypeId(typeId)) || null;
+  }
+
+  const {
+    syncUploadDropzoneLabel,
+    normalizeAvailableQualities,
+    modelSupportsQuality,
+    setSelectOptionLabel,
+    bindUploadDropzone,
+    syncRobotModelOverrideVisibility,
+    resetRobotOverrideControls,
+  } = createModelUploadHelpers({ normalizeText });
+
+  const {
+    initRobotOverrideControls,
+    initRobotTypeUploadInputs,
+    resetRobotTypeUploadInputs,
+    syncEditRobotModelControls,
+    syncEditRobotTypeModelControls,
+  } = createDetailModelControlsApi({
     addRobotHighModelDropzone,
+    addRobotHighModelField,
     addRobotHighModelFileInput,
     addRobotHighModelFileName,
-    addRobotTypeForm,
-    addRobotTypeMessage,
-    addRobotTypeNameInput,
-    addRobotTypeBatteryCommandInput,
-    addRobotIpInfoButton,
     addRobotIpInfo,
-    addRobotTypeBatteryInfoButton,
+    addRobotIpInfoButton,
+    addRobotLowModelDropzone,
+    addRobotLowModelField,
+    addRobotLowModelFileInput,
+    addRobotLowModelFileName,
+    addRobotOverrideHighModelSelect,
+    addRobotOverrideLowModelSelect,
     addRobotTypeBatteryInfo,
-    addRobotTypeLowModelDropzone,
-    addRobotTypeLowModelFileInput,
-    addRobotTypeLowModelFileName,
+    addRobotTypeBatteryInfoButton,
     addRobotTypeHighModelDropzone,
     addRobotTypeHighModelFileInput,
     addRobotTypeHighModelFileName,
-    addRobotTypeSaveButton,
-    addRobotTypeTopicsInput,
+    addRobotTypeLowModelDropzone,
+    addRobotTypeLowModelFileInput,
+    addRobotTypeLowModelFileName,
+    bindBatteryInfoToggle: bindBatteryInfoToggleForModelControls,
+    bindUploadDropzone,
+    editRobotClearOverrideField,
+    editRobotClearOverrideInput,
+    editRobotHighModelDropzone,
+    editRobotHighModelField,
+    editRobotHighModelFileInput,
+    editRobotHighModelFileName,
+    editRobotIpInfo,
+    editRobotIpInfoButton,
+    editRobotLowModelDropzone,
+    editRobotLowModelField,
+    editRobotLowModelFileInput,
+    editRobotLowModelFileName,
+    editRobotModelStatus,
+    editRobotOverrideHighModelSelect,
+    editRobotOverrideLowModelSelect,
+    editRobotSelect,
+    editRobotTypeBatteryInfo,
+    editRobotTypeBatteryInfoButton,
+    editRobotTypeClearModelField,
+    editRobotTypeClearModelInput,
+    editRobotTypeHighModelDropzone,
+    editRobotTypeHighModelFileInput,
+    editRobotTypeHighModelFileName,
+    editRobotTypeLowModelDropzone,
+    editRobotTypeLowModelFileInput,
+    editRobotTypeLowModelFileName,
+    editRobotTypeManageSelect,
+    editRobotTypeModelStatus,
+    getRobotById,
+    getRobotTypeById: getRobotTypeByIdForModelControls,
+    getRobotTypeConfig,
+    modelSupportsQuality,
+    normalizeText,
+    resetRobotOverrideControls,
+    setSelectOptionLabel,
+    syncRobotModelOverrideVisibility,
+    syncUploadDropzoneLabel,
+  });
+
+  let closeTestDebugModalHook = () => {};
+  let closeBugReportModalHook = () => {};
+  let refreshRobotsFromBackendSnapshotHook = async () => false;
+  let fillEditRobotTypeFormHook = () => {};
+  let getRobotTypeByIdHook = () => null;
+  let populateAddRobotTypeOptionsHook = () => {};
+  let populateEditRobotSelectOptionsHook = () => {};
+  let setAddRobotMessageHook = () => {};
+  let setAddRobotTypeMessageHook = () => {};
+  let setEditRobotMessageHook = () => {};
+  let setAddRobotPasswordVisibilityHook = () => {};
+  let resetRobotTypeBatteryInfoPanelsHook = () => {};
+  const {
+    hideRecorderReadPopover,
+    syncRecorderReadPopoverVisibility,
+    closeRecorderTerminalSession,
+    setRecorderTerminalActive,
+    openDetail,
+    showAddRobotPage,
+    showDashboard,
+    closeTerminalSession,
+    setTerminalInactive,
+    setTerminalActive,
+  } = createDetailSessionNavigationApi({
+    activateTerminalButton,
+    addRobotForm,
+    addRobotHighModelField,
+    addRobotHighModelFileInput,
+    addRobotHighModelFileName,
+    addRobotLowModelField,
+    addRobotLowModelFileInput,
+    addRobotLowModelFileName,
+    addRobotOverrideHighModelSelect,
+    addRobotOverrideLowModelSelect,
+    addRobotSavingHint,
     addRobotSection,
-    addRobotTypeSelect,
+    addRobotTypeForm,
     applyActionButton,
+    buildManageHash,
+    closeBugReportModal: (...args) => closeBugReportModalHook(...args),
+    closeTestDebugModal: (...args) => closeTestDebugModalHook(...args),
+    dashboard,
+    detail,
+    detailTerminalShell,
+    fillEditRobotTypeForm: (...args) => fillEditRobotTypeFormHook(...args),
+    getRobotTypeById: (...args) => getRobotTypeByIdHook(...args),
+    isManageViewActive,
+    loadDefinitionsSummary,
+    normalizeText,
+    populateAddRobotTypeOptions: (...args) => populateAddRobotTypeOptionsHook(...args),
+    populateEditRobotSelectOptions: (...args) => populateEditRobotSelectOptionsHook(...args),
+    recorderTerminalActivationOverlay,
+    recorderTerminalPopReadBtn,
+    recorderTerminalShell,
+    refreshRobotsFromBackendSnapshot: (...args) => refreshRobotsFromBackendSnapshotHook(...args),
+    renderDashboard,
+    renderDetail: (...args) => renderDetail(...args),
+    renderRecorderRobotOptions,
+    resetRobotOverrideControls,
+    resetRobotTypeBatteryInfoPanels: (...args) => resetRobotTypeBatteryInfoPanelsHook(...args),
+    resetRobotTypeUploadInputs,
+    resolveManageTab,
+    setActiveManageTab,
+    setActiveRobotRegistryPanel,
+    setAddRobotMessage: (...args) => setAddRobotMessageHook(...args),
+    setAddRobotPasswordVisibility: (...args) => setAddRobotPasswordVisibilityHook(...args),
+    setAddRobotTypeMessage: (...args) => setAddRobotTypeMessageHook(...args),
+    setEditRobotMessage: (...args) => setEditRobotMessageHook(...args),
+    setLocationHash,
+    state,
+    syncFixModePanels,
+    terminal,
+    terminalToolbar,
+  });
+
+  const {
+    getTimestamp,
+    appendTerminalLine,
+    runFallbackCommandSimulation,
+    appendTerminalPayload,
+    runFallbackChecks,
+    getDetailTerminalPresets,
+    initRobotTerminal,
+    formatConsoleLine,
+    formatEpochSeconds,
+    formatRawOutput,
+    formatReadEvaluationSummary,
+    formatReadEvaluationPre,
+    closeTestDebugModal,
+    setBugReportStatus,
+    closeBugReportModal,
+    openBugReportModal,
+    submitBugReport,
+    openTestDebugModal,
+  } = createDetailTerminalDebugApi({
+    DETAIL_TERMINAL_PRESET_IDS,
+    PRESET_COMMANDS,
+    batteryReasonText,
     bugReportMessageInput,
     bugReportModal,
     bugReportStatus,
     buildApiUrl,
     cancelBugReportButton,
-    createActionButton,
-    createPageSessionId,
-    cycleOnlineSortButton,
-    dashboard,
-    dashboardFixModeActions,
-    dashboardFixModePanel,
-    dashboardFixModeStatus,
-    dashboardFixModeSummary,
+    getDefinitionLabel,
+    getRobotBatteryState,
+    normalizeText,
+    robotId,
+    setActionButtonLoading,
+    setTerminalActive,
+    state,
+    submitBugReportButton,
+    syncModalScrollLock,
+    terminal,
+    testDebugBody,
+    testDebugModal,
+    testDebugSummary,
+    testDebugTitle,
+  });
+  closeTestDebugModalHook = (...args) => closeTestDebugModal(...args);
+  closeBugReportModalHook = (...args) => closeBugReportModal(...args);
+
+  ({
+    renderDetail,
+    runManualTests,
+  } = createDetailTestAndRenderApi({
+    $,
+    FIX_MODE_CONTEXT_DETAIL,
+    POST_CONNECT_TEST_DELAY_MS,
+    appendTerminalLine,
+    buildConnectionCornerIconMarkup,
+    buildLastFullTestPillLabel,
+    buildRobotModelContainer,
+    buildScanOverlayMarkup,
+    buildTestPreviewTextForResult,
+    closeTerminalSession,
     detail,
+    detailMatchesDefinitionFilters,
+    estimateTestCountdownMsFromBody,
+    getConfiguredDefaultTestIds,
+    getFleetParallelism,
+    getOnlineCheckCountdownMs,
+    getRobotById,
+    getRobotIdsForRun,
+    getRobotBatteryState,
+    getScopedTestEntries,
+    getTestIconPresentation,
+    getTestingCountdownText,
+    hasMixedRobotTypesForIds,
+    hydrateActionButtons,
+    invalidateCountdownNodeCache,
+    isRobotFixing,
+    isRobotSearching,
+    isRobotTesting,
+    mapRobots,
+    nonBatteryTestEntries,
+    normalizeStatus,
+    normalizeText,
+    openTestDebugModal,
+    renderBatteryPill,
+    renderDashboard,
+    renderDefinitionOwnerInline,
+    renderFixModeActionsForContext,
+    renderRobotJobQueueStrip,
+    renderRobotStopCurrentJobButton,
+    robotId,
+    runOneRobotOnlineCheck,
+    runRobotTestsForRobot,
+    runtime,
+    setRobotSearching,
+    setRobotTesting,
+    setRunningButtonState,
+    setTerminalActive,
+    setTerminalInactive,
+    shouldUseCompactAutoSearchIndicator,
+    state,
+    statusChip,
+    statusFromScore,
+    stopCurrentJob,
+    syncFixModePanels,
+    syncModelViewerRotationForContainer,
+    terminal,
+    updateOnlineCheckEstimateFromResults,
+    window,
+  }));
+
+  const {
+    setMessageNode,
+    setCollapsibleTextNode,
+    getRobotTypeById,
+    setBatteryInfoExpanded,
+    bindBatteryInfoToggle,
+    resetRobotTypeBatteryInfoPanels,
+    countRobotsForType,
+    buildKnownTypeEntries,
+    populateAddRobotTypeOptions,
+    populateEditRobotTypeOptions,
+    populateEditRobotSelectOptions,
+    fillEditRobotTypeForm,
+    fillEditRobotForm,
+    setAddRobotMessage,
+    setEditRobotMessage,
+    setEditRobotTypeMessage,
+    setAddRobotTypeMessage,
+    parseApiErrorMessage,
+    refreshDefinitionDependentViewsAfterRobotTypeMutation,
+  } = createDetailManageEntitiesApi({
+    addRobotMessage,
+    addRobotIpInfo,
+    addRobotIpInfoButton,
+    addRobotTypeMessage,
+    addRobotTypeBatteryInfo,
+    addRobotTypeBatteryInfoButton,
+    addRobotTypeSelect,
+    document,
     editRobotDeleteButton,
     editRobotForm,
-    editRobotList,
-    editRobotIpInput,
-    editRobotIpInfoButton,
     editRobotIpInfo,
-    editRobotOverrideLowModelSelect,
-    editRobotOverrideHighModelSelect,
+    editRobotIpInfoButton,
+    editRobotIpInput,
+    editRobotList,
     editRobotLowModelField,
-    editRobotLowModelDropzone,
     editRobotLowModelFileInput,
     editRobotLowModelFileName,
-    editRobotHighModelField,
-    editRobotHighModelDropzone,
-    editRobotHighModelFileInput,
-    editRobotHighModelFileName,
     editRobotModelStatus,
-    editRobotClearOverrideField,
-    editRobotClearOverrideInput,
     editRobotNameInput,
+    editRobotOverrideHighModelSelect,
+    editRobotOverrideLowModelSelect,
     editRobotPasswordInput,
     editRobotSaveButton,
     editRobotSelect,
     editRobotStatus,
     editRobotSummary,
-    editRobotTypeSelect,
-    editRobotTypeManageSelect,
-    editRobotTypeList,
-    editRobotTypeSummary,
-    editRobotTypeStatus,
+    editRobotTypeDeleteButton,
     editRobotTypeForm,
     editRobotTypeIdInput,
+    editRobotTypeList,
+    editRobotTypeManageSelect,
     editRobotTypeNameInput,
     editRobotTypeBatteryCommandInput,
-    editRobotTypeBatteryInfoButton,
-    editRobotTypeBatteryInfo,
-    editRobotTypeLowModelDropzone,
-    editRobotTypeLowModelFileInput,
-    editRobotTypeLowModelFileName,
-    editRobotTypeHighModelDropzone,
-    editRobotTypeHighModelFileInput,
-    editRobotTypeHighModelFileName,
-    editRobotTypeModelStatus,
-    editRobotTypeClearModelField,
-    editRobotTypeClearModelInput,
     editRobotTypeSaveButton,
-    editRobotTypeDeleteButton,
+    editRobotTypeSelect,
+    editRobotTypeStatus,
+    editRobotTypeSummary,
     editRobotUsernameInput,
-    detailFixModeActions,
-    detailFixModePanel,
-    detailFixModeStatus,
-    detailFixModeSummary,
-    detailTerminalShell,
-    emptyState,
-    filterError,
-    filterActiveOwner,
-    filterOwnerTags,
-    filterPlatformTags,
-    filterType,
-    hydrateActionButtons,
-    initThemeSwitcher,
-    initVisualFlows,
-    manageDeleteFixButton,
-    manageDeleteTestButton,
-    manageFixDescriptionInput,
-    manageFixEditorForm,
-    manageFixEditorStatus,
-    manageFixExecuteJsonInput,
-    manageFixIdInput,
-    manageFixLabelInput,
-    manageFixRobotTypeTargets,
-    manageFixesList,
-    manageTabButtons,
-    manageTabPanels,
-    manageTabStatus,
-    manageTestChecksJsonInput,
-    manageTestEditorForm,
-    manageTestEditorStatus,
-    manageTestExecuteJsonInput,
-    manageTestIdInput,
-    manageTestLabelInput,
-    manageTestRobotTypeTargets,
-    manageTestsList,
-    monitorApplyButton,
-    monitorConfigStatus,
-    monitorModeSelect,
-    monitorTopicsIntervalInput,
-    normalizeStatus,
+    editRobotHighModelField,
+    editRobotHighModelFileInput,
+    editRobotHighModelFileName,
+    editRobotClearOverrideInput,
+    editRobotClearOverrideField,
+    editRobotTypeBatteryInfo,
+    editRobotTypeBatteryInfoButton,
+    env,
+    getRobotById,
+    loadDefinitionsSummary,
+    modelSupportsQuality,
     normalizeText,
     normalizeTypeId,
-    offlineGrid,
-    offlineSectionTitle,
-    onlineGrid,
-    onlineSectionTitle,
-    recorderAddOutputBtn,
-    recorderAddReadBtn,
-    recorderCheckCountBadge,
-    recorderCommandInput,
-    recorderCreateNewTestButton,
-    recorderDefinitionIdInput,
-    recorderDefinitionLabelInput,
-    recorderFlowBlocks,
-    recorderLastEditingOutputKey,
-    recorderLastEditingReadBlockId,
-    recorderOutputCountBadge,
-    recorderOutputFailDetailsInput,
-    recorderOutputIconInput,
-    recorderOutputKeyInput,
-    recorderOutputLabelInput,
-    recorderOutputPassDetailsInput,
-    recorderOutputs,
-    recorderPublishStatus,
-    recorderPublishTestButton,
-    recorderReadInputRefSelect,
-    recorderReadKindSelect,
-    recorderReadLinesInput,
-    recorderReadNeedleInput,
-    recorderReadNeedlesInput,
-    recorderReadOutputKeySelect,
-    recorderReadRequireAllInput,
-    recorderRobotSelect,
-    recorderRunCaptureButton,
-    recorderStateBadge,
-    recorderStatus,
-    recorderStepCountBadge,
-    recorderTerminalActivationOverlay,
-    recorderTerminalBadge,
-    recorderTerminalDisplay,
-    recorderTerminalHint,
-    recorderTerminalPopReadBtn,
-    recorderTerminalShell,
-    recorderTerminalToolbar,
-    renderBatteryPill,
-    robotRegistryPanelButtons,
-    robotRegistryPanels,
-    setActionButtonLoading,
+    refreshRobotsFromBackendSnapshot: (...args) => refreshRobotsFromBackendSnapshotHook(...args),
+    renderManageEntityList,
+    resetRobotOverrideControls,
+    resetRobotTypeUploadInputs,
+    robotId,
     state,
-    submitBugReportButton,
-    terminal,
-    terminalBadge,
-    terminalHint,
-    terminalToolbar,
-    testDebugBody,
-    testDebugClose,
-    testDebugModal,
-    testDebugSummary,
-    testDebugTitle,
-    themeSelect,
-    toggleDashboardFixModeButton,
-    toggleDetailFixModeButton,
-  } = env;
-
+    syncEditRobotModelControls,
+    syncEditRobotTypeModelControls,
+  });
+  fillEditRobotTypeFormHook = (...args) => fillEditRobotTypeForm(...args);
+  getRobotTypeByIdHook = (...args) => getRobotTypeById(...args);
+  populateAddRobotTypeOptionsHook = (...args) => populateAddRobotTypeOptions(...args);
+  populateEditRobotSelectOptionsHook = (...args) => populateEditRobotSelectOptions(...args);
+  setAddRobotMessageHook = (...args) => setAddRobotMessage(...args);
+  setAddRobotTypeMessageHook = (...args) => setAddRobotTypeMessage(...args);
+  setEditRobotMessageHook = (...args) => setEditRobotMessage(...args);
+  resetRobotTypeBatteryInfoPanelsHook = (...args) => resetRobotTypeBatteryInfoPanels(...args);
   const {
-    addRecorderOutputVisual,
-    addRecorderReadVisual,
-    addRobotIdsToSelection,
-    applyDashboardMetaFromVisible,
-    applyFilters,
-    applyMonitorConfig,
-    applyMonitorConfigFromPayload,
-    applyRecorderMappings,
-    applyRuntimeRobotPatches,
-    areAllRobotIdsSelected,
-    batteryReasonText,
-    buildConnectionCornerIconMarkup,
-    buildFixButtonLabel,
-    buildGlobalTestDefinitions,
-    buildLastFullTestPillLabel,
-    buildRobotModelContainer,
-    buildRobotModelMarkup,
-    buildScanOverlayMarkup,
-    buildTestPreviewText,
-    buildTestPreviewTextForResult,
-    clampFleetParallelism,
-    clampMonitorBatteryInterval,
-    clampMonitorOnlineInterval,
-    clampMonitorTopicsInterval,
-    clampOnlineCountdownMs,
-    clearRecorderOutputForm,
-    clearRecorderReadForm,
-    cycleOnlineSortMode,
-    deleteManageFixDefinition,
-    deleteManageTestDefinition,
-    estimateTestCountdownMsFromBody,
-    formatDurationMs,
-    formatLastFullTestTimestamp,
-    formatTestValue,
-    getAutoFixesForType,
-    getConfiguredDefaultTestIds,
-    getCountdownLabel,
-    getCountdownNodes,
-    getDashboardFixCandidates,
-    getDefinitionLabel,
-    getDetailFixCandidates,
-    getFallbackTestIconText,
-    getFixModeElements,
-    getFleetParallelism,
-    getMonitorBatteryIntervalMs,
-    getMonitorOnlineIntervalMs,
-    getMonitorTopicsIntervalMs,
-    getOnlineCheckCountdownMs,
-    getReachableRobotIds,
-    getRobotBatteryState,
+    reconcileLoadedRobotDefinitions,
+    refreshRobotsFromBackendSnapshot,
+    setAddRobotPasswordVisibility,
+    initAddRobotPasswordToggle,
+  } = createDetailRefreshApi({
+    addRobotPasswordInput,
+    addRobotPasswordToggle,
+    applyActionButton,
+    dashboard,
+    detail,
     getRobotById,
-    getRobotDefinitionsForType,
-    getRobotIdsForRun,
-    getRobotTypeConfig,
-    getRunSelectedButtonIdleLabel,
-    getSelectedMappingTypeIds,
-    getSelectedRecorderTypeIds,
-    getSelectedRobotIds,
-    getStatusChipTone,
-    getTestIconPresentation,
-    getTestingCountdownText,
-    getVisibleOfflineRobotIds,
-    getVisibleOnlineRobotIds,
-    hasMixedRobotTypesForIds,
+    getRobotTypeById,
     haveRuntimeTestsChanged,
-    initDashboardController,
-    initFleetParallelism,
-    initManageTabs,
-    initMonitorConfigControls,
-    initThemeControls,
-    initWorkflowRecorder,
-    invalidateCountdownNodeCache,
-    isRobotAutoSearching,
-    isRobotBusyForOnlineRefresh,
-    isRobotFixing,
-    isRobotSearching,
-    isRobotSelected,
-    isRobotTesting,
-    isTopicsMonitorMode,
-    issueSummary,
-    loadDefinitionsSummary,
-    loadFleetRuntimeDelta,
-    loadFleetStaticState,
-    loadMonitorConfig,
-    loadRobotConfig,
-    loadRobotTypeConfig,
     loadRobotsFromBackend,
     mapRobots,
-    mergeRuntimeRobotsIntoList,
-    nonBatteryTestEntries,
-    normalizeAutoFixDefinition,
-    normalizeBatteryPercentForSort,
-    normalizeBatteryReason,
-    normalizeCheckedAtMs,
-    normalizeCountdownMs,
-    normalizeDefinitionsSummary,
-    normalizeIdList,
-    normalizeOwnerTags,
-    normalizePlatformTags,
-    normalizeTagList,
-    normalizePossibleResult,
-    normalizeRobotActivity,
-    normalizeRobotData,
     normalizeRobotTests,
-    normalizeRobotTypeConfig,
-    normalizeRuntimeRobotEntry,
-    normalizeRuntimeTestUpdate,
-    normalizeStepDebug,
-    normalizeTestDebugCollection,
-    normalizeTestDebugResult,
-    normalizeTestDefinition,
-    onFilterChange,
-    onlineRobotComparator,
-    parseJsonInput,
-    patchDetailRuntimeContent,
-    patchRobotTypeMapping,
-    publishRecorderAsTest,
-    queryCardByRobotId,
-    readRobotField,
-    rebuildRobotIndex,
-    refreshRuntimeStateFromBackend,
-    refreshTestingCountdowns,
-    removeRobotIdsFromSelection,
-    renderCard,
-    renderDashboard,
-    renderFixModeActionsForContext,
-    renderFixRobotTypeTargets,
-    renderManageDefinitions,
-    renderManageFixesList,
-    renderManageTestsList,
+    normalizeText,
+    populateAddRobotTypeOptions,
+    populateEditRobotSelectOptions,
+    populateEditRobotTypeOptions,
+    populateFilters,
+    reconcileRenderDashboard: renderDashboard,
+    reconcileRenderDetail: (robot) => renderDetail(robot),
     renderRecorderRobotOptions,
-    renderRecorderRobotTypeTargets,
-    renderTestRobotTypeTargets,
-    resolveRobotModelUrl,
     robotId,
-    robotModelMarkup,
-    routeFromHash,
-    runAutoFixCandidate,
-    runAutoFixForRobot,
-    runOneRobotOnlineCheck,
-    runOnlineCheckForAllRobots,
-    runRecorderCommandAndCapture,
-    runRobotTestsForRobot,
-    stopCurrentJob,
-    renderRobotJobQueueStrip,
-    renderRobotStopCurrentJobButton,
-    getDefinitionTagMeta,
-    matchesDefinitionFilters,
-    getScopedTestEntries,
-    runtimeActivityHasSignal,
-    saveManageFixDefinition,
-    saveManageTestDefinition,
-    scheduleMonitorParallelismSync,
-    selectAllOfflineRobots,
-    selectAllOnlineRobots,
-    selectAllRobots,
-    selectRobotIds,
-    setActiveManageTab,
-    setFixModeStatus,
-    setFleetOnlineButtonIdleLabel,
-    setFleetOnlineButtonState,
-    setFleetParallelism,
-    setManageEditorStatus,
-    setManageTabStatus,
-    setModelContainerFaultClasses,
-    setMonitorConfigStatus,
-    setRobotFixing,
-    setRobotSearching,
-    setRobotSearchingBulk,
-    setRobotSelection,
-    setRobotTesting,
-    setRobotTypeDefinitions,
     setRobots,
-    setRunningButtonState,
-    shouldUseCompactAutoSearchIndicator,
-    slugifyRecorderValue,
-    sortOnlineRobots,
-    startOnlineRefreshStatusTimer,
-    startRuntimeStateSync,
-    startTestingCountdowns,
-    statusChip,
-    statusFromScore,
-    statusSortRank,
-    stopOnlineRefreshStatusTimer,
-    stopRuntimeStateSync,
-    stopTestingCountdowns,
+    showDashboard,
+    state,
     syncAutoMonitorRefreshState,
     syncAutomatedRobotActivityFromState,
-    syncFixModePanels,
-    syncFixModeToggleButton,
-    syncFleetParallelismUi,
-    syncGlobalSelectionButton,
-    syncModalScrollLock,
-    syncModelViewerRotationForContainer,
-    syncMonitorConfigUi,
-    syncMonitorParallelismWithFleet,
-    syncOnlineSortButton,
-    syncRecorderReadKindFields,
-    syncRecorderUiState,
-    syncRunSelectedButtonLabel,
-    syncSectionToggleButtons,
-    syncSelectionUi,
-    toggleFixMode,
-    updateCardRuntimeContent,
-    updateFixMappings,
-    updateFleetOnlineRefreshStatus,
-    updateFleetOnlineSummary,
-    updateKPIs,
-    updateOnlineCheckEstimateFromResults,
-    updateRobotTestState,
-    updateSelectionSummary,
-    updateTestMappings,
-  } = createDetailRuntimeBridge(runtime);
-
-  function escapeHtml(value) {
-        return String(value ?? '')
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      }
-
-  function renderDefinitionOwnerInline(definition, fallback = {}) {
-        const tagMeta = getDefinitionTagMeta(definition, fallback) || {};
-        const ownerTags = getOwnerTags(tagMeta?.ownerTags);
-        const firstOwnerTag = ownerTags.find((tag) => normalizeText(tag, '').toLowerCase() !== 'global') || '';
-        if (!firstOwnerTag) return '';
-        return `<span class="detail-owner-inline" data-role="detail-owner-inline"><span class="tag-chip owner">${escapeHtml(firstOwnerTag)}</span></span>`;
-      }
-
-  function getTagList(value) {
-        const normalized = normalizeTagList(value);
-        if (Array.isArray(normalized)) return normalized;
-        return [];
-      }
-
-  function getOwnerTags(value) {
-        const normalized = normalizeOwnerTags(value);
-        if (Array.isArray(normalized) && normalized.length) return normalized;
-        const fallback = getTagList(value);
-        return fallback.length ? fallback : ['global'];
-      }
-
-  function getPlatformTags(value) {
-        const normalized = normalizePlatformTags(value);
-        if (Array.isArray(normalized)) return normalized;
-        return getTagList(value);
-      }
-
-  function detailMatchesDefinitionFilters(definition, fallback = {}) {
-        const match = matchesDefinitionFilters(definition, fallback);
-        if (typeof match === 'boolean') return match;
-        return true;
-      }
-
-  function renderDetail(robot) {
-        const model = $('#detailModel');
-        const testList = $('#testList');
-        const titleBar = $('#detailTitleBar');
-        const statusBar = $('#detailStatusBar');
-  
-        if (!robot) return;
-  
-        const stateKey = statusFromScore(robot);
-        const normalizedRobotId = robotId(robot);
-        const scopedEntries = getScopedTestEntries(robot, { scope: 'all' });
-        const safeScopedEntries = Array.isArray(scopedEntries)
-          ? scopedEntries
-          : nonBatteryTestEntries(robot).map(([id, result]) => ({ id, result }));
-        const errorCount = safeScopedEntries.filter((entry) => normalizeStatus(entry?.result?.status) !== 'ok').length;
-        const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
-        const isTesting = isRobotTesting(normalizedRobotId);
-        const isSearching = isRobotSearching(normalizedRobotId);
-        const isFixing = isRobotFixing(normalizedRobotId);
-        const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
-        const compactAutoSearch = shouldUseCompactAutoSearchIndicator(normalizedRobotId, isOffline, isSearching);
-        const isCountingDown = isTesting || isSearching || isFixing;
-        const testCountdown = isCountingDown ? getTestingCountdownText(normalizedRobotId) : '';
-  
-        if (titleBar) {
-          titleBar.innerHTML = `
-            <span class="detail-title-main">${robot.name}</span>
-            <span class="detail-title-type">(${robot.type})</span>`.trim().replace(/>\s+</g, '><');
-        }
-        if (statusBar) {
-          statusBar.innerHTML = `
-            ${statusChip(stateKey, 'detail-status-chip')}
-            ${renderBatteryPill({
-              value: batteryState.value,
-              status: batteryState.status,
-              reason: batteryState.reason,
-              size: 'small',
-            })}
-            <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-            <span class="detail-issue-count">${errorCount} issue(s)</span>
-            ${renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId)}
-            ${renderRobotJobQueueStrip(robot?.activity, { maxQueued: 4, includeEmpty: true })}`.trim().replace(/>\s+</g, '><');
-          const stopButton = statusBar.querySelector('[data-action="stop-current-job"]');
-          if (stopButton) {
-            stopButton.addEventListener('click', async (event) => {
-              event.preventDefault();
-              const targetRobotId = normalizeText(stopButton.getAttribute('data-robot-id'), normalizedRobotId);
-              try {
-                await stopCurrentJob(targetRobotId);
-                appendTerminalLine(`Stop requested for ${robot.name || targetRobotId}.`, 'warn');
-              } catch (error) {
-                appendTerminalLine(
-                  `Failed to stop job for ${robot.name || targetRobotId}: ${error instanceof Error ? error.message : String(error)}`,
-                  'err',
-                );
-              }
-            });
-          }
-        }
-  
-        const modelMarkup = buildRobotModelContainer(
-          robot,
-          `detail-model ${nonBatteryTestEntries(robot)
-            .filter(([, test]) => test.status !== 'ok')
-            .map(([id]) => `fault-${id}`)
-            .join(' ')}`,
-          isOffline,
-          'low',
-        );
-        const scanningMarkup = buildScanOverlayMarkup({
-          isSearching,
-          isTesting,
-          isFixing,
-          compactAutoSearch,
-        });
-        const countdownMarkup = isCountingDown
-          ? `<div class="scan-countdown" data-robot-id="${normalizedRobotId}">${testCountdown}</div>`
-          : '';
-        const connectionIconMarkup = buildConnectionCornerIconMarkup(isOffline, compactAutoSearch);
-        model.innerHTML = `${modelMarkup}${scanningMarkup}${countdownMarkup}${connectionIconMarkup}`;
-        invalidateCountdownNodeCache();
-        syncModelViewerRotationForContainer(model, isOffline);
-  
-        testList.replaceChildren();
-        const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
-        const filteredDefinitions = definitions.filter((def) => detailMatchesDefinitionFilters(def, robot?.tests?.[def?.id]));
-        filteredDefinitions.forEach((def) => {
-          const result = robot.tests[def.id] && typeof robot.tests[def.id] === 'object'
-            ? robot.tests[def.id]
-            : { status: 'warning', value: 'unknown', details: 'Not checked yet' };
-          const icon = getTestIconPresentation(def.id, def.icon);
-          const previewText = buildTestPreviewTextForResult(def.id, result);
-          const ownerInline = renderDefinitionOwnerInline(def, result);
-          const row = document.createElement('div');
-          row.className = 'test-row';
-          row.setAttribute('data-test-id', def.id);
-          row.innerHTML = `
-            <div class="test-info">
-              <span class="test-title">
-                <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
-                <span class="test-title-label">${def.label}</span>
-              </span>
-              <span class="test-value" data-role="detail-test-value">${previewText}</span>
-            </div>
-              <div class="test-actions">
-              ${ownerInline}
-              <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${def.id}" title="Show detailed output">Info</button>
-              <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
-            </div>`.trim().replace(/>\s+</g, '><');
-          const valueNode = row.querySelector('[data-role="detail-test-value"]');
-          if (valueNode) {
-            valueNode.title = previewText;
-          }
-          const infoButton = row.querySelector(`[data-test-id="${def.id}"]`);
-          if (infoButton) {
-            infoButton.addEventListener('click', (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              openTestDebugModal(robot, def.id);
-            });
-          }
-          testList.appendChild(row);
-        });
-  
-        if (definitions.length > 0) {
-          // Extra tests added by backend but not in the current UI catalog.
-          Object.entries(robot.tests)
-            .filter(([id]) => !definitions.find((test) => test.id === id))
-            .filter(([id, result]) => detailMatchesDefinitionFilters({ id }, result))
-            .forEach(([id, result]) => {
-              const icon = getTestIconPresentation(id, '⚙️');
-              const previewText = buildTestPreviewTextForResult(id, result);
-              const ownerInline = renderDefinitionOwnerInline({}, result);
-              const row = document.createElement('div');
-              row.className = 'test-row';
-              row.setAttribute('data-test-id', id);
-              row.innerHTML = `
-                <div class="test-info">
-                  <span class="test-title">
-                    <span class="${icon.className}" aria-hidden="true">${icon.value}</span>
-                    <span class="test-title-label">${id}</span>
-                  </span>
-                  <span class="test-value" data-role="detail-test-value">${previewText}</span>
-                </div>
-                <div class="test-actions">
-                ${ownerInline}
-                <button class="button test-info-btn" type="button" data-button-intent="utility" data-test-id="${id}" title="Show detailed output">Info</button>
-                <span class="status-chip ${result.status === 'ok' ? 'ok' : result.status === 'warning' ? 'warn' : 'err'}" data-role="detail-test-status-chip">${result.status}</span>
-              </div>`.trim().replace(/>\s+</g, '><');
-              const valueNode = row.querySelector('[data-role="detail-test-value"]');
-              if (valueNode) {
-                valueNode.title = previewText;
-              }
-              const infoButton = row.querySelector(`[data-test-id="${id}"]`);
-              if (infoButton) {
-                infoButton.addEventListener('click', (event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  openTestDebugModal(robot, id);
-                });
-              }
-              testList.appendChild(row);
-            });
-        }
-
-        if (!testList.children.length) {
-          const empty = document.createElement('div');
-          empty.className = 'manage-list-empty';
-          empty.textContent = 'No tests match the selected ownership filter.';
-          testList.appendChild(empty);
-        }
-  
-        const detailId = robotId(robot);
-        if (state.activeTerminalRobotId !== detailId) {
-          closeTerminalSession();
-          setTerminalInactive(robot);
-        } else {
-          setTerminalActive();
-        }
-        hydrateActionButtons(detail);
-        setRunningButtonState(Boolean(state.isTestRunInProgress));
-        if (state.fixModeOpen.detail) {
-          renderFixModeActionsForContext(FIX_MODE_CONTEXT_DETAIL);
-        }
-      }
-
-  async function runManualTests(options = {}) {
-        if (state.isTestRunInProgress) {
-          appendTerminalLine('Test run already in progress. Please wait before running again.', 'warn');
-          return;
-        }
-        if (state.isAutoFixInProgress) {
-          appendTerminalLine('Auto-fix run in progress. Wait for it to complete before running tests.', 'warn');
-          return;
-        }
-  
-        const runIds = getRobotIdsForRun(options);
-        if (!runIds.length) {
-          if (options.autoSelectOnlineWhenEmpty) {
-            appendTerminalLine('No robots selected and none are currently online. Refresh online status or select robots manually.', 'warn');
-          } else {
-            appendTerminalLine('No robot selected for tests. Select at least one robot first.', 'warn');
-          }
-          return;
-        }
-        if (hasMixedRobotTypesForIds(runIds)) {
-          appendTerminalLine('Selected robots must all share the same type before running tests.', 'warn');
-          setRunningButtonState(false);
-          return;
-        }
-
-        const actionableRunIds = [];
-        runIds.forEach((targetId) => {
-          const availability = runtime.getRobotActionAvailability(targetId, 'test');
-          if (availability?.allowed) {
-            actionableRunIds.push(targetId);
-            return;
-          }
-          const robot = getRobotById(targetId);
-          appendTerminalLine(
-            `Skipping tests for ${robot?.name || targetId}: ${availability?.title || 'Robot is busy with another active operation.'}`,
-            'warn',
-          );
-        });
-        if (!actionableRunIds.length) {
-          appendTerminalLine('No selected robots can run tests right now.', 'warn');
-          setRunningButtonState(false);
-          return;
-        }
-  
-        state.isTestRunInProgress = true;
-        setRunningButtonState(true);
-  
-        try {
-          let successCount = 0;
-          let failureCount = 0;
-          const workerCount = Math.max(1, Math.min(getFleetParallelism(), actionableRunIds.length));
-          if (terminal) {
-            appendTerminalLine(
-              `Running selected tests with parallelism ${workerCount} (${actionableRunIds.length} robot${actionableRunIds.length === 1 ? '' : 's'}).`,
-              'warn',
-            );
-          }
-  
-          const queue = [...actionableRunIds];
-          const processOneRobot = async (robotIdValue) => {
-            const robot = getRobotById(robotIdValue);
-            const normalizedRobotId = robotId(robotIdValue);
-            if (!robot || !normalizedRobotId) {
-              failureCount += 1;
-              if (terminal) {
-                appendTerminalLine(`Test run failed for ${robotIdValue}: Robot not found in current state`, 'err');
-              }
-              return;
-            }
-  
-            const previousOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
-            if (terminal) {
-              appendTerminalLine(
-                `Running online precheck for ${robot.name || robotId(robot)}...`,
-                'warn',
-              );
-            }
-
-            const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
-            const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
-            setRobotSearching(normalizedRobotId, true, searchCountdownMs);
-            const onlineStatus = await runOneRobotOnlineCheck(robot);
-            updateOnlineCheckEstimateFromResults([onlineStatus]);
-            mapRobots((item) =>
-              robotId(item) === normalizedRobotId
-                ? {
-                    ...item,
-                    tests: {
-                      ...(item.tests || {}),
-                      online: {
-                        status: onlineStatus.status,
-                        value: onlineStatus.value,
-                        details: onlineStatus.details,
-                      },
-                    },
-                  }
-                : item,
-            );
-            renderDashboard();
-            const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
-            if (activeRobotPostOnline) {
-              renderDetail(activeRobotPostOnline);
-            }
-
-            if (normalizeStatus(onlineStatus.status) !== 'ok') {
-              failureCount += 1;
-              if (terminal) {
-                appendTerminalLine(
-                  `Skipping tests for ${robotId(robot)}: robot is offline (${onlineStatus.details}).`,
-                  'err',
-                );
-              }
-              setRobotSearching(normalizedRobotId, false);
-              setRobotTesting(normalizedRobotId, false);
-              return;
-            }
-
-            if (previousOnlineStatus !== 'ok') {
-              if (terminal) {
-                appendTerminalLine(
-                  `Connected to ${robot.name || robotId(robot)}. Waiting 5s before starting tests...`,
-                  'warn',
-                );
-              }
-              await new Promise((resolve) => window.setTimeout(resolve, POST_CONNECT_TEST_DELAY_MS));
-            }
-            setRobotSearching(normalizedRobotId, false);
-  
-            const body = { ...options.body };
-            const includeOnline = options.includeOnline !== false;
-            const hasExplicitTestIds = Array.isArray(body.testIds) && body.testIds.length;
-            const defaultTestIds = getConfiguredDefaultTestIds(robot, includeOnline);
-  
-            if (!hasExplicitTestIds && defaultTestIds.length) {
-              body.testIds = defaultTestIds;
-            }
-            const countdownMs = estimateTestCountdownMsFromBody(body);
-  
-            if (terminal) {
-              appendTerminalLine(`Running tests for ${robot.name}...`, 'warn');
-            }
-  
-            setRobotTesting(normalizedRobotId, true, countdownMs);
-            try {
-              const result = await runRobotTestsForRobot(robotId(robot), body);
-              if (terminal && Array.isArray(body.testIds) && body.testIds.length) {
-                appendTerminalLine(`Requested test IDs: ${body.testIds.join(', ')}`, 'ok');
-              }
-              successCount += 1;
-              const activeStatus = normalizeText(result?.activeJob?.status, '').toLowerCase();
-              const queuedCount = Array.isArray(result?.queuedJobs) ? result.queuedJobs.length : 0;
-              if (terminal) {
-                if (activeStatus === 'running' || activeStatus === 'interrupting') {
-                  appendTerminalLine(`Started tests for ${robotId(robot)}.`, 'ok');
-                } else {
-                  appendTerminalLine(`Queued tests for ${robotId(robot)} (${queuedCount} queued).`, 'ok');
-                }
-              }
-              renderDashboard();
-  
-              const activeRobot = state.robots.find((item) => robotId(item) === state.detailRobotId);
-              if (activeRobot) {
-                renderDetail(activeRobot);
-              }
-            } catch (error) {
-              failureCount += 1;
-              if (terminal) {
-                appendTerminalLine(
-                  `Test run failed for ${robotId(robot)}: ${error instanceof Error ? error.message : String(error)}`,
-                  'err',
-                );
-              }
-            } finally {
-              setRobotTesting(normalizedRobotId, false);
-            }
-          };
-  
-          const workers = Array.from({ length: workerCount }, () => (async () => {
-            while (queue.length) {
-              const nextRobotId = queue.shift();
-              if (!nextRobotId) break;
-              await processOneRobot(nextRobotId);
-            }
-          })());
-          await Promise.all(workers);
-  
-          if (terminal) {
-            if (failureCount === 0) {
-              appendTerminalLine(`Test run complete (${successCount}/${actionableRunIds.length} robots).`, 'ok');
-            } else {
-              appendTerminalLine(`Test run complete (${successCount} succeeded, ${failureCount} failed).`, 'warn');
-            }
-          }
-  
-          renderDashboard();
-  
-          const activeRobot = state.robots.find((item) => robotId(item) === state.detailRobotId);
-          if (activeRobot) {
-            renderDetail(activeRobot);
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error('Test run failed', error);
-          appendTerminalLine(`Failed to run tests: ${message}`, 'err');
-        } finally {
-          state.isTestRunInProgress = false;
-          setRunningButtonState(false);
-          if (terminal) {
-            appendTerminalLine('Ready.', 'ok');
-          }
-        }
-      }
-
-  function reconcileLoadedRobotDefinitions() {
-        const changedRobotIds = new Set();
-        mapRobots((robot) => {
-          const id = robotId(robot);
-          if (!id || !robot || typeof robot !== 'object') return robot;
-
-          const typeConfig = getRobotTypeConfig(robot.typeId);
-          const normalized = normalizeRobotTests(robot.tests || {}, robot.typeId);
-          const nextDefinitions = Array.isArray(normalized.definitions) ? normalized.definitions : [];
-          const nextTests = normalized.tests && typeof normalized.tests === 'object' ? normalized.tests : {};
-          const nextTopics = Array.isArray(typeConfig?.topics) ? typeConfig.topics : [];
-          const nextAutoFixes = Array.isArray(typeConfig?.autoFixes) ? typeConfig.autoFixes : [];
-
-          const definitionsChanged = JSON.stringify(robot.testDefinitions || []) !== JSON.stringify(nextDefinitions);
-          const testsChanged = haveRuntimeTestsChanged(robot.tests || {}, nextTests);
-          const topicsChanged = JSON.stringify(robot.topics || []) !== JSON.stringify(nextTopics);
-          const autoFixesChanged = JSON.stringify(robot.autoFixes || []) !== JSON.stringify(nextAutoFixes);
-
-          if (!definitionsChanged && !testsChanged && !topicsChanged && !autoFixesChanged) {
-            return robot;
-          }
-
-          changedRobotIds.add(id);
-          return {
-            ...robot,
-            tests: nextTests,
-            testDefinitions: nextDefinitions,
-            topics: nextTopics,
-            autoFixes: nextAutoFixes,
-          };
-        });
-
-        if (!changedRobotIds.size) return changedRobotIds;
-
-        if (dashboard.classList.contains('active')) {
-          renderDashboard();
-        }
-        if (detail.classList.contains('active')) {
-          const activeRobot = getRobotById(state.detailRobotId);
-          if (activeRobot) {
-            renderDetail(activeRobot);
-          }
-        }
-        return changedRobotIds;
-      }
-
-  function normalizeManageTab(tabId) {
-        return normalizeManageTabValue({
-          normalizeText,
-          manageTabs: MANAGE_TABS,
-          tabId,
-        });
-      }
-
-  function getPersistedManageTab() {
-        try {
-          return normalizeManageTab(window.sessionStorage.getItem(MANAGE_TAB_STORAGE_KEY));
-        } catch (_error) {
-          return '';
-        }
-      }
-
-  function persistManageTab(tabId) {
-        const normalized = normalizeManageTab(tabId);
-        if (!normalized) return;
-        try {
-          window.sessionStorage.setItem(MANAGE_TAB_STORAGE_KEY, normalized);
-        } catch (_error) {
-          // Best effort persistence.
-        }
-      }
-
-  function resolveManageTab(tabId = '') {
-        return (
-          normalizeManageTab(tabId)
-          || getPersistedManageTab()
-          || normalizeManageTab(state.activeManageTab)
-          || 'robots'
-        );
-      }
-
-  function buildManageHash(tabId) {
-        return buildManageHashValue({
-          normalizeManageTab,
-          manageViewHash: MANAGE_VIEW_HASH,
-          tabId,
-        });
-      }
-
-  function parseManageRoute(hashValue) {
-        return parseManageRouteValue({
-          normalizeManageTab,
-          normalizeText,
-          manageViewHash: MANAGE_VIEW_HASH,
-          hashValue,
-        });
-      }
-
-  function setLocationHash(hashValue) {
-        const nextHash = normalizeText(hashValue, '').replace(/^#/, '');
-        const currentHash = normalizeText(window.location.hash, '').replace(/^#/, '');
-        if (currentHash === nextHash) return;
-        state.ignoreNextHashChange = true;
-        window.location.hash = nextHash ? `#${nextHash}` : '';
-      }
-
-  function isManageViewActive() {
-        return Boolean(addRobotSection?.classList?.contains('active'));
-      }
-
-  function normalizeRobotRegistryPanel(panelId) {
-        return normalizeRobotRegistryPanelValue(normalizeText, panelId);
-      }
-
-  function setActiveRobotRegistryPanel(panelId = 'existing-robots') {
-        state.activeRobotRegistryPanel = renderRobotRegistryPanel({
-          buttons: robotRegistryPanelButtons,
-          panels: robotRegistryPanels,
-          normalizeRobotRegistryPanel,
-          panelId,
-        });
-      }
-
-  function initRobotRegistryPanels() {
-        robotRegistryPanelButtons.forEach((button) => {
-          button.addEventListener('click', () => {
-            setActiveRobotRegistryPanel(button?.dataset?.robotRegistryPanelButton || 'existing-robots');
-          });
-        });
-        setActiveRobotRegistryPanel(state.activeRobotRegistryPanel || 'existing-robots');
-      }
-
-  function syncUploadDropzoneLabel(input, labelNode, emptyLabel = 'No file selected') {
-        if (!labelNode) return;
-        const file = input?.files?.[0] || null;
-        labelNode.textContent = file ? `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)} MB` : emptyLabel;
-      }
-
-  function normalizeAvailableQualities(model) {
-        const raw = Array.isArray(model?.available_qualities)
-          ? model.available_qualities
-          : Array.isArray(model?.availableQualities)
-            ? model.availableQualities
-            : null;
-        if (!Array.isArray(raw)) return null;
-        return raw
-          .map((quality) => normalizeText(quality, '').toLowerCase())
-          .filter(
-            (quality, index, list) =>
-              (quality === 'low' || quality === 'high') && list.indexOf(quality) === index,
-          );
-      }
-
-  function modelSupportsQuality(model, quality) {
-        const fileName = normalizeText(model?.file_name, '');
-        if (!fileName) return false;
-        const availableQualities = normalizeAvailableQualities(model);
-        if (!Array.isArray(availableQualities)) return true;
-        return availableQualities.includes(quality);
-      }
-
-  function setSelectOptionLabel(selectNode, value, label) {
-        if (!selectNode) return;
-        const option = Array.from(selectNode.options || []).find((entry) => normalizeText(entry.value, '') === value);
-        if (option) option.textContent = label;
-      }
-
-  function bindUploadDropzone(dropzone, input, labelNode, emptyLabel = 'No file selected') {
-        if (!dropzone || !input) return;
-        input.addEventListener('change', () => {
-          syncUploadDropzoneLabel(input, labelNode, emptyLabel);
-        });
-        ['dragenter', 'dragover'].forEach((eventName) => {
-          dropzone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            dropzone.classList.add('is-drag-over');
-          });
-        });
-        ['dragleave', 'dragend', 'drop'].forEach((eventName) => {
-          dropzone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            if (eventName === 'dragleave' && event.target !== dropzone) return;
-            dropzone.classList.remove('is-drag-over');
-          });
-        });
-        dropzone.addEventListener('drop', (event) => {
-          const [file] = Array.from(event?.dataTransfer?.files || []);
-          if (!file) return;
-          try {
-            const transfer = new DataTransfer();
-            transfer.items.add(file);
-            input.files = transfer.files;
-            syncUploadDropzoneLabel(input, labelNode, emptyLabel);
-          } catch (_error) {
-            // Browser fallback: keep native picker path available.
-          }
-        });
-        syncUploadDropzoneLabel(input, labelNode, emptyLabel);
-      }
-
-  function resetRobotTypeUploadInputs() {
-        syncUploadDropzoneLabel(addRobotTypeLowModelFileInput, addRobotTypeLowModelFileName);
-        syncUploadDropzoneLabel(addRobotTypeHighModelFileInput, addRobotTypeHighModelFileName);
-        if (editRobotTypeClearModelInput) editRobotTypeClearModelInput.checked = false;
-        if (editRobotTypeClearModelField) editRobotTypeClearModelField.classList.add('hidden');
-        if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.disabled = false;
-        if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.disabled = false;
-        syncUploadDropzoneLabel(editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, 'Keep existing low-res file');
-        syncUploadDropzoneLabel(editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, 'Keep existing high-res file');
-        if (editRobotTypeModelStatus) editRobotTypeModelStatus.textContent = 'Type model status unavailable.';
-      }
-
-  function syncEditRobotTypeModelControls(typeConfig) {
-        const hasModel = Boolean(normalizeText(typeConfig?.model?.file_name, ''));
-        const clearModel = Boolean(editRobotTypeClearModelInput?.checked) && hasModel;
-        const lowStatus = modelSupportsQuality(typeConfig?.model, 'low')
-          ? normalizeText(typeConfig?.model?.file_name, 'configured')
-          : 'No low-res file configured';
-        const highStatus = modelSupportsQuality(typeConfig?.model, 'high')
-          ? normalizeText(typeConfig?.model?.file_name, 'configured')
-          : 'No high-res file configured';
-
-        if (editRobotTypeClearModelField) {
-          editRobotTypeClearModelField.classList.toggle('hidden', !hasModel);
-        }
-        if (editRobotTypeClearModelInput && !hasModel) {
-          editRobotTypeClearModelInput.checked = false;
-        }
-        if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.disabled = clearModel;
-        if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.disabled = clearModel;
-
-        if (clearModel) {
-          if (editRobotTypeLowModelFileInput) editRobotTypeLowModelFileInput.value = '';
-          if (editRobotTypeHighModelFileInput) editRobotTypeHighModelFileInput.value = '';
-          syncUploadDropzoneLabel(
-            editRobotTypeLowModelFileInput,
-            editRobotTypeLowModelFileName,
-            'Class low-res file will be removed on save',
-          );
-          syncUploadDropzoneLabel(
-            editRobotTypeHighModelFileInput,
-            editRobotTypeHighModelFileName,
-            'Class high-res file will be removed on save',
-          );
-          if (editRobotTypeModelStatus) {
-            editRobotTypeModelStatus.textContent =
-              'Class model will be removed on save. Robots without overrides will use the default viewer.';
-          }
-          return;
-        }
-
-        syncUploadDropzoneLabel(editRobotTypeLowModelFileInput, editRobotTypeLowModelFileName, lowStatus);
-        syncUploadDropzoneLabel(editRobotTypeHighModelFileInput, editRobotTypeHighModelFileName, highStatus);
-        if (editRobotTypeModelStatus) {
-          editRobotTypeModelStatus.textContent = '';
-        }
-      }
-
-  function syncRobotModelOverrideVisibility(selectNode, fieldNode, inputNode, labelNode, emptyLabel) {
-        if (!selectNode || !fieldNode) return;
-        const shouldShow = normalizeText(selectNode.value, 'default') === 'override';
-        fieldNode.classList.toggle('hidden', !shouldShow);
-        if (!shouldShow && inputNode) {
-          inputNode.value = '';
-          syncUploadDropzoneLabel(inputNode, labelNode, emptyLabel);
-        }
-      }
-
-  function syncEditRobotModelControls(robot) {
-        const typeConfig = getRobotTypeConfig(robot?.typeId || robot?.type);
-        const robotModel = robot?.model && typeof robot.model === 'object' ? robot.model : null;
-        const typeModel = typeConfig?.model && typeof typeConfig.model === 'object' ? typeConfig.model : null;
-        const hasOverride = Boolean(normalizeText(robotModel?.file_name, ''));
-        const removeOverride = Boolean(editRobotClearOverrideInput?.checked) && hasOverride;
-        const lowUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'low');
-        const highUsesOverride = hasOverride && modelSupportsQuality(robotModel, 'high');
-        const lowStatus = lowUsesOverride
-          ? normalizeText(robotModel?.file_name, 'configured')
-          : modelSupportsQuality(typeModel, 'low')
-            ? normalizeText(typeModel?.file_name, 'configured')
-            : 'No low-res file configured';
-        const highStatus = highUsesOverride
-          ? normalizeText(robotModel?.file_name, 'configured')
-          : modelSupportsQuality(typeModel, 'high')
-            ? normalizeText(typeModel?.file_name, 'configured')
-            : 'No high-res file configured';
-
-        setSelectOptionLabel(
-          editRobotOverrideLowModelSelect,
-          'default',
-          lowUsesOverride ? 'Keep current override' : 'Keep class model',
-        );
-        setSelectOptionLabel(
-          editRobotOverrideHighModelSelect,
-          'default',
-          highUsesOverride ? 'Keep current override' : 'Keep class model',
-        );
-        setSelectOptionLabel(
-          editRobotOverrideLowModelSelect,
-          'override',
-          lowUsesOverride ? 'Replace current override' : 'Upload override',
-        );
-        setSelectOptionLabel(
-          editRobotOverrideHighModelSelect,
-          'override',
-          highUsesOverride ? 'Replace current override' : 'Upload override',
-        );
-
-        if (editRobotModelStatus) {
-          editRobotModelStatus.textContent = removeOverride
-            ? 'Override will be removed on save. This robot will use the class low/high model files.'
-            : '';
-        }
-        if (editRobotClearOverrideField) {
-          editRobotClearOverrideField.classList.toggle('hidden', !hasOverride);
-        }
-        if (editRobotClearOverrideInput && !hasOverride) {
-          editRobotClearOverrideInput.checked = false;
-        }
-        if (editRobotOverrideLowModelSelect) editRobotOverrideLowModelSelect.disabled = removeOverride;
-        if (editRobotOverrideHighModelSelect) editRobotOverrideHighModelSelect.disabled = removeOverride;
-
-        const lowEmptyLabel = lowUsesOverride
-          ? `Keep current low-res override (${normalizeText(robotModel?.file_name, 'configured')})`
-          : lowStatus;
-        const highEmptyLabel = highUsesOverride
-          ? `Keep current high-res override (${normalizeText(robotModel?.file_name, 'configured')})`
-          : highStatus;
-
-        if (removeOverride) {
-          if (editRobotOverrideLowModelSelect) editRobotOverrideLowModelSelect.value = 'default';
-          if (editRobotOverrideHighModelSelect) editRobotOverrideHighModelSelect.value = 'default';
-        }
-
-        syncRobotModelOverrideVisibility(
-          editRobotOverrideLowModelSelect,
-          editRobotLowModelField,
-          editRobotLowModelFileInput,
-          editRobotLowModelFileName,
-          lowEmptyLabel,
-        );
-        syncRobotModelOverrideVisibility(
-          editRobotOverrideHighModelSelect,
-          editRobotHighModelField,
-          editRobotHighModelFileInput,
-          editRobotHighModelFileName,
-          highEmptyLabel,
-        );
-
-        if (normalizeText(editRobotOverrideLowModelSelect?.value, 'default') !== 'override') {
-          syncUploadDropzoneLabel(editRobotLowModelFileInput, editRobotLowModelFileName, lowEmptyLabel);
-        }
-        if (normalizeText(editRobotOverrideHighModelSelect?.value, 'default') !== 'override') {
-          syncUploadDropzoneLabel(editRobotHighModelFileInput, editRobotHighModelFileName, highEmptyLabel);
-        }
-      }
-
-  function resetRobotOverrideControls({
-        lowSelect,
-        highSelect,
-        lowField,
-        highField,
-        lowInput,
-        highInput,
-        lowLabel,
-        highLabel,
-        lowEmptyLabel,
-        highEmptyLabel,
-        clearOverrideInput,
-        clearOverrideField,
-      }) {
-        if (lowSelect) lowSelect.value = 'default';
-        if (highSelect) highSelect.value = 'default';
-        if (lowInput) lowInput.value = '';
-        if (highInput) highInput.value = '';
-        if (clearOverrideInput) clearOverrideInput.checked = false;
-        if (clearOverrideField) clearOverrideField.classList.add('hidden');
-        if (lowSelect) lowSelect.disabled = false;
-        if (highSelect) highSelect.disabled = false;
-        syncUploadDropzoneLabel(lowInput, lowLabel, lowEmptyLabel);
-        syncUploadDropzoneLabel(highInput, highLabel, highEmptyLabel);
-        syncRobotModelOverrideVisibility(lowSelect, lowField, lowInput, lowLabel, lowEmptyLabel);
-        syncRobotModelOverrideVisibility(highSelect, highField, highInput, highLabel, highEmptyLabel);
-      }
-
-  function initRobotOverrideControls() {
-        bindUploadDropzone(
-          addRobotLowModelDropzone,
-          addRobotLowModelFileInput,
-          addRobotLowModelFileName,
-          'No low-res override selected',
-        );
-        bindUploadDropzone(
-          addRobotHighModelDropzone,
-          addRobotHighModelFileInput,
-          addRobotHighModelFileName,
-          'No high-res override selected',
-        );
-        bindUploadDropzone(
-          editRobotLowModelDropzone,
-          editRobotLowModelFileInput,
-          editRobotLowModelFileName,
-          'Keep class low-res model',
-        );
-        bindUploadDropzone(
-          editRobotHighModelDropzone,
-          editRobotHighModelFileInput,
-          editRobotHighModelFileName,
-          'Keep class high-res model',
-        );
-        addRobotOverrideLowModelSelect?.addEventListener('change', () => {
-          syncRobotModelOverrideVisibility(
-            addRobotOverrideLowModelSelect,
-            addRobotLowModelField,
-            addRobotLowModelFileInput,
-            addRobotLowModelFileName,
-            'No low-res override selected',
-          );
-        });
-        addRobotOverrideHighModelSelect?.addEventListener('change', () => {
-          syncRobotModelOverrideVisibility(
-            addRobotOverrideHighModelSelect,
-            addRobotHighModelField,
-            addRobotHighModelFileInput,
-            addRobotHighModelFileName,
-            'No high-res override selected',
-          );
-        });
-        editRobotOverrideLowModelSelect?.addEventListener('change', () => {
-          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
-        });
-        editRobotOverrideHighModelSelect?.addEventListener('change', () => {
-          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
-        });
-        editRobotClearOverrideInput?.addEventListener('change', () => {
-          syncEditRobotModelControls(getRobotById(editRobotSelect?.value));
-        });
-        resetRobotOverrideControls({
-          lowSelect: addRobotOverrideLowModelSelect,
-          highSelect: addRobotOverrideHighModelSelect,
-          lowField: addRobotLowModelField,
-          highField: addRobotHighModelField,
-          lowInput: addRobotLowModelFileInput,
-          highInput: addRobotHighModelFileInput,
-          lowLabel: addRobotLowModelFileName,
-          highLabel: addRobotHighModelFileName,
-          lowEmptyLabel: 'No low-res override selected',
-          highEmptyLabel: 'No high-res override selected',
-        });
-        resetRobotOverrideControls({
-          lowSelect: editRobotOverrideLowModelSelect,
-          highSelect: editRobotOverrideHighModelSelect,
-          lowField: editRobotLowModelField,
-          highField: editRobotHighModelField,
-          lowInput: editRobotLowModelFileInput,
-          highInput: editRobotHighModelFileInput,
-          lowLabel: editRobotLowModelFileName,
-          highLabel: editRobotHighModelFileName,
-          lowEmptyLabel: 'Keep class low-res model',
-          highEmptyLabel: 'Keep class high-res model',
-          clearOverrideInput: editRobotClearOverrideInput,
-          clearOverrideField: editRobotClearOverrideField,
-        });
-      }
-
-  function initRobotTypeUploadInputs() {
-        bindUploadDropzone(addRobotTypeLowModelDropzone, addRobotTypeLowModelFileInput, addRobotTypeLowModelFileName);
-        bindUploadDropzone(addRobotTypeHighModelDropzone, addRobotTypeHighModelFileInput, addRobotTypeHighModelFileName);
-        bindUploadDropzone(
-          editRobotTypeLowModelDropzone,
-          editRobotTypeLowModelFileInput,
-          editRobotTypeLowModelFileName,
-          'Keep existing low-res file',
-        );
-        bindUploadDropzone(
-          editRobotTypeHighModelDropzone,
-          editRobotTypeHighModelFileInput,
-          editRobotTypeHighModelFileName,
-          'Keep existing high-res file',
-        );
-        editRobotTypeClearModelInput?.addEventListener('change', () => {
-          syncEditRobotTypeModelControls(getRobotTypeById(editRobotTypeManageSelect?.value));
-        });
-        bindBatteryInfoToggle(addRobotIpInfoButton, addRobotIpInfo);
-        bindBatteryInfoToggle(editRobotIpInfoButton, editRobotIpInfo);
-        bindBatteryInfoToggle(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo);
-        bindBatteryInfoToggle(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo);
-        resetRobotTypeUploadInputs();
-      }
-
-  function hideRecorderReadPopover() {
-        if (recorderTerminalPopReadBtn) {
-          recorderTerminalPopReadBtn.style.display = 'none';
-        }
-      }
-
-  function syncRecorderReadPopoverVisibility() {
-        if (
-          !isManageViewActive()
-          || state.activeManageTab !== 'recorder'
-          || !state.recorderTerminalComponent?.terminal
-          || !state.workflowRecorder?.started
-        ) {
-          hideRecorderReadPopover();
-          return;
-        }
-        try {
-          const selection = state.recorderTerminalComponent.terminal.getSelection();
-          if (selection && selection.trim()) {
-            if (recorderTerminalPopReadBtn) recorderTerminalPopReadBtn.style.display = 'block';
-            return;
-          }
-        } catch (_error) {
-          // Best effort UI hint.
-        }
-        hideRecorderReadPopover();
-      }
-
-  function closeRecorderTerminalSession() {
-        hideRecorderReadPopover();
-        if (recorderTerminalShell) {
-          recorderTerminalShell.classList.remove('active');
-        }
-        if (recorderTerminalActivationOverlay) {
-          recorderTerminalActivationOverlay.style.display = '';
-        }
-        if (state.recorderTerminalComponent) {
-          state.recorderTerminalComponent.dispose();
-        }
-      }
-
-  function setRecorderTerminalActive() {
-        if (recorderTerminalShell) {
-          recorderTerminalShell.classList.add('active');
-        }
-        if (recorderTerminalActivationOverlay) {
-          recorderTerminalActivationOverlay.style.display = 'none';
-        }
-      }
-
-  function openDetail(id, { syncHash = true } = {}) {
-        const robot = state.robots.find((r) => r.id === id);
-        if (!robot) return;
-        state.detailRobotId = id;
-        closeRecorderTerminalSession();
-        addRobotSection.classList.remove('active');
-        dashboard.classList.remove('active');
-        detail.classList.add('active');
-        renderDetail(robot);
-        syncFixModePanels();
-        if (syncHash) {
-          setLocationHash(`robot/${id}`);
-        }
-      }
-
-  function showAddRobotPage({
-        tabId = '',
-        syncHash = true,
-        refreshDefinitions = true,
-        robotRegistryPanelId = '',
-      } = {}) {
-        closeTestDebugModal();
-        closeBugReportModal();
-        closeTerminalSession();
-        state.detailRobotId = null;
-        state.isCreateRobotInProgress = false;
-        state.isEditRobotInProgress = false;
-        state.isDeleteRobotInProgress = false;
-        setAddRobotMessage('', '');
-        setEditRobotMessage('', '');
-        setAddRobotTypeMessage('', '');
-        if (addRobotSavingHint) {
-          addRobotSavingHint.textContent = '';
-        }
-        if (addRobotForm) {
-          addRobotForm.reset();
-          setAddRobotPasswordVisibility(false);
-        }
-        if (addRobotTypeForm) {
-          addRobotTypeForm.reset();
-          resetRobotTypeUploadInputs();
-          resetRobotTypeBatteryInfoPanels();
-        }
-        resetRobotOverrideControls({
-          lowSelect: addRobotOverrideLowModelSelect,
-          highSelect: addRobotOverrideHighModelSelect,
-          lowField: addRobotLowModelField,
-          highField: addRobotHighModelField,
-          lowInput: addRobotLowModelFileInput,
-          highInput: addRobotHighModelFileInput,
-          lowLabel: addRobotLowModelFileName,
-          highLabel: addRobotHighModelFileName,
-          lowEmptyLabel: 'No low-res override selected',
-          highEmptyLabel: 'No high-res override selected',
-        });
-        detail.classList.remove('active');
-        dashboard.classList.remove('active');
-        populateAddRobotTypeOptions();
-        populateEditRobotSelectOptions(state.selectedManageRobotId);
-        renderRecorderRobotOptions();
-        const activeTab = resolveManageTab(tabId);
-        const requestedRobotRegistryPanel = normalizeText(robotRegistryPanelId, '');
-        setActiveManageTab(activeTab, { syncHash: false, persist: true });
-        if (activeTab === 'robots' && requestedRobotRegistryPanel) {
-          setActiveRobotRegistryPanel(requestedRobotRegistryPanel);
-        }
-        addRobotSection.classList.add('active');
-        if (!state.robots.length) {
-          refreshRobotsFromBackendSnapshot();
-        }
-        syncFixModePanels();
-        if (syncHash) {
-          setLocationHash(buildManageHash(activeTab));
-        }
-        if (refreshDefinitions) {
-          Promise.resolve(loadDefinitionsSummary()).finally(() => {
-            resetRobotTypeBatteryInfoPanels();
-            fillEditRobotTypeForm(getRobotTypeById(state.selectedManageRobotTypeId));
-          });
-        } else {
-          resetRobotTypeBatteryInfoPanels();
-        }
-      }
-
-  function showDashboard({ syncHash = true } = {}) {
-        closeTestDebugModal();
-        closeBugReportModal();
-        closeTerminalSession();
-        closeRecorderTerminalSession();
-        if (addRobotForm) {
-          addRobotForm.reset();
-        }
-        if (addRobotTypeForm) {
-          addRobotTypeForm.reset();
-          resetRobotTypeUploadInputs();
-          resetRobotTypeBatteryInfoPanels();
-        }
-        resetRobotOverrideControls({
-          lowSelect: addRobotOverrideLowModelSelect,
-          highSelect: addRobotOverrideHighModelSelect,
-          lowField: addRobotLowModelField,
-          highField: addRobotHighModelField,
-          lowInput: addRobotLowModelFileInput,
-          highInput: addRobotHighModelFileInput,
-          lowLabel: addRobotLowModelFileName,
-          highLabel: addRobotHighModelFileName,
-          lowEmptyLabel: 'No low-res override selected',
-          highEmptyLabel: 'No high-res override selected',
-        });
-        setAddRobotMessage('', '');
-        setEditRobotMessage('', '');
-        setAddRobotTypeMessage('', '');
-        if (addRobotSavingHint) {
-          addRobotSavingHint.textContent = '';
-        }
-        detail.classList.remove('active');
-        addRobotSection.classList.remove('active');
-        dashboard.classList.add('active');
-        state.detailRobotId = null;
-        renderDashboard();
-        syncFixModePanels();
-        if (syncHash) {
-          setLocationHash('');
-        }
-      }
-
-  function closeTerminalSession() {
-        if (state.terminalComponent) {
-          state.terminalComponent.dispose();
-        }
-        if (terminal) {
-          terminal.classList.add('fallback');
-          terminal.textContent = '';
-        }
-        if (terminalToolbar) {
-          terminalToolbar.innerHTML = '';
-        }
-        state.terminalMode = 'fallback';
-        state.activeTerminalRobotId = null;
-        setTerminalInactive();
-      }
-
-  function setTerminalInactive(robot = null) {
-        if (detailTerminalShell) {
-          detailTerminalShell.classList.remove('active');
-        }
-        if (activateTerminalButton) {
-          const target = robot?.name || 'robot';
-          applyActionButton(activateTerminalButton, {
-            intent: 'terminal',
-            label: `Connect SSH to ${target}`,
-          });
-        }
-      }
-
-  function setTerminalActive() {
-        if (detailTerminalShell) {
-          detailTerminalShell.classList.add('active');
-        }
-      }
-
-  function getTimestamp() {
-        return new Date().toLocaleTimeString();
-      }
-
-  function appendTerminalLine(line, level = 'ok', fromAuto = false) {
-        const safeLine = `[${getTimestamp()}] ${line}`;
-  
-        const span = document.createElement('span');
-        span.className = `line ${level}`;
-        if (fromAuto) {
-          span.style.opacity = '0.9';
-        }
-        span.textContent = safeLine;
-        terminal.appendChild(span);
-        terminal.scrollTop = terminal.scrollHeight;
-      }
-
-  async function runFallbackCommandSimulation(robot, command, commandId, reason = '') {
-      if (!robot || !robot.id) {
-        appendTerminalLine('Fallback blocked: no active robot selected.', 'err');
-        return;
-      }
-  
-      const commandText = String(command || '').trim();
-      if (!commandText) {
-        appendTerminalLine('Fallback blocked: empty command.', 'warn');
-        return;
-      }
-  
-      const terminalEndpoint = buildApiUrl(`/api/robots/${encodeURIComponent(robot.id)}/terminal`);
-      appendTerminalLine(`$ ${commandText}`, 'warn');
-      if (reason) {
-        appendTerminalLine(`Terminal hint: ${reason}. Attempting direct command execution.`, 'warn');
-      }
-  
-      try {
-        const response = await fetch(terminalEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            robotId: robot.id,
-            command: commandText,
-            commandId,
-            source: 'robot-dashboard-fallback',
-          }),
-        });
-        const responseText = await response.text();
-        if (!response.ok) {
-          appendTerminalLine(`[HTTP ${response.status}] Terminal API rejected the command.`, 'err');
-          if (responseText) appendTerminalLine(responseText, 'err');
-          return;
-        }
-  
-        let payload = null;
-        try {
-          payload = JSON.parse(responseText);
-        } catch (_error) {
-          payload = null;
-        }
-  
-        if (payload) {
-          appendTerminalPayload(payload);
-        } else {
-          appendTerminalLine(responseText || '[No response text]', responseText ? 'plain' : 'warn');
-        }
-        return;
-      } catch (_error) {
-        appendTerminalLine('Direct terminal execution unavailable. Falling back to simulated output.', 'warn');
-      }
-  
-      const map = Object.fromEntries(PRESET_COMMANDS.map((item) => [item.id, item]));
-      const friendly = map[commandId]?.label || commandText;
-      appendTerminalLine(`Simulating output for ${friendly}.`, 'warn');
-      const generalState = robot.tests.general || { status: 'warning', value: 'n/a', details: 'No detail available' };
-      const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {
-        status: 'warning',
-        value: 'n/a',
-        details: 'No detail available',
-      };
-      appendTerminalLine(
-        formatConsoleLine('general', generalState.status, generalState.value, generalState.details),
-        generalState.status === 'error' ? 'err' : generalState.status === 'warning' ? 'warn' : 'ok',
-      );
-      appendTerminalLine(
-        formatConsoleLine('battery', batteryState.status, batteryState.value, batteryState.details),
-        batteryState.status === 'error' ? 'err' : batteryState.status === 'warning' ? 'warn' : 'ok',
-      );
-      appendTerminalLine(`Simulated command result: ${commandText} executed.`, 'warn');
-      appendTerminalLine(`Hint: configure /api/robots/{robotId}/terminal`, 'ok');
-    }
-
-  function appendTerminalPayload(payload) {
-      if (payload === null || payload === undefined) {
-        appendTerminalLine('[Empty output]', 'warn');
-        return;
-      }
-      if (typeof payload.stdout === 'string') {
-        appendTerminalLine(payload.stdout, 'plain');
-      }
-      if (typeof payload.stderr === 'string') {
-        appendTerminalLine(payload.stderr, 'err');
-      }
-      if (typeof payload.output === 'string') {
-        appendTerminalLine(payload.output, 'plain');
-      }
-      if (Array.isArray(payload.lines)) {
-        appendTerminalLine(payload.lines.join('\n'), 'plain');
-      }
-      if (payload.result !== undefined) {
-        appendTerminalLine(String(payload.result), 'plain');
-      }
-      if (typeof payload.exitCode === 'number' && payload.exitCode !== 0) {
-        appendTerminalLine(`[exit ${payload.exitCode}]`, 'warn');
-      }
-      if (typeof payload.code === 'number' && payload.code !== 0) {
-        appendTerminalLine(`[exit ${payload.code}]`, 'warn');
-      }
-  
-      const hasKnownFields =
-        typeof payload.stdout === 'string' ||
-        typeof payload.stderr === 'string' ||
-        typeof payload.output === 'string' ||
-        Array.isArray(payload.lines) ||
-        payload.result !== undefined ||
-        typeof payload.exitCode === 'number' ||
-        typeof payload.code === 'number';
-      if (!hasKnownFields) {
-        appendTerminalLine(JSON.stringify(payload), 'plain');
-      }
-    }
-
-  function runFallbackChecks(robot) {
-        if (!robot) {
-          appendTerminalLine('Fallback blocked: no active robot selected.', 'err');
-          return;
-        }
-        appendTerminalLine('--- Simulated live checks begin ---', 'warn');
-        Object.entries(robot.tests).forEach(([key, value]) => {
-          appendTerminalLine(formatConsoleLine(key, value.status, value.value, value.details), value.status === 'error' ? 'err' : value.status === 'warning' ? 'warn' : 'ok');
-        });
-        appendTerminalLine('--- End checks ---', 'warn');
-      }
-
-  function getDetailTerminalPresets() {
-        return PRESET_COMMANDS.filter((preset) => {
-          const presetId = normalizeText(preset?.id, '').toLowerCase();
-          return DETAIL_TERMINAL_PRESET_IDS.has(presetId);
-        });
-      }
-
-  function initRobotTerminal(robot) {
-        if (!robot) return;
-        if (!state.terminalComponent) return;
-        state.terminalComponent.connect(robot, getDetailTerminalPresets());
-        state.activeTerminalRobotId = robotId(robot);
-        setTerminalActive();
-      }
-
-  function formatConsoleLine(key, status, value, details) {
-        const map = {
-          online: 'network',
-          general: 'system',
-          battery: 'power',
-          movement: 'motion',
-          proximity: 'perception',
-          lidar: 'perception',
-          camera: 'vision',
-        };
-        const zone = map[key] || 'system';
-        if (status === 'ok') {
-          return `[OK] ${zone}::${key} => ${value} | ${details}`;
-        }
-        if (status === 'warning') {
-          return `[WARN] ${zone}::${key} => ${value} | ${details}`;
-        }
-        return `[ERROR] ${zone}::${key} => ${value} | ${details}`;
-      }
-
-  function formatEpochSeconds(value) {
-        const num = Number(value);
-        if (!Number.isFinite(num) || num <= 0) return 'n/a';
-        return new Date(num * 1000).toLocaleString();
-      }
-
-  function formatRawOutput(output) {
-        const text = normalizeText(output, '');
-        if (!text) return '(no output)';
-        try {
-          const parsed = JSON.parse(text);
-          return JSON.stringify(parsed, null, 2);
-        } catch (_error) {
-          return text;
-        }
-      }
-
-  function formatReadEvaluationSummary(readResult) {
-        if (!readResult || typeof readResult !== 'object') return '';
-        const kind = normalizeText(readResult.kind, '');
-        const detailText = normalizeText(readResult.details, '');
-        const missing = Array.isArray(readResult.missing) ? readResult.missing.filter(Boolean) : [];
-        const matched = Array.isArray(readResult.matched) ? readResult.matched.filter(Boolean) : [];
-        const status = readResult.passed ? 'pass' : 'fail';
-        const parts = [];
-        if (kind) parts.push(`${kind}`);
-        parts.push(status);
-        if (detailText) parts.push(detailText);
-        if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
-        if (matched.length) parts.push(`matched: ${matched.join(', ')}`);
-        return parts.join(' | ');
-      }
-
-  function formatReadEvaluationPre(readResult) {
-        if (!readResult || typeof readResult !== 'object') return '';
-        const lines = [];
-        lines.push(`kind: ${normalizeText(readResult.kind, 'n/a')}`);
-        lines.push(`passed: ${Boolean(readResult.passed)}`);
-        lines.push(`details: ${normalizeText(readResult.details, 'No detail available')}`);
-        if (Array.isArray(readResult.missing) && readResult.missing.length) {
-          lines.push(`missing: ${readResult.missing.join(', ')}`);
-        }
-        if (Array.isArray(readResult.matched) && readResult.matched.length) {
-          lines.push(`matched: ${readResult.matched.join(', ')}`);
-        }
-        if (Number.isFinite(Number(readResult.failedRules))) {
-          lines.push(`failedRules: ${Number(readResult.failedRules)}`);
-        }
-        if (Number.isFinite(Number(readResult.totalRules))) {
-          lines.push(`totalRules: ${Number(readResult.totalRules)}`);
-        }
-        lines.push('');
-        lines.push('raw:');
-        lines.push(JSON.stringify(readResult, null, 2));
-        return lines.join('\n');
-      }
-
-  function closeTestDebugModal() {
-        if (!testDebugModal) return;
-        testDebugModal.classList.add('hidden');
-        testDebugModal.setAttribute('aria-hidden', 'true');
-        state.testDebugModalOpen = false;
-        syncModalScrollLock();
-      }
-
-  function setBugReportStatus(message = '', tone = '') {
-        if (!bugReportStatus) return;
-        bugReportStatus.textContent = message;
-        bugReportStatus.classList.remove('ok', 'error');
-        if (tone) {
-          bugReportStatus.classList.add(tone);
-        }
-      }
-
-  function closeBugReportModal({ force = false } = {}) {
-        if (!bugReportModal) return;
-        if (state.isBugReportSubmitInProgress && !force) return;
-        bugReportModal.classList.add('hidden');
-        bugReportModal.setAttribute('aria-hidden', 'true');
-        state.isBugReportModalOpen = false;
-        syncModalScrollLock();
-        setBugReportStatus('', '');
-        if (bugReportMessageInput) {
-          bugReportMessageInput.value = '';
-        }
-        if (submitBugReportButton) {
-          setActionButtonLoading(submitBugReportButton, false, { idleLabel: 'Submit' });
-        }
-        if (cancelBugReportButton) {
-          cancelBugReportButton.disabled = false;
-        }
-      }
-
-  function openBugReportModal() {
-        if (!bugReportModal) return;
-        state.isBugReportModalOpen = true;
-        syncModalScrollLock();
-        state.isBugReportSubmitInProgress = false;
-        setBugReportStatus('', '');
-        if (bugReportMessageInput) {
-          bugReportMessageInput.value = '';
-        }
-        if (cancelBugReportButton) {
-          cancelBugReportButton.disabled = false;
-        }
-        if (submitBugReportButton) {
-          setActionButtonLoading(submitBugReportButton, false, { idleLabel: 'Submit' });
-        }
-        bugReportModal.classList.remove('hidden');
-        bugReportModal.setAttribute('aria-hidden', 'false');
-        if (bugReportMessageInput) {
-          bugReportMessageInput.focus();
-        }
-      }
-
-  async function submitBugReport() {
-        if (state.isBugReportSubmitInProgress) return;
-        const message = normalizeText(bugReportMessageInput?.value, '').trim();
-        if (!message) {
-          setBugReportStatus('Please describe the bug before submitting.', 'error');
-          if (bugReportMessageInput) {
-            bugReportMessageInput.focus();
-          }
-          return;
-        }
-  
-        state.isBugReportSubmitInProgress = true;
-        setBugReportStatus('');
-        if (cancelBugReportButton) {
-          cancelBugReportButton.disabled = true;
-        }
-        if (submitBugReportButton) {
-          setActionButtonLoading(submitBugReportButton, true, {
-            loadingLabel: 'Submitting...',
-            idleLabel: 'Submit',
-          });
-        }
-  
-        try {
-          const response = await fetch(buildApiUrl('/api/bug-reports'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message }),
-          });
-          const raw = await response.text();
-          let payload = null;
-          try {
-            payload = raw ? JSON.parse(raw) : null;
-          } catch (_error) {
-            payload = null;
-          }
-          if (!response.ok) {
-            const details = normalizeText(payload?.detail, raw || 'Unable to save bug report.');
-            setBugReportStatus(details, 'error');
-            return;
-          }
-          closeBugReportModal({ force: true });
-        } catch (_error) {
-          setBugReportStatus('Unable to submit bug report right now.', 'error');
-        } finally {
-          state.isBugReportSubmitInProgress = false;
-          if (cancelBugReportButton) {
-            cancelBugReportButton.disabled = false;
-          }
-          if (submitBugReportButton) {
-            setActionButtonLoading(submitBugReportButton, false, { idleLabel: 'Submit' });
-          }
-        }
-      }
-
-  function openTestDebugModal(robot, testId) {
-        if (!robot || !testDebugModal || !testDebugTitle || !testDebugSummary || !testDebugBody) return;
-  
-        const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
-        const definitionLabel = getDefinitionLabel(definitions, testId);
-        const basicResult = robot?.tests?.[testId] || { status: 'warning', value: 'n/a', details: 'No detail available' };
-        const debugResult = robot?.testDebug?.[testId] || null;
-        const reasonLabel =
-          normalizeText(testId, '').toLowerCase() === 'battery'
-            ? batteryReasonText(basicResult)
-            : '';
-        const errorCodeLabel = normalizeText(debugResult?.errorCode || basicResult?.errorCode, '');
-        const sourceLabel = normalizeText(debugResult?.source || basicResult?.source, '');
-        const debugReasonLabel = normalizeText(debugResult?.reason || basicResult?.reason, '');
-        const readSummaryLabel = formatReadEvaluationSummary(debugResult?.read);
-        const checkedAtLabel = Number.isFinite(Number(debugResult?.checkedAt))
-          ? formatEpochSeconds(debugResult.checkedAt)
-          : 'n/a';
-  
-        testDebugTitle.textContent = `${robot.name} • ${definitionLabel}`;
-        testDebugSummary.textContent = `Status: ${basicResult.status} | Value: ${basicResult.value} | Details: ${basicResult.details}${reasonLabel ? ` | Reason: ${reasonLabel}` : ''}${errorCodeLabel ? ` | ErrorCode: ${errorCodeLabel}` : ''}${sourceLabel ? ` | Source: ${sourceLabel}` : ''}${debugReasonLabel && debugReasonLabel !== reasonLabel ? ` | ResultReason: ${debugReasonLabel}` : ''}${readSummaryLabel ? ` | CheckEval: ${readSummaryLabel}` : ''}`;
-        testDebugBody.replaceChildren();
-  
-        const summaryBlock = document.createElement('pre');
-        summaryBlock.className = 'test-debug-pre';
-        summaryBlock.textContent = debugResult
-          ? [
-              `runId: ${normalizeText(debugResult.runId, 'n/a')}`,
-              `startedAt: ${formatEpochSeconds(debugResult.startedAt)}`,
-              `finishedAt: ${formatEpochSeconds(debugResult.finishedAt)}`,
-              `testMs: ${Number.isFinite(Number(debugResult.ms)) ? Number(debugResult.ms) : 0}`,
-              `status: ${debugResult.status}`,
-              `value: ${debugResult.value}`,
-              `details: ${debugResult.details}`,
-              `errorCode: ${normalizeText(debugResult.errorCode, 'n/a')}`,
-              `source: ${normalizeText(debugResult.source, 'n/a')}`,
-              `reason: ${normalizeText(debugResult.reason, 'n/a')}`,
-              `checkedAt: ${checkedAtLabel}`,
-              `skipped: ${Boolean(debugResult.skipped)}`,
-            ].join('\n')
-          : 'No detailed backend output recorded yet for this test. Run tests once from this page.';
-        testDebugBody.appendChild(summaryBlock);
-
-        const sessionResult = debugResult?.session && typeof debugResult.session === 'object' ? debugResult.session : null;
-        if (sessionResult && Object.keys(sessionResult).length) {
-          const sessionSection = document.createElement('section');
-          sessionSection.className = 'test-debug-step';
-          const sessionTitle = document.createElement('h4');
-          sessionTitle.className = 'test-debug-step-title';
-          sessionTitle.textContent = 'Run session';
-          sessionSection.appendChild(sessionTitle);
-          const sessionPre = document.createElement('pre');
-          sessionPre.className = 'test-debug-pre';
-          sessionPre.textContent = [
-            `runId: ${normalizeText(sessionResult.runId, 'n/a')}`,
-            `robotId: ${normalizeText(sessionResult.robotId, 'n/a')}`,
-            `pageSessionId: ${normalizeText(sessionResult.pageSessionId, 'n/a')}`,
-            `runKind: ${normalizeText(sessionResult.runKind, 'n/a')}`,
-            `transportReused: ${Boolean(sessionResult.transportReused)}`,
-            `resetPolicy: ${normalizeText(sessionResult.resetPolicy, 'n/a')}`,
-          ].join('\n');
-          sessionSection.appendChild(sessionPre);
-          testDebugBody.appendChild(sessionSection);
-        }
-
-        const timingResult = debugResult?.timing && typeof debugResult.timing === 'object' ? debugResult.timing : null;
-        if (timingResult && Object.keys(timingResult).length) {
-          const timingSection = document.createElement('section');
-          timingSection.className = 'test-debug-step';
-          const timingTitle = document.createElement('h4');
-          timingTitle.className = 'test-debug-step-title';
-          timingTitle.textContent = 'Run timing';
-          timingSection.appendChild(timingTitle);
-          const timingPre = document.createElement('pre');
-          timingPre.className = 'test-debug-pre';
-          timingPre.textContent = [
-            `queueMs: ${Number.isFinite(Number(timingResult.queueMs)) ? Number(timingResult.queueMs) : 0}`,
-            `connectMs: ${Number.isFinite(Number(timingResult.connectMs)) ? Number(timingResult.connectMs) : 0}`,
-            `executeMs: ${Number.isFinite(Number(timingResult.executeMs)) ? Number(timingResult.executeMs) : 0}`,
-            `totalMs: ${Number.isFinite(Number(timingResult.totalMs)) ? Number(timingResult.totalMs) : 0}`,
-          ].join('\n');
-          timingSection.appendChild(timingPre);
-          testDebugBody.appendChild(timingSection);
-        }
-
-        if (debugResult && debugResult.read && Object.keys(debugResult.read).length) {
-          const readSection = document.createElement('section');
-          readSection.className = 'test-debug-step';
-          const readTitle = document.createElement('h4');
-          readTitle.className = 'test-debug-step-title';
-          readTitle.textContent = 'Check criteria & evaluation';
-          readSection.appendChild(readTitle);
-          const readPre = document.createElement('pre');
-          readPre.className = 'test-debug-pre';
-          readPre.textContent = formatReadEvaluationPre(debugResult.read);
-          readSection.appendChild(readPre);
-          testDebugBody.appendChild(readSection);
-        }
-
-        if (debugResult && Array.isArray(debugResult.steps) && debugResult.steps.length) {
-          debugResult.steps.forEach((step) => {
-            const stepSection = document.createElement('section');
-            stepSection.className = 'test-debug-step';
-  
-            const heading = document.createElement('h4');
-            heading.className = 'test-debug-step-title';
-            heading.textContent = `Step: ${step.id} (${step.status})`;
-            stepSection.appendChild(heading);
-  
-            const details = document.createElement('pre');
-            details.className = 'test-debug-pre';
-            details.textContent = [
-              `value: ${step.value}`,
-              `details: ${step.details}`,
-              `ms: ${Number.isFinite(Number(step.ms)) ? Number(step.ms) : 0}`,
-              'output:',
-              formatRawOutput(step.output),
-            ].join('\n');
-            stepSection.appendChild(details);
-            testDebugBody.appendChild(stepSection);
-          });
-        }
-  
-        if (debugResult && debugResult.raw && Object.keys(debugResult.raw).length) {
-          const rawSection = document.createElement('section');
-          rawSection.className = 'test-debug-step';
-          const rawTitle = document.createElement('h4');
-          rawTitle.className = 'test-debug-step-title';
-          rawTitle.textContent = 'Parser metadata';
-          rawSection.appendChild(rawTitle);
-          const rawPre = document.createElement('pre');
-          rawPre.className = 'test-debug-pre';
-          rawPre.textContent = JSON.stringify(debugResult.raw, null, 2);
-          rawSection.appendChild(rawPre);
-          testDebugBody.appendChild(rawSection);
-        }
-  
-        testDebugModal.classList.remove('hidden');
-        testDebugModal.setAttribute('aria-hidden', 'false');
-        state.testDebugModalOpen = true;
-        syncModalScrollLock();
-      }
-
-  function populateFilters() {
-        if (!filterType || !filterError) return;
-        const typeOptions = Array.from(new Set(state.robots.map((r) => r.type)));
-        const knownTestDefinitions = new Map();
-        const ownerTagUniverse = new Set();
-        const platformTagUniverse = new Set();
-        const ownerProfiles = new Set();
-        state.robots.forEach((robot) => {
-          const definitions = Array.isArray(robot?.testDefinitions) ? robot.testDefinitions : [];
-          definitions.forEach((test) => {
-            if (!knownTestDefinitions.has(test.id)) {
-              knownTestDefinitions.set(test.id, test);
-            }
-            getOwnerTags(test?.ownerTags).forEach((tag) => {
-              ownerTagUniverse.add(tag);
-              if (tag !== 'global') ownerProfiles.add(tag);
-            });
-            getPlatformTags(test?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
-          });
-        });
-
-        const summaryTests = Array.isArray(state?.definitionsSummary?.tests) ? state.definitionsSummary.tests : [];
-        summaryTests.forEach((test) => {
-          getOwnerTags(test?.ownerTags).forEach((tag) => {
-            ownerTagUniverse.add(tag);
-            if (tag !== 'global') ownerProfiles.add(tag);
-          });
-          getPlatformTags(test?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
-        });
-        const summaryFixes = Array.isArray(state?.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [];
-        summaryFixes.forEach((fix) => {
-          getOwnerTags(fix?.ownerTags).forEach((tag) => {
-            ownerTagUniverse.add(tag);
-            if (tag !== 'global') ownerProfiles.add(tag);
-          });
-          getPlatformTags(fix?.platformTags).forEach((tag) => platformTagUniverse.add(tag));
-        });
-
-        const previousType = normalizeText(state?.filter?.type, 'all');
-        const previousError = normalizeText(state?.filter?.error, 'all');
-        const previousOwnerTags = getTagList(state?.filter?.ownerTags);
-        const previousPlatformTags = getTagList(state?.filter?.platformTags);
-        const previousActiveOwner = normalizeText(state?.filter?.activeOwnerProfile, '').toLowerCase();
-  
-        filterType.innerHTML = `<option value="all">All Types</option>`;
-        typeOptions.forEach((type) => {
-          const opt = document.createElement('option');
-          opt.value = type;
-          opt.textContent = type;
-          filterType.appendChild(opt);
-        });
-  
-        filterError.innerHTML = `
-          <option value="all">All Robots</option>
-          <option value="healthy">Healthy</option>
-          <option value="warning">Warnings</option>
-          <option value="critical">Critical</option>
-          <option value="unknown">Unknown</option>
-          <option value="error">Any error</option>
-        `.trim().replace(/>\s+</g, '><');
-  
-        Array.from(knownTestDefinitions.values()).forEach((test) => {
-          const option = document.createElement('option');
-          option.value = test.id;
-          option.textContent = `${test.label} errors`;
-          filterError.appendChild(option);
-        });
-
-        if (Array.from(filterType.options || []).some((option) => normalizeText(option?.value, '') === previousType)) {
-          filterType.value = previousType;
-        } else {
-          filterType.value = 'all';
-        }
-        if (Array.from(filterError.options || []).some((option) => normalizeText(option?.value, '') === previousError)) {
-          filterError.value = previousError;
-        } else {
-          filterError.value = 'all';
-        }
-
-        if (filterOwnerTags) {
-          const ownerOptions = Array.from(ownerTagUniverse).sort((left, right) => left.localeCompare(right));
-          filterOwnerTags.innerHTML = '';
-          ownerOptions.forEach((tag) => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            option.selected = previousOwnerTags.includes(tag);
-            filterOwnerTags.appendChild(option);
-          });
-        }
-
-        if (filterPlatformTags) {
-          const platformOptions = Array.from(platformTagUniverse).sort((left, right) => left.localeCompare(right));
-          filterPlatformTags.innerHTML = '';
-          platformOptions.forEach((tag) => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            option.selected = previousPlatformTags.includes(tag);
-            filterPlatformTags.appendChild(option);
-          });
-        }
-
-        if (filterActiveOwner) {
-          const activeOwnerOptions = Array.from(ownerProfiles).sort((left, right) => left.localeCompare(right));
-          filterActiveOwner.innerHTML = `<option value="">Global</option>`;
-          activeOwnerOptions.forEach((tag) => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            filterActiveOwner.appendChild(option);
-          });
-          filterActiveOwner.value = activeOwnerOptions.includes(previousActiveOwner) ? previousActiveOwner : '';
-        }
-
-        const filterState = state.filter && typeof state.filter === 'object'
-          ? state.filter
-          : (state.filter = {});
-        filterState.type = normalizeText(filterType?.value, normalizeText(filterState.type, 'all'));
-        filterState.error = normalizeText(filterError?.value, normalizeText(filterState.error, 'all'));
-        const activeOwnerProfile = normalizeText(filterActiveOwner?.value, '').toLowerCase();
-        const selectedOwnerTags = filterOwnerTags
-          ? Array.from(filterOwnerTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
-          : [];
-        filterState.ownerTags = selectedOwnerTags.length
-          ? selectedOwnerTags
-          : (activeOwnerProfile ? [activeOwnerProfile] : []);
-        filterState.platformTags = filterPlatformTags
-          ? Array.from(filterPlatformTags.selectedOptions || []).map((option) => normalizeText(option?.value, '').toLowerCase()).filter(Boolean)
-          : [];
-        filterState.activeOwnerProfile = activeOwnerProfile;
-      }
-
-  function setMessageNode(node, message, style = '') {
-        if (!node) return;
-        const normalizedMessage = normalizeText(message, '');
-        node.textContent = normalizedMessage;
-        node.classList.remove('error', 'ok', 'warn');
-        node.classList.toggle('is-empty', !normalizedMessage);
-        if (node.style) {
-          node.style.display = normalizedMessage ? '' : 'none';
-          node.style.minHeight = normalizedMessage ? '' : '0';
-          node.style.margin = normalizedMessage ? '' : '0';
-        }
-        if (style) node.classList.add(style);
-      }
-
-  function setCollapsibleTextNode(node, message) {
-        if (!node) return;
-        const normalizedMessage = normalizeText(message, '');
-        node.textContent = normalizedMessage;
-        node.classList.toggle('is-empty', !normalizedMessage);
-        if (node.style) {
-          node.style.display = normalizedMessage ? '' : 'none';
-          node.style.minHeight = normalizedMessage ? '' : '0';
-          node.style.margin = normalizedMessage ? '' : '0';
-        }
-      }
-
-  function getRobotTypeById(typeId) {
-        return env.ROBOT_TYPE_BY_ID.get(normalizeTypeId(typeId)) || null;
-      }
-
-  function setBatteryInfoExpanded(buttonNode, panelNode, expanded) {
-        if (!panelNode) return;
-        panelNode.classList.toggle('hidden', !expanded);
-        if (buttonNode) {
-          buttonNode.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        }
-      }
-
-  function bindBatteryInfoToggle(buttonNode, panelNode) {
-        if (!buttonNode || !panelNode || buttonNode.dataset.infoToggleBound === 'true') return;
-        buttonNode.dataset.infoToggleBound = 'true';
-        buttonNode.addEventListener('click', () => {
-          const expanded = buttonNode.getAttribute('aria-expanded') === 'true';
-          setBatteryInfoExpanded(buttonNode, panelNode, !expanded);
-        });
-      }
-
-  function resetRobotTypeBatteryInfoPanels() {
-        setBatteryInfoExpanded(addRobotIpInfoButton, addRobotIpInfo, false);
-        setBatteryInfoExpanded(addRobotTypeBatteryInfoButton, addRobotTypeBatteryInfo, false);
-        setBatteryInfoExpanded(editRobotIpInfoButton, editRobotIpInfo, false);
-        setBatteryInfoExpanded(editRobotTypeBatteryInfoButton, editRobotTypeBatteryInfo, false);
-      }
-
-  function countRobotsForType(typeId) {
-        const typeKey = normalizeTypeId(typeId);
-        return state.robots.filter((robot) => normalizeTypeId(robot?.typeId || robot?.type) === typeKey).length;
-      }
-
-  function buildKnownTypeEntries() {
-        const seenTypes = new Set();
-        return env.ROBOT_TYPES
-          .map((typeConfig) => {
-            const typeId = normalizeText(typeConfig?.typeId, '');
-            const typeKey = normalizeTypeId(typeId);
-            if (!typeId || seenTypes.has(typeKey)) return null;
-            seenTypes.add(typeKey);
-            return {
-              typeId,
-              label: normalizeText(typeConfig?.label, typeId),
-              topics: Array.isArray(typeConfig?.topics) ? typeConfig.topics : [],
-              model: typeConfig?.model && typeof typeConfig.model === 'object' ? typeConfig.model : null,
-              assignedRobotCount: countRobotsForType(typeId),
-            };
-          })
-          .filter(Boolean);
-      }
-
-  function populateAddRobotTypeOptions(preferredTypeId = '') {
-        const typeEntries = buildKnownTypeEntries();
-
-        if (addRobotTypeSelect) {
-          const selectedType = normalizeText(preferredTypeId || addRobotTypeSelect.value, '');
-          addRobotTypeSelect.replaceChildren();
-          if (!typeEntries.length) {
-            const emptyOption = document.createElement('option');
-            emptyOption.value = '';
-            emptyOption.textContent = 'No robot types found';
-            emptyOption.disabled = true;
-            addRobotTypeSelect.appendChild(emptyOption);
-          } else {
-            const placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = 'Select a robot type';
-            placeholder.disabled = true;
-            addRobotTypeSelect.appendChild(placeholder);
-            typeEntries.forEach((entry) => {
-              const option = document.createElement('option');
-              option.value = entry.typeId;
-              option.textContent = entry.label;
-              addRobotTypeSelect.appendChild(option);
-            });
-            const preferred = addRobotTypeSelect.querySelector(`option[value="${selectedType}"]`)
-              || addRobotTypeSelect.querySelector('option:not([value=""])');
-            if (preferred) preferred.selected = true;
-          }
-        }
-
-        if (editRobotTypeSelect) {
-          const selectedType = normalizeText(preferredTypeId || editRobotTypeSelect.value, '');
-          editRobotTypeSelect.replaceChildren();
-          if (!typeEntries.length) {
-            const emptyOption = document.createElement('option');
-            emptyOption.value = '';
-            emptyOption.textContent = 'No robot types found';
-            emptyOption.disabled = true;
-            editRobotTypeSelect.appendChild(emptyOption);
-          } else {
-            typeEntries.forEach((entry) => {
-              const option = document.createElement('option');
-              option.value = entry.typeId;
-              option.textContent = entry.label;
-              editRobotTypeSelect.appendChild(option);
-            });
-            const preferred = editRobotTypeSelect.querySelector(`option[value="${selectedType}"]`)
-              || editRobotTypeSelect.querySelector('option');
-            if (preferred) preferred.selected = true;
-          }
-        }
-
-        populateEditRobotTypeOptions(preferredTypeId || state.selectedManageRobotTypeId);
-      }
-
-  function populateEditRobotTypeOptions(preferredTypeId = '') {
-        if (!editRobotTypeManageSelect) return;
-        const typeEntries = [...buildKnownTypeEntries()].sort((a, b) => {
-          const aLabel = normalizeText(a?.label, '').toLowerCase();
-          const bLabel = normalizeText(b?.label, '').toLowerCase();
-          return aLabel.localeCompare(bLabel);
-        });
-        editRobotTypeManageSelect.replaceChildren();
-        if (!typeEntries.length) {
-          const emptyOption = document.createElement('option');
-          emptyOption.value = '';
-          emptyOption.textContent = 'No robot types available';
-          editRobotTypeManageSelect.appendChild(emptyOption);
-          renderManageEntityList({ container: editRobotTypeList, items: [], emptyText: 'No robot types available.' });
-          state.selectedManageRobotTypeId = '';
-          fillEditRobotTypeForm(null);
-          return;
-        }
-        typeEntries.forEach((entry) => {
-          const option = document.createElement('option');
-          option.value = entry.typeId;
-          option.textContent = `${entry.label} (${entry.typeId})`;
-          editRobotTypeManageSelect.appendChild(option);
-        });
-        const nextTypeId = preferredTypeId || state.selectedManageRobotTypeId || normalizeText(typeEntries[0]?.typeId, '');
-        if (nextTypeId) {
-          const option = editRobotTypeManageSelect.querySelector(`option[value="${nextTypeId}"]`)
-            || editRobotTypeManageSelect.querySelector('option');
-          if (option) option.selected = true;
-          state.selectedManageRobotTypeId = normalizeText(option?.value, '');
-        }
-        renderManageEntityList({
-          container: editRobotTypeList,
-          items: typeEntries,
-          emptyText: 'No robot types available.',
-          activeId: state.selectedManageRobotTypeId,
-          getId: (entry) => entry.typeId,
-          getLabel: (entry) => ({
-            title: normalizeText(entry?.label, normalizeText(entry?.typeId, 'Unnamed type')),
-            meta: normalizeText(entry?.typeId, ''),
-            ariaLabel: `${normalizeText(entry?.label, normalizeText(entry?.typeId, 'Unnamed type'))} ${normalizeText(entry?.typeId, '')}`.trim(),
-          }),
-          onSelect: (_entry, id) => {
-            state.selectedManageRobotTypeId = id;
-            if (editRobotTypeManageSelect) editRobotTypeManageSelect.value = id;
-            fillEditRobotTypeForm(getRobotTypeById(id));
-            setEditRobotTypeMessage('', '');
-            populateEditRobotTypeOptions(id);
-          },
-        });
-        fillEditRobotTypeForm(getRobotTypeById(state.selectedManageRobotTypeId));
-      }
-
-  function populateEditRobotSelectOptions(preferredRobotId = '') {
-        if (!editRobotSelect) return;
-        const robots = [...state.robots].sort((a, b) => {
-          const aName = normalizeText(a?.name, '').toLowerCase();
-          const bName = normalizeText(b?.name, '').toLowerCase();
-          return aName.localeCompare(bName);
-        });
-        editRobotSelect.replaceChildren();
-        if (!robots.length) {
-          const emptyOption = document.createElement('option');
-          emptyOption.value = '';
-          emptyOption.textContent = 'No robots available';
-          editRobotSelect.appendChild(emptyOption);
-          renderManageEntityList({ container: editRobotList, items: [], emptyText: 'No robots available.' });
-          state.selectedManageRobotId = '';
-          fillEditRobotForm(null);
-          return;
-        }
-        robots.forEach((robot) => {
-          const id = robotId(robot);
-          if (!id) return;
-          const option = document.createElement('option');
-          option.value = id;
-          option.textContent = `${normalizeText(robot.name, id)} (${normalizeText(robot.type, 'n/a')})`;
-          editRobotSelect.appendChild(option);
-        });
-        const nextId = preferredRobotId || state.selectedManageRobotId || robotId(robots[0]);
-        if (nextId) {
-          const option = editRobotSelect.querySelector(`option[value="${nextId}"]`) || editRobotSelect.querySelector('option');
-          if (option) option.selected = true;
-          state.selectedManageRobotId = normalizeText(option?.value, '');
-        }
-        renderManageEntityList({
-          container: editRobotList,
-          items: robots,
-          emptyText: 'No robots available.',
-          activeId: state.selectedManageRobotId,
-          getId: (robot) => robotId(robot),
-          getLabel: (robot) => {
-            const id = robotId(robot);
-            const typeLabel = normalizeText(robot?.type, normalizeText(robot?.typeId, 'n/a'));
-            const name = normalizeText(robot?.name, id);
-            return {
-              title: name,
-              meta: typeLabel,
-              ariaLabel: `${name} ${typeLabel}`.trim(),
-            };
-          },
-          onSelect: (_robot, id) => {
-            state.selectedManageRobotId = id;
-            if (editRobotSelect) editRobotSelect.value = id;
-            fillEditRobotForm(getRobotById(id));
-            setEditRobotMessage('', '');
-            populateEditRobotSelectOptions(id);
-          },
-        });
-        fillEditRobotForm(getRobotById(state.selectedManageRobotId));
-      }
-
-  function fillEditRobotTypeForm(typeConfig) {
-        if (!editRobotTypeForm) return;
-        if (!typeConfig) {
-          if (editRobotTypeIdInput) editRobotTypeIdInput.value = '';
-          if (editRobotTypeNameInput) editRobotTypeNameInput.value = '';
-          if (editRobotTypeBatteryCommandInput) editRobotTypeBatteryCommandInput.value = '';
-          if (editRobotTypeForm) editRobotTypeForm.reset();
-          resetRobotTypeUploadInputs();
-          resetRobotTypeBatteryInfoPanels();
-          setCollapsibleTextNode(editRobotTypeSummary, 'Select a robot type to view details.');
-          if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = true;
-          if (editRobotTypeDeleteButton) editRobotTypeDeleteButton.disabled = true;
-          return;
-        }
-        const typeId = normalizeText(typeConfig.typeId, '');
-        const assignedRobotCount = countRobotsForType(typeId);
-        if (editRobotTypeForm) editRobotTypeForm.reset();
-        if (editRobotTypeIdInput) editRobotTypeIdInput.value = typeId;
-        if (editRobotTypeNameInput) editRobotTypeNameInput.value = normalizeText(typeConfig.label, typeId);
-        if (editRobotTypeBatteryCommandInput) {
-          editRobotTypeBatteryCommandInput.value = normalizeText(typeConfig?.batteryCommand, '');
-        }
-        resetRobotTypeUploadInputs();
-        resetRobotTypeBatteryInfoPanels();
-        if (editRobotTypeSummary) {
-          const modelFileName = normalizeText(typeConfig?.model?.file_name, 'no model');
-          const lowAvailable = modelSupportsQuality(typeConfig?.model, 'low') ? 'configured' : 'missing';
-          const highAvailable = modelSupportsQuality(typeConfig?.model, 'high') ? 'configured' : 'missing';
-          const batteryState = normalizeText(typeConfig?.batteryCommand, '') ? 'configured' : 'off';
-          setCollapsibleTextNode(editRobotTypeSummary, '');
-        }
-        syncEditRobotTypeModelControls(typeConfig);
-        if (editRobotTypeSaveButton) editRobotTypeSaveButton.disabled = false;
-        if (editRobotTypeDeleteButton) {
-          editRobotTypeDeleteButton.disabled = false;
-        }
-      }
-
-  function fillEditRobotForm(robot) {
-        if (!editRobotForm) return;
-        if (!robot) {
-          if (editRobotNameInput) editRobotNameInput.value = '';
-          if (editRobotIpInput) editRobotIpInput.value = '';
-          if (editRobotForm) editRobotForm.reset();
-          resetRobotOverrideControls({
-            lowSelect: editRobotOverrideLowModelSelect,
-            highSelect: editRobotOverrideHighModelSelect,
-            lowField: editRobotLowModelField,
-            highField: editRobotHighModelField,
-            lowInput: editRobotLowModelFileInput,
-            highInput: editRobotHighModelFileInput,
-          lowLabel: editRobotLowModelFileName,
-          highLabel: editRobotHighModelFileName,
-          lowEmptyLabel: 'Keep class low-res model',
-          highEmptyLabel: 'Keep class high-res model',
-          clearOverrideInput: editRobotClearOverrideInput,
-          clearOverrideField: editRobotClearOverrideField,
-        });
-          if (editRobotUsernameInput) editRobotUsernameInput.value = '';
-          if (editRobotPasswordInput) editRobotPasswordInput.value = '';
-          setCollapsibleTextNode(editRobotSummary, 'Select a robot to view details.');
-          if (editRobotModelStatus) editRobotModelStatus.textContent = 'Robot currently uses the class model.';
-          if (editRobotSaveButton) editRobotSaveButton.disabled = true;
-          if (editRobotDeleteButton) editRobotDeleteButton.disabled = true;
-          return;
-        }
-        if (editRobotForm) editRobotForm.reset();
-        if (editRobotNameInput) editRobotNameInput.value = normalizeText(robot.name, '');
-        if (editRobotTypeSelect) {
-          editRobotTypeSelect.value = normalizeText(robot.typeId, normalizeText(robot.type, ''));
-        }
-        if (editRobotIpInput) editRobotIpInput.value = normalizeText(robot.ip, '');
-        resetRobotOverrideControls({
-          lowSelect: editRobotOverrideLowModelSelect,
-          highSelect: editRobotOverrideHighModelSelect,
-          lowField: editRobotLowModelField,
-          highField: editRobotHighModelField,
-          lowInput: editRobotLowModelFileInput,
-          highInput: editRobotHighModelFileInput,
-          lowLabel: editRobotLowModelFileName,
-          highLabel: editRobotHighModelFileName,
-          lowEmptyLabel: 'Keep class low-res model',
-          highEmptyLabel: 'Keep class high-res model',
-          clearOverrideInput: editRobotClearOverrideInput,
-          clearOverrideField: editRobotClearOverrideField,
-        });
-        syncEditRobotModelControls(robot);
-        if (editRobotUsernameInput) editRobotUsernameInput.value = normalizeText(robot?.ssh?.username, '');
-        if (editRobotPasswordInput) editRobotPasswordInput.value = normalizeText(robot?.ssh?.password, '');
-        if (editRobotSummary) {
-          const hasOverride = Boolean(normalizeText(robot?.model?.file_name, ''));
-          setCollapsibleTextNode(editRobotSummary, '');
-        }
-        if (editRobotSaveButton) editRobotSaveButton.disabled = false;
-        if (editRobotDeleteButton) editRobotDeleteButton.disabled = false;
-      }
-
-  function setAddRobotMessage(message, style = 'warn') {
-        setMessageNode(addRobotMessage, message, style);
-      }
-
-  function setEditRobotMessage(message, style = 'warn') {
-        setMessageNode(editRobotStatus, message, style);
-      }
-
-  function setEditRobotTypeMessage(message, style = 'warn') {
-        setMessageNode(editRobotTypeStatus, message, style);
-      }
-
-  function setAddRobotTypeMessage(message, style = 'warn') {
-        setMessageNode(addRobotTypeMessage, message, style);
-      }
-
-  async function parseApiErrorMessage(response, fallbackMessage) {
-        const raw = await response.text();
-        let message = raw;
-        try {
-          const parsed = JSON.parse(raw);
-          message = normalizeText(parsed?.detail, raw);
-        } catch (_error) {
-          // Keep raw text.
-        }
-        return normalizeText(message, fallbackMessage);
-      }
-
-  async function refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId = '' } = {}) {
-        const refreshed = await refreshRobotsFromBackendSnapshot({ preferredTypeId });
-        await loadDefinitionsSummary();
-        return refreshed;
-      }
-
-  function setAddRobotPasswordVisibility(isVisible) {
-        if (!addRobotPasswordInput || !addRobotPasswordToggle) return;
-        addRobotPasswordInput.type = isVisible ? 'text' : 'password';
-        applyActionButton(addRobotPasswordToggle, {
-          intent: 'utility',
-          label: isVisible ? 'Hide' : 'Show',
-        });
-        addRobotPasswordToggle.setAttribute('aria-label', isVisible ? 'Hide password' : 'Show password');
-      }
-
-  async function createRobotFromForm() {
-        if (!addRobotForm || state.isCreateRobotInProgress) return;
-        const form = new FormData(addRobotForm);
-        const name = normalizeText(form.get('name'), '');
-        const typeId = normalizeText(form.get('type'), '');
-        const ip = normalizeText(form.get('ip'), '');
-        const username = normalizeText(form.get('username'), '');
-        const password = normalizeText(form.get('password'), '');
-        const lowOverrideEnabled = normalizeText(addRobotOverrideLowModelSelect?.value, 'default') === 'override';
-        const highOverrideEnabled = normalizeText(addRobotOverrideHighModelSelect?.value, 'default') === 'override';
-        const lowModelFile = addRobotLowModelFileInput?.files?.[0] || null;
-        const highModelFile = addRobotHighModelFileInput?.files?.[0] || null;
-  
-        if (!name || !typeId || !ip || !username || !password) {
-          setAddRobotMessage('All fields except model fields are required.', 'error');
-          return;
-        }
-        if (lowOverrideEnabled && !lowModelFile) {
-          setAddRobotMessage('Choose a low quality override file or keep the class model.', 'error');
-          return;
-        }
-        if (highOverrideEnabled && !highModelFile) {
-          setAddRobotMessage('Choose a high quality override file or keep the class model.', 'error');
-          return;
-        }
-  
-        const knownType = env.ROBOT_TYPES.some(
-          (type) => normalizeTypeId(type?.typeId) === normalizeTypeId(typeId),
-        );
-        if (!knownType) {
-          setAddRobotMessage('Selected type is invalid. Choose an existing type.', 'error');
-          return;
-        }
-
-        state.isCreateRobotInProgress = true;
-        const saveButton = addRobotForm.querySelector('button[type="submit"]');
-        if (saveButton) {
-          setActionButtonLoading(saveButton, true, {
-            loadingLabel: 'Saving...',
-            idleLabel: 'Save robot',
-          });
-        }
-        if (addRobotSavingHint) {
-          addRobotSavingHint.textContent = 'Saving robot...';
-        }
-  
-        try {
-          const payload = new FormData();
-          payload.set('name', name);
-          payload.set('type', typeId);
-          payload.set('ip', ip);
-          payload.set('username', username);
-          payload.set('password', password);
-          if (lowOverrideEnabled && lowModelFile) payload.set('lowModelFile', lowModelFile);
-          if (highOverrideEnabled && highModelFile) payload.set('highModelFile', highModelFile);
-          const response = await fetch(buildApiUrl('/api/robots'), {
-            method: 'POST',
-            body: payload,
-          });
-  
-          if (!response.ok) {
-            const responseText = await response.text();
-            setAddRobotMessage(responseText || 'Unable to create robot.', 'error');
-            return;
-          }
-          const createdRobot = await response.json();
-
-          setAddRobotMessage('Robot created and written to config.', 'ok');
-          await refreshRobotsFromBackendSnapshot();
-          populateEditRobotSelectOptions(normalizeText(createdRobot?.id, ''));
-          setEditRobotMessage('New robot is ready for review/editing.', 'ok');
-          if (editRobotSelect?.value) {
-            setActiveManageTab('robots', { syncHash: false, persist: true });
-            setActiveRobotRegistryPanel('existing-robots');
-          }
-          if (addRobotForm) addRobotForm.reset();
-          resetRobotOverrideControls({
-            lowSelect: addRobotOverrideLowModelSelect,
-            highSelect: addRobotOverrideHighModelSelect,
-            lowField: addRobotLowModelField,
-            highField: addRobotHighModelField,
-            lowInput: addRobotLowModelFileInput,
-            highInput: addRobotHighModelFileInput,
-            lowLabel: addRobotLowModelFileName,
-            highLabel: addRobotHighModelFileName,
-            lowEmptyLabel: 'No low-res override selected',
-            highEmptyLabel: 'No high-res override selected',
-          });
-        } finally {
-          state.isCreateRobotInProgress = false;
-          if (saveButton) {
-            setActionButtonLoading(saveButton, false, {
-              idleLabel: 'Save robot',
-            });
-          }
-          if (addRobotSavingHint) {
-            addRobotSavingHint.textContent = '';
-          }
-        }
-      }
-
-  async function saveRobotEditsFromForm() {
-        const selectedRobotId = normalizeText(editRobotSelect?.value, '');
-        if (!selectedRobotId || state.isEditRobotInProgress) return;
-        const name = normalizeText(editRobotNameInput?.value, '');
-        const type = normalizeText(editRobotTypeSelect?.value, '');
-        const ip = normalizeText(editRobotIpInput?.value, '');
-        const username = normalizeText(editRobotUsernameInput?.value, '');
-        const password = normalizeText(editRobotPasswordInput?.value, '');
-        const lowOverrideEnabled = normalizeText(editRobotOverrideLowModelSelect?.value, 'default') === 'override';
-        const highOverrideEnabled = normalizeText(editRobotOverrideHighModelSelect?.value, 'default') === 'override';
-        const clearModelOverride = Boolean(editRobotClearOverrideInput?.checked);
-        const lowModelFile = editRobotLowModelFileInput?.files?.[0] || null;
-        const highModelFile = editRobotHighModelFileInput?.files?.[0] || null;
-        if (!name || !type || !ip || !username || !password) {
-          setEditRobotMessage('All fields except model fields are required.', 'error');
-          return;
-        }
-        if (clearModelOverride && (lowOverrideEnabled || highOverrideEnabled || lowModelFile || highModelFile)) {
-          setEditRobotMessage('Choose either override removal or replacement uploads, not both.', 'error');
-          return;
-        }
-        if (lowOverrideEnabled && !lowModelFile) {
-          setEditRobotMessage('Choose a low quality override file or keep the class model.', 'error');
-          return;
-        }
-        if (highOverrideEnabled && !highModelFile) {
-          setEditRobotMessage('Choose a high quality override file or keep the class model.', 'error');
-          return;
-        }
-        state.isEditRobotInProgress = true;
-        if (editRobotSaveButton) {
-          setActionButtonLoading(editRobotSaveButton, true, {
-            loadingLabel: 'Saving...',
-            idleLabel: 'Save changes',
-          });
-        }
-        try {
-          const payload = new FormData();
-          payload.set('name', name);
-          payload.set('type', type);
-          payload.set('ip', ip);
-          payload.set('username', username);
-          payload.set('password', password);
-          if (clearModelOverride) payload.set('clearModelOverride', 'true');
-          if (lowOverrideEnabled && lowModelFile) payload.set('lowModelFile', lowModelFile);
-          if (highOverrideEnabled && highModelFile) payload.set('highModelFile', highModelFile);
-          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(selectedRobotId)}`), {
-            method: 'PUT',
-            body: payload,
-          });
-          if (!response.ok) {
-            const responseText = await response.text();
-            setEditRobotMessage(responseText || 'Unable to update robot.', 'error');
-            return;
-          }
-          setEditRobotMessage('Robot updated successfully.', 'ok');
-          await refreshRobotsFromBackendSnapshot();
-        } finally {
-          state.isEditRobotInProgress = false;
-          if (editRobotSaveButton) {
-            setActionButtonLoading(editRobotSaveButton, false, { idleLabel: 'Save changes' });
-          }
-        }
-      }
-
-  async function deleteSelectedRobotFromForm() {
-        const selectedRobotId = normalizeText(editRobotSelect?.value, '');
-        if (!selectedRobotId || state.isDeleteRobotInProgress) return;
-        const robot = getRobotById(selectedRobotId);
-        const label = normalizeText(robot?.name, selectedRobotId);
-        if (!window.confirm(`Delete robot "${label}"? This cannot be undone.`)) {
-          return;
-        }
-        state.isDeleteRobotInProgress = true;
-        if (editRobotDeleteButton) {
-          setActionButtonLoading(editRobotDeleteButton, true, {
-            loadingLabel: 'Deleting...',
-            idleLabel: 'Delete robot',
-          });
-        }
-        try {
-          const response = await fetch(buildApiUrl(`/api/robots/${encodeURIComponent(selectedRobotId)}`), {
-            method: 'DELETE',
-          });
-          if (!response.ok) {
-            const responseText = await response.text();
-            setEditRobotMessage(responseText || 'Unable to delete robot.', 'error');
-            return;
-          }
-          setEditRobotMessage('Robot deleted from registry.', 'ok');
-          await refreshRobotsFromBackendSnapshot();
-          populateEditRobotSelectOptions('');
-        } finally {
-          state.isDeleteRobotInProgress = false;
-          if (editRobotDeleteButton) {
-            setActionButtonLoading(editRobotDeleteButton, false, { idleLabel: 'Delete robot' });
-          }
-        }
-      }
-
-  async function saveRobotTypeEditsFromForm() {
-        const selectedTypeId = normalizeText(editRobotTypeManageSelect?.value, '');
-        if (!selectedTypeId || state.isEditRobotTypeInProgress) return;
-        const form = new FormData(editRobotTypeForm);
-        const name = normalizeText(form.get('name'), '');
-        const batteryCommand = normalizeText(form.get('batteryCommand'), '');
-        const clearModel = Boolean(editRobotTypeClearModelInput?.checked);
-        const lowModelFile = editRobotTypeLowModelFileInput?.files?.[0] || null;
-        const highModelFile = editRobotTypeHighModelFileInput?.files?.[0] || null;
-        if (!name) {
-          setEditRobotTypeMessage('Display name is required.', 'error');
-          return;
-        }
-        if (clearModel && (lowModelFile || highModelFile)) {
-          setEditRobotTypeMessage('Choose either class model removal or replacement uploads, not both.', 'error');
-          return;
-        }
-        state.isEditRobotTypeInProgress = true;
-        if (editRobotTypeSaveButton) {
-          setActionButtonLoading(editRobotTypeSaveButton, true, {
-            loadingLabel: 'Saving...',
-            idleLabel: 'Save type',
-          });
-        }
-        try {
-          const payload = new FormData();
-          payload.set('name', name);
-          payload.set('batteryCommand', batteryCommand);
-          if (clearModel) payload.set('clearModel', 'true');
-          if (lowModelFile) payload.set('lowModelFile', lowModelFile);
-          if (highModelFile) payload.set('highModelFile', highModelFile);
-          const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(selectedTypeId)}`), {
-            method: 'PUT',
-            body: payload,
-          });
-          if (!response.ok) {
-            setEditRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to update robot type.'), 'error');
-            return;
-          }
-          setEditRobotTypeMessage('Robot type updated successfully.', 'ok');
-          await refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId: selectedTypeId });
-        } finally {
-          state.isEditRobotTypeInProgress = false;
-          if (editRobotTypeSaveButton) {
-            setActionButtonLoading(editRobotTypeSaveButton, false, { idleLabel: 'Save type' });
-          }
-        }
-      }
-
-  async function deleteSelectedRobotTypeFromForm() {
-        const selectedTypeId = normalizeText(editRobotTypeManageSelect?.value, '');
-        if (!selectedTypeId || state.isDeleteRobotTypeInProgress) return;
-        const typeConfig = getRobotTypeById(selectedTypeId);
-        const label = normalizeText(typeConfig?.label, selectedTypeId);
-        if (!window.confirm(`Delete robot type "${label}"? This cannot be undone.`)) {
-          return;
-        }
-        state.isDeleteRobotTypeInProgress = true;
-        if (editRobotTypeDeleteButton) {
-          setActionButtonLoading(editRobotTypeDeleteButton, true, {
-            loadingLabel: 'Deleting...',
-            idleLabel: 'Delete type',
-          });
-        }
-        try {
-          const response = await fetch(buildApiUrl(`/api/robot-types/${encodeURIComponent(selectedTypeId)}`), {
-            method: 'DELETE',
-          });
-          if (!response.ok) {
-            setEditRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to delete robot type.'), 'error');
-            return;
-          }
-          if (normalizeText(state.selectedManageRobotTypeId, '') === selectedTypeId) {
-            state.selectedManageRobotTypeId = '';
-          }
-          setEditRobotTypeMessage('Robot type deleted.', 'ok');
-          await refreshDefinitionDependentViewsAfterRobotTypeMutation();
-        } finally {
-          state.isDeleteRobotTypeInProgress = false;
-          if (editRobotTypeDeleteButton) {
-            setActionButtonLoading(editRobotTypeDeleteButton, false, { idleLabel: 'Delete type' });
-          }
-        }
-      }
-
-      async function createRobotTypeFromForm() {
-        if (!addRobotTypeForm || state.isCreateRobotTypeInProgress) return;
-        const form = new FormData(addRobotTypeForm);
-        const name = normalizeText(form.get('name'), '');
-        const batteryCommand = normalizeText(form.get('batteryCommand'), '');
-        const lowModelFile = addRobotTypeLowModelFileInput?.files?.[0] || null;
-        const highModelFile = addRobotTypeHighModelFileInput?.files?.[0] || null;
-        if (!name) {
-          setAddRobotTypeMessage('Display name is required.', 'error');
-          return;
-        }
-        if (!lowModelFile || !highModelFile) {
-          setAddRobotTypeMessage('Both low and high quality model files are required.', 'error');
-          return;
-        }
-        state.isCreateRobotTypeInProgress = true;
-        if (addRobotTypeSaveButton) {
-          setActionButtonLoading(addRobotTypeSaveButton, true, {
-            loadingLabel: 'Creating...',
-            idleLabel: 'Create robot type',
-          });
-        }
-        try {
-          const payload = new FormData();
-          payload.set('name', name);
-          payload.set('batteryCommand', batteryCommand);
-          payload.set('lowModelFile', lowModelFile);
-          payload.set('highModelFile', highModelFile);
-          const response = await fetch(buildApiUrl('/api/robot-types'), {
-            method: 'POST',
-            body: payload,
-          });
-          if (!response.ok) {
-            setAddRobotTypeMessage(await parseApiErrorMessage(response, 'Unable to create robot type.'), 'error');
-            return;
-          }
-          const createdType = await response.json();
-          const createdTypeId = normalizeText(createdType?.typeId || createdType?.id, '');
-          setAddRobotTypeMessage('Robot type created and saved.', 'ok');
-          await refreshDefinitionDependentViewsAfterRobotTypeMutation({ preferredTypeId: createdTypeId });
-          if (addRobotTypeForm) addRobotTypeForm.reset();
-          resetRobotTypeUploadInputs();
-          resetRobotTypeBatteryInfoPanels();
-          setActiveRobotRegistryPanel('new-robot-type');
-        } finally {
-          state.isCreateRobotTypeInProgress = false;
-          if (addRobotTypeSaveButton) {
-            setActionButtonLoading(addRobotTypeSaveButton, false, { idleLabel: 'Create robot type' });
-          }
-        }
-      }
-
-  async function refreshRobotsFromBackendSnapshot(options = {}) {
-        const preferredManageRobotId = normalizeText(options?.preferredManageRobotId, '');
-        const preferredTypeId = normalizeText(options?.preferredTypeId, '');
-        const previousSelectedIds = Array.from(state.selectedRobotIds || []);
-        const previousDetailRobotId = normalizeText(state.detailRobotId, '');
-        const previousManageRobotId = normalizeText(state.selectedManageRobotId, '');
-        try {
-          const refreshed = await loadRobotsFromBackend();
-          setRobots(refreshed);
-        } catch (_error) {
-          reconcileLoadedRobotDefinitions();
-          return false;
-        }
-  
-        const validRobotIds = new Set(state.robots.map((robot) => robotId(robot)).filter(Boolean));
-        state.selectedRobotIds = new Set(previousSelectedIds.filter((id) => validRobotIds.has(id)));
-        state.testingRobotIds = new Set(Array.from(state.testingRobotIds).filter((id) => validRobotIds.has(id)));
-        state.searchingRobotIds = new Set(Array.from(state.searchingRobotIds).filter((id) => validRobotIds.has(id)));
-        state.fixingRobotIds = new Set(Array.from(state.fixingRobotIds).filter((id) => validRobotIds.has(id)));
-        state.autoTestingRobotIds = new Set(Array.from(state.autoTestingRobotIds).filter((id) => validRobotIds.has(id)));
-        state.autoSearchingRobotIds = new Set(Array.from(state.autoSearchingRobotIds).filter((id) => validRobotIds.has(id)));
-        state.autoActivityRobotIds = new Set(Array.from(state.autoActivityRobotIds).filter((id) => validRobotIds.has(id)));
-  
-        if (previousDetailRobotId && !validRobotIds.has(previousDetailRobotId)) {
-          state.detailRobotId = null;
-        }
-  
-        syncAutomatedRobotActivityFromState();
-        syncAutoMonitorRefreshState();
-        populateFilters();
-        populateAddRobotTypeOptions(preferredTypeId);
-        populateEditRobotSelectOptions(preferredManageRobotId || previousManageRobotId);
-        populateEditRobotTypeOptions(preferredTypeId || state.selectedManageRobotTypeId);
-        renderRecorderRobotOptions();
-  
-        if (dashboard.classList.contains('active')) {
-          renderDashboard();
-        }
-  
-        if (detail.classList.contains('active')) {
-          const activeRobot = getRobotById(previousDetailRobotId || state.detailRobotId);
-          if (activeRobot) {
-            renderDetail(activeRobot);
-          } else {
-            showDashboard({ syncHash: false });
-          }
-        }
-  
-        return true;
-      }
-
-  function initAddRobotPasswordToggle() {
-        if (!addRobotPasswordToggle || !addRobotPasswordInput) return;
-        addRobotPasswordToggle.addEventListener('click', () => {
-          setAddRobotPasswordVisibility(addRobotPasswordInput.type === 'password');
-        });
-      }
+  });
+  setAddRobotPasswordVisibilityHook = (...args) => setAddRobotPasswordVisibility(...args);
+  refreshRobotsFromBackendSnapshotHook = (...args) => refreshRobotsFromBackendSnapshot(...args);
+
+  const {
+    createRobotFromForm,
+    saveRobotEditsFromForm,
+    deleteSelectedRobotFromForm,
+    saveRobotTypeEditsFromForm,
+    deleteSelectedRobotTypeFromForm,
+    createRobotTypeFromForm,
+  } = createDetailRobotMutationApi({
+    addRobotForm,
+    addRobotHighModelField,
+    addRobotHighModelFileInput,
+    addRobotHighModelFileName,
+    addRobotLowModelField,
+    addRobotLowModelFileInput,
+    addRobotLowModelFileName,
+    addRobotOverrideHighModelSelect,
+    addRobotOverrideLowModelSelect,
+    addRobotSavingHint,
+    addRobotTypeForm,
+    addRobotTypeHighModelFileInput,
+    addRobotTypeLowModelFileInput,
+    addRobotTypeSaveButton,
+    buildApiUrl,
+    editRobotClearOverrideInput,
+    editRobotDeleteButton,
+    editRobotHighModelField,
+    editRobotHighModelFileInput,
+    editRobotHighModelFileName,
+    editRobotIpInput,
+    editRobotLowModelField,
+    editRobotLowModelFileInput,
+    editRobotLowModelFileName,
+    editRobotNameInput,
+    editRobotOverrideHighModelSelect,
+    editRobotOverrideLowModelSelect,
+    editRobotPasswordInput,
+    editRobotSaveButton,
+    editRobotSelect,
+    editRobotTypeClearModelInput,
+    editRobotTypeDeleteButton,
+    editRobotTypeForm,
+    editRobotTypeHighModelFileInput,
+    editRobotTypeLowModelFileInput,
+    editRobotTypeManageSelect,
+    editRobotTypeSaveButton,
+    editRobotTypeSelect,
+    editRobotUsernameInput,
+    env,
+    getRobotById,
+    getRobotTypeById,
+    normalizeText,
+    normalizeTypeId,
+    parseApiErrorMessage,
+    populateEditRobotSelectOptions,
+    refreshDefinitionDependentViewsAfterRobotTypeMutation,
+    refreshRobotsFromBackendSnapshot: (...args) => refreshRobotsFromBackendSnapshotHook(...args),
+    resetRobotOverrideControls,
+    resetRobotTypeBatteryInfoPanels,
+    resetRobotTypeUploadInputs,
+    setActionButtonLoading,
+    setActiveManageTab,
+    setActiveRobotRegistryPanel,
+    setAddRobotMessage,
+    setAddRobotTypeMessage,
+    setEditRobotMessage,
+    setEditRobotTypeMessage,
+    state,
+    window,
+  });
 
   return {
     init() {},

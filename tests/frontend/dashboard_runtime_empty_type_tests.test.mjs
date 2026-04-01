@@ -11,9 +11,49 @@ const MONITOR_MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/monitor-config/runtime/createMonitorConfigFeatureRuntime.js',
 );
+const MONITOR_DOMAIN_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/monitor-config/domain/createMonitorConfigDomainApi.js',
+);
 const FIX_TESTS_MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/fix-tests/runtime/createFixTestsFeatureRuntime.js',
+);
+const FIX_TESTS_JOB_QUEUE_HELPERS_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/robotJobQueueHelpers.js',
+);
+const FIX_TESTS_DEBUG_HELPERS_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/fixTestsDebugHelpers.js',
+);
+const FIX_TESTS_FIX_MODE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsFixModeApi.js',
+);
+const FIX_TESTS_AUTO_FIX_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsAutoFixApi.js',
+);
+const FIX_TESTS_RUN_STATE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsRunStateApi.js',
+);
+const FIX_TESTS_JOB_QUEUE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsJobQueueApi.js',
+);
+const FIX_TESTS_RUNTIME_PATCH_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsRuntimePatchApi.js',
+);
+const FIX_TESTS_SELECTION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsSelectionApi.js',
+);
+const FIX_TESTS_ONLINE_CHECKS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsOnlineChecksApi.js',
 );
 
 function normalizeText(value, fallback = '') {
@@ -119,22 +159,114 @@ function makeButton(label = '') {
 
 async function loadNamedExport(modulePath, exportName, extraContext = {}) {
   const source = await fs.readFile(modulePath, 'utf8');
-  const transformed = `${source
-    .replace(
-      "import { createMonitorConfigRuntimeBridge } from '../domain/monitorConfigRuntimeBridge.js';",
-      `const createMonitorConfigRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+  let prelude = '';
+  if (source.includes("import { createMonitorConfigDomainApi } from '../domain/createMonitorConfigDomainApi.js';")) {
+    const domainApiSource = await fs.readFile(MONITOR_DOMAIN_API_PATH, 'utf8');
+    prelude = `${domainApiSource.replace(
+      'export function createMonitorConfigDomainApi',
+      'function createMonitorConfigDomainApi',
+    )}\n`;
+  }
+  if (source.includes("import { createRobotJobsApi, createRobotJobQueueRenderer, createRobotJobQueueStore } from '../domain/robotJobQueueHelpers.js';")) {
+    const queueHelpersSource = await fs.readFile(FIX_TESTS_JOB_QUEUE_HELPERS_PATH, 'utf8');
+    prelude += `${queueHelpersSource.replaceAll('export function ', 'function ')}\n`;
+  }
+  if (source.includes("import { createFixTestsDebugHelpers } from '../domain/fixTestsDebugHelpers.js';")) {
+    const debugHelpersSource = await fs.readFile(FIX_TESTS_DEBUG_HELPERS_PATH, 'utf8');
+    prelude += `${debugHelpersSource.replace(
+      'export function createFixTestsDebugHelpers',
+      'function createFixTestsDebugHelpers',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsFixModeApi } from '../domain/createFixTestsFixModeApi.js';")) {
+    const fixModeApiSource = await fs.readFile(FIX_TESTS_FIX_MODE_API_PATH, 'utf8');
+    prelude += `${fixModeApiSource.replace(
+      'export function createFixTestsFixModeApi',
+      'function createFixTestsFixModeApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsAutoFixApi } from '../domain/createFixTestsAutoFixApi.js';")) {
+    const autoFixApiSource = await fs.readFile(FIX_TESTS_AUTO_FIX_API_PATH, 'utf8');
+    prelude += `${autoFixApiSource.replace(
+      'export function createFixTestsAutoFixApi',
+      'function createFixTestsAutoFixApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsRunStateApi } from '../domain/createFixTestsRunStateApi.js';")) {
+    const runStateApiSource = await fs.readFile(FIX_TESTS_RUN_STATE_API_PATH, 'utf8');
+    prelude += `${runStateApiSource.replace(
+      'export function createFixTestsRunStateApi',
+      'function createFixTestsRunStateApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsJobQueueApi } from '../domain/createFixTestsJobQueueApi.js';")) {
+    const jobQueueApiSource = await fs.readFile(FIX_TESTS_JOB_QUEUE_API_PATH, 'utf8');
+    prelude += `${jobQueueApiSource.replace(
+      'export function createFixTestsJobQueueApi',
+      'function createFixTestsJobQueueApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsRuntimePatchApi } from '../domain/createFixTestsRuntimePatchApi.js';")) {
+    const runtimePatchApiSource = await fs.readFile(FIX_TESTS_RUNTIME_PATCH_API_PATH, 'utf8');
+    prelude += `${runtimePatchApiSource.replace(
+      'export function createFixTestsRuntimePatchApi',
+      'function createFixTestsRuntimePatchApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsSelectionApi } from '../domain/createFixTestsSelectionApi.js';")) {
+    const selectionApiSource = await fs.readFile(FIX_TESTS_SELECTION_API_PATH, 'utf8');
+    prelude += `${selectionApiSource.replace(
+      'export function createFixTestsSelectionApi',
+      'function createFixTestsSelectionApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsOnlineChecksApi } from '../domain/createFixTestsOnlineChecksApi.js';")) {
+    const onlineChecksApiSource = await fs.readFile(FIX_TESTS_ONLINE_CHECKS_API_PATH, 'utf8');
+    prelude += `${onlineChecksApiSource.replace(
+      'export function createFixTestsOnlineChecksApi',
+      'function createFixTestsOnlineChecksApi',
+    )}\n`;
+  }
+  const transformed = `${prelude}${source
+        .replace(
+      "import { createMonitorConfigDomainApi } from '../domain/createMonitorConfigDomainApi.js';",
+      '',
+    )
+        .replace(
+      "import { createRobotJobsApi, createRobotJobQueueRenderer, createRobotJobQueueStore } from '../domain/robotJobQueueHelpers.js';",
+      '',
     )
     .replace(
-      "import { createFixTestsRuntimeBridge } from '../domain/fixTestsRuntimeBridge.js';",
-      `const createFixTestsRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      "import { createFixTestsDebugHelpers } from '../domain/fixTestsDebugHelpers.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsFixModeApi } from '../domain/createFixTestsFixModeApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsAutoFixApi } from '../domain/createFixTestsAutoFixApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsRunStateApi } from '../domain/createFixTestsRunStateApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsJobQueueApi } from '../domain/createFixTestsJobQueueApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsRuntimePatchApi } from '../domain/createFixTestsRuntimePatchApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsSelectionApi } from '../domain/createFixTestsSelectionApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsOnlineChecksApi } from '../domain/createFixTestsOnlineChecksApi.js';",
+      '',
     )
     .replace(
       `export function ${exportName}`,
@@ -695,6 +827,62 @@ test('setRunningButtonState keeps the detail Run tests button enabled during con
   assert.equal(runButton.title, 'Stops automatic recovery tests and runs tests.');
 });
 
+test('setRunningButtonState keeps the detail Run tests button enabled during recovery phase with transient local searching state', async () => {
+  const runButton = makeButton('Run tests');
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    $: (selector) => (selector === '#runRobotTests' ? runButton : null),
+    applyActionButton: (button, options = {}) => {
+      if (typeof options.label === 'string') button.textContent = options.label;
+      if (typeof options.title === 'string') button.title = options.title;
+      button.disabled = Boolean(options.disabled);
+      return button;
+    },
+    setActionButtonLoading: (button, isLoading, options = {}) => {
+      button.textContent = isLoading ? String(options.loadingLabel || 'Working...') : String(options.idleLabel || button.textContent);
+      button.disabled = isLoading || options.disabled === true;
+    },
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [{ id: 'robot-1', activity: { testing: true, phase: 'connection_retry' } }],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(['robot-1']),
+    },
+  });
+  const runtime = makeRuntime({
+    getSelectedRobotIds: () => [],
+    getReachableRobotIds: () => [],
+    getRunSelectedButtonIdleLabel: () => 'Run selected (default online)',
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    isRobotTesting: (robotId) =>
+      env.state.testingRobotIds.has(robotId) || env.state.autoTestingRobotIds.has(robotId),
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  api.setRunningButtonState(false);
+
+  assert.equal(runButton.disabled, false);
+  assert.equal(runButton.textContent, 'Run tests');
+  assert.equal(runButton.title, 'Stops automatic recovery tests and runs tests.');
+});
+
 test('setRunningButtonState keeps the detail Run tests button enabled during full test after recovery', async () => {
   const runButton = makeButton('Run tests');
   const createFixTestsFeature = await loadNamedExport(
@@ -900,6 +1088,47 @@ test('getRobotActionAvailability treats auto recovery as preemptable for fixes a
   assert.equal(autoRecovery.title, 'Stops automatic recovery tests and runs fix.');
   assert.equal(fixing.allowed, false);
   assert.equal(fixing.title, 'Fix is already running for this robot.');
+});
+
+test('getRobotActionAvailability prioritizes recovery phase over transient local busy flags', async () => {
+  const createFixTestsFeature = await loadNamedExport(
+    FIX_TESTS_MODULE_PATH,
+    'createFixTestsFeature',
+  );
+  const env = makeEnv({
+    state: {
+      pageSessionId: 'test-session',
+      detailRobotId: 'robot-1',
+      robots: [
+        { id: 'robot-1', activity: { testing: true, phase: 'connection_retry' } },
+      ],
+      selectedRobotIds: new Set(),
+      testingRobotIds: new Set(),
+      autoTestingRobotIds: new Set(),
+      autoSearchingRobotIds: new Set(),
+      fixingRobotIds: new Set(),
+      searchingRobotIds: new Set(['robot-1']),
+    },
+  });
+  const runtime = makeRuntime({
+    getRobotById: (robotId) => env.state.robots.find((robot) => robot.id === robotId) || null,
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, '') || null,
+      lastFullTestAt: 0,
+      lastFullTestSource: null,
+      updatedAt: 0,
+    }),
+    robotId: (value) => normalizeText(typeof value === 'string' ? value : value?.id, ''),
+  });
+  const api = createFixTestsFeature(runtime, env);
+
+  const availability = api.getRobotActionAvailability('robot-1', 'fix');
+
+  assert.equal(availability.allowed, true);
+  assert.equal(availability.preemptableAuto, true);
+  assert.equal(availability.title, 'Stops automatic recovery tests and runs fix.');
 });
 
 test('getRobotActionAvailability treats connection retry as preemptable for online checks', async () => {

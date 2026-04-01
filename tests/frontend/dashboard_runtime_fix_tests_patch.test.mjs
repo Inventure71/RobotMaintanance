@@ -11,6 +11,42 @@ const MODULE_PATH = path.resolve(
   __dirname,
   '../../assets/js/modules/dashboard/features/fix-tests/runtime/createFixTestsFeatureRuntime.js',
 );
+const JOB_QUEUE_HELPERS_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/robotJobQueueHelpers.js',
+);
+const DEBUG_HELPERS_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/fixTestsDebugHelpers.js',
+);
+const FIX_MODE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsFixModeApi.js',
+);
+const AUTO_FIX_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsAutoFixApi.js',
+);
+const RUN_STATE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsRunStateApi.js',
+);
+const JOB_QUEUE_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsJobQueueApi.js',
+);
+const RUNTIME_PATCH_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsRuntimePatchApi.js',
+);
+const SELECTION_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsSelectionApi.js',
+);
+const ONLINE_CHECKS_API_PATH = path.resolve(
+  __dirname,
+  '../../assets/js/modules/dashboard/features/fix-tests/domain/createFixTestsOnlineChecksApi.js',
+);
 
 function normalizeText(value, fallback = '') {
   if (value === null || value === undefined) return String(fallback ?? '');
@@ -88,14 +124,103 @@ function makeNode() {
 
 async function loadApi() {
   const source = await fs.readFile(MODULE_PATH, 'utf8');
-  const transformed = `${source
+  let prelude = '';
+  if (source.includes("import { createRobotJobsApi, createRobotJobQueueRenderer, createRobotJobQueueStore } from '../domain/robotJobQueueHelpers.js';")) {
+    const queueHelpersSource = await fs.readFile(JOB_QUEUE_HELPERS_PATH, 'utf8');
+    prelude += `${queueHelpersSource.replaceAll('export function ', 'function ')}\n`;
+  }
+  if (source.includes("import { createFixTestsDebugHelpers } from '../domain/fixTestsDebugHelpers.js';")) {
+    const debugHelpersSource = await fs.readFile(DEBUG_HELPERS_PATH, 'utf8');
+    prelude += `${debugHelpersSource.replace(
+      'export function createFixTestsDebugHelpers',
+      'function createFixTestsDebugHelpers',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsFixModeApi } from '../domain/createFixTestsFixModeApi.js';")) {
+    const fixModeApiSource = await fs.readFile(FIX_MODE_API_PATH, 'utf8');
+    prelude += `${fixModeApiSource.replace(
+      'export function createFixTestsFixModeApi',
+      'function createFixTestsFixModeApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsAutoFixApi } from '../domain/createFixTestsAutoFixApi.js';")) {
+    const autoFixApiSource = await fs.readFile(AUTO_FIX_API_PATH, 'utf8');
+    prelude += `${autoFixApiSource.replace(
+      'export function createFixTestsAutoFixApi',
+      'function createFixTestsAutoFixApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsRunStateApi } from '../domain/createFixTestsRunStateApi.js';")) {
+    const runStateApiSource = await fs.readFile(RUN_STATE_API_PATH, 'utf8');
+    prelude += `${runStateApiSource.replace(
+      'export function createFixTestsRunStateApi',
+      'function createFixTestsRunStateApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsJobQueueApi } from '../domain/createFixTestsJobQueueApi.js';")) {
+    const jobQueueApiSource = await fs.readFile(JOB_QUEUE_API_PATH, 'utf8');
+    prelude += `${jobQueueApiSource.replace(
+      'export function createFixTestsJobQueueApi',
+      'function createFixTestsJobQueueApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsRuntimePatchApi } from '../domain/createFixTestsRuntimePatchApi.js';")) {
+    const runtimePatchApiSource = await fs.readFile(RUNTIME_PATCH_API_PATH, 'utf8');
+    prelude += `${runtimePatchApiSource.replace(
+      'export function createFixTestsRuntimePatchApi',
+      'function createFixTestsRuntimePatchApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsSelectionApi } from '../domain/createFixTestsSelectionApi.js';")) {
+    const selectionApiSource = await fs.readFile(SELECTION_API_PATH, 'utf8');
+    prelude += `${selectionApiSource.replace(
+      'export function createFixTestsSelectionApi',
+      'function createFixTestsSelectionApi',
+    )}\n`;
+  }
+  if (source.includes("import { createFixTestsOnlineChecksApi } from '../domain/createFixTestsOnlineChecksApi.js';")) {
+    const onlineChecksApiSource = await fs.readFile(ONLINE_CHECKS_API_PATH, 'utf8');
+    prelude += `${onlineChecksApiSource.replace(
+      'export function createFixTestsOnlineChecksApi',
+      'function createFixTestsOnlineChecksApi',
+    )}\n`;
+  }
+  const transformed = `${prelude}${source
+        .replace(
+      "import { createRobotJobsApi, createRobotJobQueueRenderer, createRobotJobQueueStore } from '../domain/robotJobQueueHelpers.js';",
+      '',
+    )
     .replace(
-      "import { createFixTestsRuntimeBridge } from '../domain/fixTestsRuntimeBridge.js';",
-      `const createFixTestsRuntimeBridge = (runtime) => new Proxy({}, {
-        get(_target, prop) {
-          return (...args) => runtime[prop](...args);
-        },
-      });`,
+      "import { createFixTestsDebugHelpers } from '../domain/fixTestsDebugHelpers.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsFixModeApi } from '../domain/createFixTestsFixModeApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsAutoFixApi } from '../domain/createFixTestsAutoFixApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsRunStateApi } from '../domain/createFixTestsRunStateApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsJobQueueApi } from '../domain/createFixTestsJobQueueApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsRuntimePatchApi } from '../domain/createFixTestsRuntimePatchApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsSelectionApi } from '../domain/createFixTestsSelectionApi.js';",
+      '',
+    )
+    .replace(
+      "import { createFixTestsOnlineChecksApi } from '../domain/createFixTestsOnlineChecksApi.js';",
+      '',
     )
     .replace(
       'export function createFixTestsFeature',
