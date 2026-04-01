@@ -4,7 +4,20 @@ from typing import Any, Callable
 
 from ..terminal_manager.job_scheduler.cancel import JobInterrupted
 from .read import ReadConnector
-from .write import WriteConnector
+from .write import CommandExecutionError, WriteConnector
+
+
+class OrchestrationExecutionError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        steps: list[dict[str, Any]] | None = None,
+        commands_executed: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.steps = list(steps or [])
+        self.commands_executed = list(commands_executed or [])
 
 
 class OrchestrateConnector:
@@ -26,7 +39,7 @@ class OrchestrateConnector:
         definition: dict[str, Any],
         *,
         run_scope: str,
-        run_command: Callable[[str, float | None], str],
+        run_command: Callable[[str, float | None], Any],
         params: dict[str, Any] | None = None,
         dry_run: bool = False,
         emit_event: Callable[[str, str, dict[str, Any] | None], None] | None = None,
@@ -92,7 +105,17 @@ class OrchestrateConnector:
                             "command": cmd_record,
                         },
                     )
+            except JobInterrupted:
+                if callable(emit_event):
+                    emit_event(
+                        "step_interrupted",
+                        f"Step '{step.get('id')}' interrupted.",
+                        {"stepId": step.get("id")},
+                    )
+                raise
             except Exception as exc:
+                error_output = ""
+                error_ms = 0
                 error_step = {
                     "id": str(step.get("id") or f"step-{index + 1}"),
                     "status": "error",
@@ -101,14 +124,36 @@ class OrchestrateConnector:
                     "ms": 0,
                     "output": "",
                 }
+                if isinstance(exc, CommandExecutionError):
+                    error_output = str(exc.output or "")
+                    error_ms = max(0, int(exc.duration_ms))
+                    error_step["ms"] = error_ms
+                    error_step["output"] = error_output
                 steps.append(error_step)
+                if isinstance(exc, CommandExecutionError):
+                    commands_executed.append(
+                        {
+                            "id": error_step["id"],
+                            "command": exc.command,
+                            "timeoutSec": exc.timeout_sec,
+                            "output": error_output,
+                            "exitCode": exc.exit_code,
+                            "ok": False,
+                            "durationMs": error_ms,
+                            "usedCache": False,
+                        }
+                    )
                 if callable(emit_event):
                     emit_event(
                         "step_failed",
                         f"Step '{error_step['id']}' failed: {exc}",
                         {"step": error_step},
                     )
-                raise
+                raise OrchestrationExecutionError(
+                    str(exc),
+                    steps=steps,
+                    commands_executed=commands_executed,
+                ) from exc
 
         for raw_check in checks:
             if callable(should_cancel) and bool(should_cancel()):

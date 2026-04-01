@@ -2,7 +2,6 @@ export function createFleetCardRenderingApi(deps) {
   const {
     CAN_USE_MODEL_VIEWER,
     MODEL_RESOLUTION_LOW,
-    appendTerminalLine,
     buildConnectionCornerIconMarkup,
     buildLastFullTestPillLabel,
     buildScanOverlayMarkup,
@@ -28,13 +27,10 @@ export function createFleetCardRenderingApi(deps) {
     openDetail,
     registerLazyModelViewersInNode,
     renderBatteryPill,
-    renderRobotJobQueueStrip,
-    renderRobotStopCurrentJobButton,
     resolveRobotBaseModelUrl,
     robotId,
     setRobotSelection,
     shouldUseCompactAutoSearchIndicator,
-    stopCurrentJob,
     syncModelViewerRotationForContainer,
   } = deps;
 
@@ -521,31 +517,9 @@ export function createFleetCardRenderingApi(deps) {
           reason: descriptor.batteryState.reason,
           size: 'default',
         })}</span>
-        <span data-role="card-stop-current-job">${renderRobotStopCurrentJobButton(robot?.activity, descriptor.normalizedRobotId)}</span>
       </div>`.trim().replace(/>\s+</g, '><');
-    const queueStripMarkup = renderRobotJobQueueStrip(robot?.activity, { maxQueued: 2 });
-    if (queueStripMarkup) {
-      const queueNode = documentRef.createElement('div');
-      queueNode.setAttribute('data-role', 'card-job-queue-strip');
-      queueNode.innerHTML = queueStripMarkup;
-      card.appendChild(queueNode);
-    } else {
-      const emptyQueueNode = documentRef.createElement('div');
-      emptyQueueNode.setAttribute('data-role', 'card-job-queue-strip');
-      card.appendChild(emptyQueueNode);
-    }
 
     card.addEventListener('click', (event) => {
-      const stopButton = event.target.closest('[data-action="stop-current-job"]');
-      if (stopButton) {
-        event.preventDefault();
-        event.stopPropagation();
-        stopCurrentJob(stopButton.getAttribute('data-robot-id') || descriptor.normalizedRobotId).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          appendTerminalLine(`Failed to stop job for ${descriptor.normalizedRobotId}: ${message}`, 'err');
-        });
-        return;
-      }
       const selectButton = event.target.closest('[data-action="select-robot"]');
       if (selectButton) {
         event.preventDefault();

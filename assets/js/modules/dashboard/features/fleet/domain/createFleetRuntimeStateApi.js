@@ -70,7 +70,8 @@ export function createFleetRuntimeStateApi({
   }
 
   function isRobotFixing(robotIdValue) {
-    return state.fixingRobotIds.has(robotId(robotIdValue));
+    const normalizedId = robotId(robotIdValue);
+    return state.fixingRobotIds.has(normalizedId) || state.autoFixingRobotIds?.has(normalizedId) === true;
   }
 
   function isRobotBusyForOnlineRefresh(robotIdValue) {
@@ -166,7 +167,7 @@ export function createFleetRuntimeStateApi({
     if (!id) return '';
     const countdown = state.testingCountdowns.get(id);
     if (!countdown) {
-      if (state.fixingRobotIds.has(id)) return 'Fixing...';
+      if (state.fixingRobotIds.has(id) || state.autoFixingRobotIds?.has(id) === true) return 'Fixing...';
       if (state.autoSearchingRobotIds.has(id)) return 'Finding...';
       if (state.autoTestingRobotIds.has(id)) return 'Scanning...';
       return '';

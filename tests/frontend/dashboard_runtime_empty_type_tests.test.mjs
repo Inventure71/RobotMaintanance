@@ -715,7 +715,7 @@ test('runAutoFixForRobot surfaces enqueue failures and preserves local fix/test 
   );
 });
 
-test('setRunningButtonState disables the detail Run tests button while the active robot is doing non-interruptible fix work', async () => {
+test('setRunningButtonState keeps the detail Run tests button enabled and queueing while the active robot is fixing', async () => {
   const runButton = makeButton('Run tests');
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
@@ -766,9 +766,9 @@ test('setRunningButtonState disables the detail Run tests button while the activ
 
   api.setRunningButtonState(false);
 
-  assert.equal(runButton.disabled, true);
+  assert.equal(runButton.disabled, false);
   assert.equal(runButton.textContent, 'Run tests');
-  assert.equal(runButton.title, 'Fix is already running for this robot.');
+  assert.equal(runButton.title, 'Queue test job');
 });
 
 test('setRunningButtonState keeps the detail Run tests button enabled during connection retry auto testing', async () => {
@@ -992,7 +992,7 @@ test('setRunningButtonState keeps Run selected enabled while one of the target r
   assert.equal(runSelectedButton.title, 'Run selected');
 });
 
-test('setRunningButtonState disables Run selected when all selected robots are in non-interruptible fix work', async () => {
+test('setRunningButtonState keeps Run selected enabled and queueing when selected robots are in fix work', async () => {
   const runSelectedButton = makeButton('Run selected');
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
@@ -1041,11 +1041,11 @@ test('setRunningButtonState disables Run selected when all selected robots are i
 
   api.setRunningButtonState(false);
 
-  assert.equal(runSelectedButton.disabled, true);
-  assert.equal(runSelectedButton.title, 'Fix is already running for this robot.');
+  assert.equal(runSelectedButton.disabled, false);
+  assert.equal(runSelectedButton.title, 'Run selected');
 });
 
-test('getRobotActionAvailability treats auto recovery as preemptable for fixes and active fix phase as blocked', async () => {
+test('getRobotActionAvailability treats auto recovery as preemptable for fixes and active fix phase as queueable', async () => {
   const createFixTestsFeature = await loadNamedExport(
     FIX_TESTS_MODULE_PATH,
     'createFixTestsFeature',
@@ -1086,8 +1086,8 @@ test('getRobotActionAvailability treats auto recovery as preemptable for fixes a
   assert.equal(autoRecovery.allowed, true);
   assert.equal(autoRecovery.preemptableAuto, true);
   assert.equal(autoRecovery.title, 'Stops automatic recovery tests and runs fix.');
-  assert.equal(fixing.allowed, false);
-  assert.equal(fixing.title, 'Fix is already running for this robot.');
+  assert.equal(fixing.allowed, true);
+  assert.equal(fixing.title, 'Queue fix job');
 });
 
 test('getRobotActionAvailability prioritizes recovery phase over transient local busy flags', async () => {

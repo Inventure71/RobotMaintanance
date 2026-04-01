@@ -19,7 +19,6 @@ export function createDetailTestAndRenderApi(deps) {
     getRobotById,
     getRobotIdsForRun,
     getRobotBatteryState,
-    getScopedTestEntries,
     getTestIconPresentation,
     getTestingCountdownText,
     hasMixedRobotTypesForIds,
@@ -32,7 +31,7 @@ export function createDetailTestAndRenderApi(deps) {
     nonBatteryTestEntries,
     normalizeStatus,
     normalizeText,
-    openTestDebugModal,
+    openLatestTestDebugModal,
     renderBatteryPill,
     renderDashboard,
     renderDefinitionOwnerInline,
@@ -65,16 +64,12 @@ export function createDetailTestAndRenderApi(deps) {
     const testList = $('#testList');
     const titleBar = $('#detailTitleBar');
     const statusBar = $('#detailStatusBar');
+    const matrixHeaderBar = $('#detailMatrixHeaderBar');
 
     if (!robot) return;
 
     const stateKey = statusFromScore(robot);
     const normalizedRobotId = robotId(robot);
-    const scopedEntries = getScopedTestEntries(robot, { scope: 'all' });
-    const safeScopedEntries = Array.isArray(scopedEntries)
-      ? scopedEntries
-      : nonBatteryTestEntries(robot).map(([id, result]) => ({ id, result }));
-    const errorCount = safeScopedEntries.filter((entry) => normalizeStatus(entry?.result?.status) !== 'ok').length;
     const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
     const isTesting = isRobotTesting(normalizedRobotId);
     const isSearching = isRobotSearching(normalizedRobotId);
@@ -91,26 +86,28 @@ export function createDetailTestAndRenderApi(deps) {
     }
     if (statusBar) {
       statusBar.innerHTML = `
-        ${statusChip(stateKey, 'detail-status-chip')}
         ${renderBatteryPill({
           value: batteryState.value,
           status: batteryState.status,
           reason: batteryState.reason,
           size: 'small',
         })}
-        <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-        <span class="detail-issue-count">${errorCount} issue(s)</span>
-        ${renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId)}
-        ${renderRobotJobQueueStrip(robot?.activity, { maxQueued: 4, includeEmpty: true })}`.trim().replace(/>\s+</g, '><');
+        <span data-role="detail-stop-current-job">${renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId)}</span>
+        <span data-role="detail-job-queue-strip">${renderRobotJobQueueStrip(robot?.activity, { maxQueued: 6, includeEmpty: true })}</span>`.trim().replace(/>\s+</g, '><');
       const stopButton = statusBar.querySelector('[data-action="stop-current-job"]');
       if (stopButton) {
         stopButton.addEventListener('click', async (event) => {
           event.preventDefault();
           const targetRobotId = normalizeText(stopButton.getAttribute('data-robot-id'), normalizedRobotId);
+          const previousLabel = normalizeText(stopButton.textContent, 'Stop');
+          stopButton.disabled = true;
+          stopButton.textContent = 'Stopping...';
           try {
             await stopCurrentJob(targetRobotId);
             appendTerminalLine(`Stop requested for ${robot.name || targetRobotId}.`, 'warn');
           } catch (error) {
+            stopButton.disabled = false;
+            stopButton.textContent = previousLabel;
             appendTerminalLine(
               `Failed to stop job for ${robot.name || targetRobotId}: ${error instanceof Error ? error.message : String(error)}`,
               'err',
@@ -118,6 +115,11 @@ export function createDetailTestAndRenderApi(deps) {
           }
         });
       }
+    }
+    if (matrixHeaderBar) {
+      matrixHeaderBar.innerHTML = `
+        ${statusChip(stateKey, 'detail-status-chip')}
+        <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>`.trim().replace(/>\s+</g, '><');
     }
 
     const modelMarkup = buildRobotModelContainer(
@@ -175,10 +177,11 @@ export function createDetailTestAndRenderApi(deps) {
       }
       const infoButton = row.querySelector(`[data-test-id="${def.id}"]`);
       if (infoButton) {
-        infoButton.addEventListener('click', (event) => {
+        infoButton.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          openTestDebugModal(robot, def.id);
+          const latestRobot = getRobotById(normalizedRobotId) || robot;
+          await openLatestTestDebugModal(latestRobot, def.id);
         });
       }
       testList.appendChild(row);
@@ -214,10 +217,11 @@ export function createDetailTestAndRenderApi(deps) {
           }
           const infoButton = row.querySelector(`[data-test-id="${id}"]`);
           if (infoButton) {
-            infoButton.addEventListener('click', (event) => {
+            infoButton.addEventListener('click', async (event) => {
               event.preventDefault();
               event.stopPropagation();
-              openTestDebugModal(robot, id);
+              const latestRobot = getRobotById(normalizedRobotId) || robot;
+              await openLatestTestDebugModal(latestRobot, id);
             });
           }
           testList.appendChild(row);
@@ -270,11 +274,14 @@ export function createDetailTestAndRenderApi(deps) {
       return;
     }
 
-    const actionableRunIds = [];
+    const actionableRunTargets = [];
     runIds.forEach((targetId) => {
       const availability = runtime.getRobotActionAvailability(targetId, 'test');
       if (availability?.allowed) {
-        actionableRunIds.push(targetId);
+        actionableRunTargets.push({
+          id: targetId,
+          availability,
+        });
         return;
       }
       const robot = getRobotById(targetId);
@@ -283,7 +290,7 @@ export function createDetailTestAndRenderApi(deps) {
         'warn',
       );
     });
-    if (!actionableRunIds.length) {
+    if (!actionableRunTargets.length) {
       appendTerminalLine('No selected robots can run tests right now.', 'warn');
       setRunningButtonState(false);
       return;
@@ -295,16 +302,17 @@ export function createDetailTestAndRenderApi(deps) {
     try {
       let successCount = 0;
       let failureCount = 0;
-      const workerCount = Math.max(1, Math.min(getFleetParallelism(), actionableRunIds.length));
+      const workerCount = Math.max(1, Math.min(getFleetParallelism(), actionableRunTargets.length));
       if (terminal) {
         appendTerminalLine(
-          `Running selected tests with parallelism ${workerCount} (${actionableRunIds.length} robot${actionableRunIds.length === 1 ? '' : 's'}).`,
+          `Running selected tests with parallelism ${workerCount} (${actionableRunTargets.length} robot${actionableRunTargets.length === 1 ? '' : 's'}).`,
           'warn',
         );
       }
 
-      const queue = [...actionableRunIds];
-      const processOneRobot = async (robotIdValue) => {
+      const queue = [...actionableRunTargets];
+      const processOneRobot = async (target) => {
+        const robotIdValue = normalizeText(target?.id, '');
         const robot = getRobotById(robotIdValue);
         const normalizedRobotId = robotId(robotIdValue);
         if (!robot || !normalizedRobotId) {
@@ -315,63 +323,67 @@ export function createDetailTestAndRenderApi(deps) {
           return;
         }
 
-        const previousOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
-        if (terminal) {
-          appendTerminalLine(
-            `Running online precheck for ${robot.name || robotId(robot)}...`,
-            'warn',
-          );
-        }
-
-        const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
-        const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
-        setRobotSearching(normalizedRobotId, true, searchCountdownMs);
-        const onlineStatus = await runOneRobotOnlineCheck(robot);
-        updateOnlineCheckEstimateFromResults([onlineStatus]);
-        mapRobots((item) =>
-          robotId(item) === normalizedRobotId
-            ? {
-                ...item,
-                tests: {
-                  ...(item.tests || {}),
-                  online: {
-                    status: onlineStatus.status,
-                    value: onlineStatus.value,
-                    details: onlineStatus.details,
-                  },
-                },
-              }
-            : item,
-        );
-        renderDashboard();
-        const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
-        if (activeRobotPostOnline) {
-          renderDetail(activeRobotPostOnline);
-        }
-
-        if (normalizeStatus(onlineStatus.status) !== 'ok') {
-          failureCount += 1;
+        const queueOnlyByAvailability =
+          normalizeText(target?.availability?.title, '').toLowerCase() === 'queue test job';
+        if (!queueOnlyByAvailability) {
+          const previousOnlineStatus = normalizeStatus(robot?.tests?.online?.status);
           if (terminal) {
             appendTerminalLine(
-              `Skipping tests for ${robotId(robot)}: robot is offline (${onlineStatus.details}).`,
-              'err',
-            );
-          }
-          setRobotSearching(normalizedRobotId, false);
-          setRobotTesting(normalizedRobotId, false);
-          return;
-        }
-
-        if (previousOnlineStatus !== 'ok') {
-          if (terminal) {
-            appendTerminalLine(
-              `Connected to ${robot.name || robotId(robot)}. Waiting 5s before starting tests...`,
+              `Running online precheck for ${robot.name || robotId(robot)}...`,
               'warn',
             );
           }
-          await new Promise((resolve) => window.setTimeout(resolve, POST_CONNECT_TEST_DELAY_MS));
+
+          const onlineCheckCountdownMs = getOnlineCheckCountdownMs();
+          const searchCountdownMs = onlineCheckCountdownMs + POST_CONNECT_TEST_DELAY_MS;
+          setRobotSearching(normalizedRobotId, true, searchCountdownMs);
+          const onlineStatus = await runOneRobotOnlineCheck(robot);
+          updateOnlineCheckEstimateFromResults([onlineStatus]);
+          mapRobots((item) =>
+            robotId(item) === normalizedRobotId
+              ? {
+                  ...item,
+                  tests: {
+                    ...(item.tests || {}),
+                    online: {
+                      status: onlineStatus.status,
+                      value: onlineStatus.value,
+                      details: onlineStatus.details,
+                    },
+                  },
+                }
+              : item,
+          );
+          renderDashboard();
+          const activeRobotPostOnline = state.robots.find((item) => robotId(item) === state.detailRobotId);
+          if (activeRobotPostOnline) {
+            renderDetail(activeRobotPostOnline);
+          }
+
+          if (normalizeStatus(onlineStatus.status) !== 'ok') {
+            failureCount += 1;
+            if (terminal) {
+              appendTerminalLine(
+                `Skipping tests for ${robotId(robot)}: robot is offline (${onlineStatus.details}).`,
+                'err',
+              );
+            }
+            setRobotSearching(normalizedRobotId, false);
+            setRobotTesting(normalizedRobotId, false);
+            return;
+          }
+
+          if (previousOnlineStatus !== 'ok') {
+            if (terminal) {
+              appendTerminalLine(
+                `Connected to ${robot.name || robotId(robot)}. Waiting 5s before starting tests...`,
+                'warn',
+              );
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, POST_CONNECT_TEST_DELAY_MS));
+          }
+          setRobotSearching(normalizedRobotId, false);
         }
-        setRobotSearching(normalizedRobotId, false);
 
         const body = { ...options.body };
         const includeOnline = options.includeOnline !== false;
@@ -433,7 +445,7 @@ export function createDetailTestAndRenderApi(deps) {
 
       if (terminal) {
         if (failureCount === 0) {
-          appendTerminalLine(`Test run complete (${successCount}/${actionableRunIds.length} robots).`, 'ok');
+          appendTerminalLine(`Test run complete (${successCount}/${actionableRunTargets.length} robots).`, 'ok');
         } else {
           appendTerminalLine(`Test run complete (${successCount} succeeded, ${failureCount} failed).`, 'warn');
         }

@@ -140,6 +140,7 @@ class TerminalManager(
         self._handles = {}
         self._online_cache = {}
         self._runtime_tests = {}
+        self._runtime_test_debug = {}
         self._runtime_activity = {}
         self._runtime_version = 0
         self._runtime_robot_versions = {}
@@ -443,27 +444,44 @@ class TerminalManager(
                 valid_test_ids = valid_test_ids_by_robot.get(normalized_runtime_robot_id)
                 if not valid_test_ids:
                     removed_tests = self._runtime_tests.pop(runtime_robot_id, None)
+                    removed_test_debug = self._runtime_test_debug.pop(runtime_robot_id, None)
                     removed_activity = self._runtime_activity.pop(runtime_robot_id, None)
                     removed_online = self._online_cache.pop(runtime_robot_id, None)
-                    if removed_tests is not None or removed_activity is not None or removed_online is not None:
+                    if (
+                        removed_tests is not None
+                        or removed_test_debug is not None
+                        or removed_activity is not None
+                        or removed_online is not None
+                    ):
                         self._mark_runtime_robot_dirty_locked(runtime_robot_id)
                     continue
 
                 existing_tests = self._runtime_tests.get(runtime_robot_id, {})
+                existing_test_debug = self._runtime_test_debug.get(runtime_robot_id, {})
                 pruned_tests = {
                     normalize_text(test_id, ""): payload
                     for test_id, payload in existing_tests.items()
                     if isinstance(payload, dict) and normalize_text(test_id, "") in valid_test_ids
                 }
+                pruned_test_debug = {
+                    normalize_text(test_id, ""): payload
+                    for test_id, payload in existing_test_debug.items()
+                    if isinstance(payload, dict) and normalize_text(test_id, "") in valid_test_ids
+                }
                 tests_changed = pruned_tests != existing_tests
+                test_debug_changed = pruned_test_debug != existing_test_debug
                 if pruned_tests:
                     self._runtime_tests[runtime_robot_id] = pruned_tests
                 else:
                     self._runtime_tests.pop(runtime_robot_id, None)
+                if pruned_test_debug:
+                    self._runtime_test_debug[runtime_robot_id] = pruned_test_debug
+                else:
+                    self._runtime_test_debug.pop(runtime_robot_id, None)
                 if "online" not in pruned_tests:
                     if self._online_cache.pop(runtime_robot_id, None) is not None:
                         tests_changed = True
-                if tests_changed:
+                if tests_changed or test_debug_changed:
                     self._mark_runtime_robot_dirty_locked(runtime_robot_id)
 
             for runtime_robot_id in list(self._runtime_activity.keys()):
@@ -471,6 +489,12 @@ class TerminalManager(
                 if normalized_runtime_robot_id not in valid_test_ids_by_robot:
                     if self._runtime_activity.pop(runtime_robot_id, None) is not None:
                         self._mark_runtime_robot_dirty_locked(runtime_robot_id)
+
+            for runtime_robot_id in list(self._runtime_test_debug.keys()):
+                normalized_runtime_robot_id = normalize_text(runtime_robot_id, "")
+                if normalized_runtime_robot_id in valid_test_ids_by_robot:
+                    continue
+                self._runtime_test_debug.pop(runtime_robot_id, None)
 
         return {
             "robotCount": len(self.robots_by_id),

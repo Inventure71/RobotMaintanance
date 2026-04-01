@@ -60,6 +60,66 @@ def test_get_robots_merges_runtime_tests():
     assert payload[0]["activity"]["phase"] == "online_probe"
 
 
+def test_robot_test_debug_endpoint_returns_latest_saved_snapshot():
+    robots_by_id = {
+        "r1": {
+            "id": "r1",
+            "name": "Robot One",
+            "type": "rosbot-2-pro",
+            "ip": "10.0.0.1",
+            "ssh": {"username": "u", "password": "p"},
+        }
+    }
+    robot_types_by_id = {
+        "rosbot-2-pro": {
+            "typeId": "rosbot-2-pro",
+            "tests": [{"id": "general"}],
+        }
+    }
+
+    app = FastAPI()
+    app.include_router(
+        create_robots_router(
+            robots_by_id=robots_by_id,
+            robot_types_by_id=robot_types_by_id,
+            robots_config_path=Path("/tmp/robots.config.json"),
+            runtime_tests_provider=lambda _robot_id: {
+                "general": {
+                    "status": "error",
+                    "value": "read_error",
+                    "details": "Parser mismatch",
+                    "source": "auto-monitor",
+                    "checkedAt": 123.0,
+                }
+            },
+            runtime_test_debug_provider=lambda _robot_id: {
+                "general": {
+                    "id": "general",
+                    "status": "error",
+                    "value": "read_error",
+                    "details": "Parser mismatch",
+                    "errorCode": "definition_output_missing",
+                    "source": "executor",
+                    "runId": "run-1",
+                    "session": {"pageSessionId": "auto-monitor"},
+                    "timing": {"totalMs": 55},
+                    "steps": [],
+                }
+            },
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/robots/r1/tests/general/debug")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["robotId"] == "r1"
+    assert payload["testId"] == "general"
+    assert payload["result"]["status"] == "error"
+    assert payload["debug"]["runId"] == "run-1"
+    assert payload["debug"]["timing"]["totalMs"] == 55
+
+
 def test_fleet_static_endpoint_returns_default_test_payloads():
     robots_by_id = {
         "r1": {

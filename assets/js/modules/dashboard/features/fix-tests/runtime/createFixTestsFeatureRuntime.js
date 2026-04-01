@@ -140,6 +140,7 @@ export function createFixTestsFeature(context, maybeEnv) {
     setFleetOnlineButtonState,
   } = createFixTestsRuntimePatchApi({
     $,
+    appendTerminalLine,
     buildConnectionCornerIconMarkup,
     buildLastFullTestPillLabel,
     buildScanOverlayMarkup,
@@ -164,6 +165,7 @@ export function createFixTestsFeature(context, maybeEnv) {
     renderRobotStopCurrentJobButton,
     robotId,
     setActionButtonLoading,
+    stopCurrentJob,
     shouldUseCompactAutoSearchIndicator,
     state,
     statusChip,

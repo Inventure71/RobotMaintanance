@@ -198,6 +198,7 @@ function loadPersistedActiveOwnerProfile() {
       editingTestSourceId: '',
       editingFixSourceId: '',
       fixingRobotIds: new Set(),
+      autoFixingRobotIds: new Set(),
       autoTestingRobotIds: new Set(),
       autoSearchingRobotIds: new Set(),
       autoActivityRobotIds: new Set(),

@@ -15,6 +15,8 @@ from .normalization import strip_terminal_control_sequences
 
 
 class ShellChannel(Protocol):
+    closed: bool
+
     def settimeout(self, timeout: float | None) -> None: ...
     def recv_ready(self) -> bool: ...
     def recv(self, nbytes: int) -> bytes: ...
@@ -32,6 +34,7 @@ class ShellClient(Protocol):
         width: int = ...,
         height: int = ...,
     ) -> ShellChannel: ...
+    def get_transport(self) -> Any: ...
     def close(self) -> None: ...
 
 
@@ -125,6 +128,7 @@ class InteractiveShell:
         self._out_queue: Queue[str] = Queue(maxsize=queue_limit)
         self._reader_thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
+        self._session_closed = threading.Event()
 
     def __enter__(self) -> "InteractiveShell":
         self.connect()
@@ -166,6 +170,7 @@ class InteractiveShell:
         self.chan.settimeout(self.READ_BLOCK_TIMEOUT_SEC)
 
         self._stop.clear()
+        self._session_closed.clear()
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
         try:
@@ -176,6 +181,7 @@ class InteractiveShell:
 
     def close(self) -> None:
         self._stop.set()
+        self._session_closed.set()
         if self.chan:
             try:
                 self.chan.close()
@@ -198,18 +204,21 @@ class InteractiveShell:
 
     def _reader_loop(self) -> None:
         assert self.chan is not None
-        while not self._stop.is_set():
-            try:
-                data = self.chan.recv(4096)
-                if not data:
-                    break
-                self._enqueue_output_chunk(data.decode(errors="replace"))
-            except socket.timeout:
-                continue
-            except Exception:
-                if self._stop.is_set():
-                    break
-                self._sleep(0.05)
+        try:
+            while not self._stop.is_set():
+                try:
+                    data = self.chan.recv(4096)
+                    if not data:
+                        break
+                    self._enqueue_output_chunk(data.decode(errors="replace"))
+                except socket.timeout:
+                    continue
+                except Exception:
+                    if self._stop.is_set() or not self._session_is_active():
+                        break
+                    self._sleep(0.05)
+        finally:
+            self._session_closed.set()
 
     def _enqueue_output_chunk(self, chunk: str) -> None:
         text = str(chunk or "")
@@ -231,6 +240,44 @@ class InteractiveShell:
         cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
         tail = cleaned[-1024:]
         return bool(re.search(rf"(?:{self.prompt_re.pattern})\s*$", tail))
+
+    def _channel_is_open(self) -> bool:
+        if self.chan is None:
+            return False
+        return not bool(getattr(self.chan, "closed", False))
+
+    def _transport_is_active(self) -> bool:
+        client = self.client
+        if client is None:
+            return False
+        get_transport = getattr(client, "get_transport", None)
+        if not callable(get_transport):
+            return True
+        try:
+            transport = get_transport()
+        except Exception:
+            return False
+        if transport is None:
+            return False
+        is_active = getattr(transport, "is_active", None)
+        if not callable(is_active):
+            return True
+        try:
+            return bool(is_active())
+        except Exception:
+            return False
+
+    def _session_is_active(self) -> bool:
+        if self._stop.is_set() or self._session_closed.is_set():
+            return False
+        if not self._channel_is_open():
+            return False
+        return self._transport_is_active()
+
+    def _raise_if_session_inactive(self, context: str) -> None:
+        if self._session_is_active():
+            return
+        raise RuntimeError(f"SSH session closed while {context}")
 
     def _build_completion_marker(self) -> tuple[str, str]:
         marker = f"{self.COMMAND_DONE_PREFIX}{uuid.uuid4().hex}__"
@@ -434,6 +481,7 @@ class InteractiveShell:
         start = self._time()
         password_sent = False
         while True:
+            self._raise_if_session_inactive("waiting for sudo authentication")
             chunk = self.read(wait_timeout=0.05)
             if chunk:
                 buf += chunk
@@ -510,6 +558,7 @@ class InteractiveShell:
         start = self._time()
         timed_out = False
         while True:
+            self._raise_if_session_inactive("waiting for automation command output")
             chunk = self.read(wait_timeout=0.05)
             if chunk:
                 buf += chunk

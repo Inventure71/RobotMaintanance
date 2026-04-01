@@ -937,3 +937,60 @@ def test_run_automation_command_rejects_repeated_sudo_prompt():
 
     with pytest.raises(RuntimeError, match="password was rejected"):
         shell.run_automation_command("sudo rosbot.flash", timeout=1.0, sudo_password="pw")
+
+
+def test_run_automation_command_unwinds_immediately_when_channel_closes():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_: float) -> None:
+        sleep_calls["count"] += 1
+        fake_channel.closed = True
+
+    shell._sleep = fake_sleep
+
+    with pytest.raises(RuntimeError, match="SSH session closed while waiting for automation command output"):
+        shell.run_automation_command("tail -f /var/log/syslog", timeout=30.0)
+
+    assert sleep_calls["count"] >= 1
+    assert clock["v"] < 5.0
+
+
+def test_run_automation_command_unwinds_immediately_when_channel_closes_during_sudo_auth():
+    fake_channel = FakeChannel()
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._out_queue = Queue()
+    shell._reset_sudo_timestamp = lambda: None
+
+    def fake_sleep(_: float) -> None:
+        fake_channel.closed = True
+
+    shell._sleep = fake_sleep
+
+    with pytest.raises(RuntimeError, match="SSH session closed while waiting for sudo authentication"):
+        shell.run_automation_command("sudo rosbot.flash", timeout=30.0, sudo_password="pw")

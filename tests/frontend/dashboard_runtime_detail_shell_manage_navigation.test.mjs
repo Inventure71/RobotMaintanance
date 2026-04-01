@@ -820,3 +820,92 @@ test('runManualTests runs tests after successful online precheck', async () => {
   assert.equal(calls.runRobotTests, 1);
   assert.equal(terminalLines.some((line) => line.includes('Running online precheck for Robot 1')), true);
 });
+
+test('runManualTests skips online precheck for queue-only availability and preserves online status', async () => {
+  const createDetailFeature = await loadApi();
+  const env = makeEnv('existing-robots');
+  const terminalLines = [];
+  env.terminal = {
+    appendChild: (node) => {
+      terminalLines.push(String(node?.textContent || ''));
+    },
+    scrollTop: 0,
+    scrollHeight: 0,
+    classList: makeClassList(),
+  };
+  env.state = {
+    pageSessionId: 'page-queue',
+    robots: [
+      {
+        id: 'r1',
+        name: 'Robot 1',
+        typeId: 'picker',
+        tests: { online: { status: 'ok', value: 'reachable', details: 'cached green' } },
+        activity: {
+          activeJob: {
+            id: 'job-1',
+            kind: 'test',
+            status: 'running',
+            source: 'manual',
+            label: 'Run tests',
+          },
+          queuedJobs: [],
+        },
+      },
+    ],
+    selectedRobotIds: new Set(),
+    detailRobotId: '',
+    isTestRunInProgress: false,
+    isAutoFixInProgress: false,
+  };
+  const calls = {
+    addRobotMessages: [],
+    editRobotMessages: [],
+    addRobotTypeMessages: [],
+    populateAddRobotTypeOptions: 0,
+    populateEditRobotSelectOptions: [],
+    renderRecorderRobotOptions: 0,
+    setActiveManageTab: [],
+    syncFixModePanels: 0,
+    onlineChecks: 0,
+    runRobotTests: 0,
+  };
+  const runtime = makeRuntime(calls);
+  runtime.getRobotIdsForRun = () => ['r1'];
+  runtime.hasMixedRobotTypesForIds = () => false;
+  runtime.getRobotActionAvailability = () => ({ allowed: true, title: 'Queue test job' });
+  runtime.getFleetParallelism = () => 1;
+  runtime.getRobotById = (id) => env.state.robots.find((robot) => robot.id === id) || null;
+  runtime.robotId = (value) => normalizeText(typeof value === 'string' ? value : value?.id, '');
+  runtime.runOneRobotOnlineCheck = async () => {
+    calls.onlineChecks += 1;
+    return { status: 'warning', value: 'skipped', details: 'busy' };
+  };
+  runtime.updateOnlineCheckEstimateFromResults = () => {};
+  runtime.mapRobots = (updater) => {
+    env.state.robots = env.state.robots.map((robot) => updater(robot));
+  };
+  runtime.renderDashboard = () => {};
+  runtime.setRobotSearching = () => {};
+  runtime.setRobotTesting = () => {};
+  runtime.runRobotTestsForRobot = async () => {
+    calls.runRobotTests += 1;
+    return {
+      activeJob: null,
+      queuedJobs: [{ id: 'job-2', kind: 'test', status: 'queued' }],
+      results: [],
+    };
+  };
+  runtime.getConfiguredDefaultTestIds = () => ['general'];
+  runtime.estimateTestCountdownMsFromBody = () => 1000;
+  runtime.updateRobotTestState = () => {};
+  runtime.setRunningButtonState = () => {};
+
+  const api = createDetailFeature(runtime, env);
+  await api.runManualTests({ fallbackToActive: true, body: { testIds: ['general'] } });
+
+  assert.equal(calls.onlineChecks, 0);
+  assert.equal(calls.runRobotTests, 1);
+  assert.equal(env.state.robots[0].tests.online.status, 'ok');
+  assert.equal(terminalLines.some((line) => line.includes('Queued tests for r1 (1 queued).')), true);
+});

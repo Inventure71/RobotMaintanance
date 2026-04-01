@@ -332,6 +332,45 @@ class TestExecutor:
             "steps": normalized_steps,
         }
 
+    @staticmethod
+    def _normalize_step_debug_payload(raw_steps: Any) -> list[dict[str, Any]]:
+        if not isinstance(raw_steps, list):
+            return []
+        normalized_steps: list[dict[str, Any]] = []
+        for raw_step in raw_steps:
+            if not isinstance(raw_step, dict):
+                continue
+            normalized_steps.append(
+                {
+                    "id": normalize_text(raw_step.get("id"), "step"),
+                    "status": normalize_status(raw_step.get("status")),
+                    "value": normalize_text(raw_step.get("value"), "n/a"),
+                    "details": normalize_text(raw_step.get("details"), "No detail available"),
+                    "ms": int(raw_step.get("ms") or 0),
+                    "output": raw_step.get("output", ""),
+                }
+            )
+        return normalized_steps
+
+    def _build_execution_error_result(
+        self,
+        *,
+        test_id: str,
+        exc: Exception,
+        elapsed_ms: int,
+    ) -> dict[str, Any]:
+        steps = self._normalize_step_debug_payload(getattr(exc, "steps", None))
+        return {
+            "id": normalize_text(test_id, "test"),
+            "status": "error",
+            "value": "execution_error",
+            "details": f"Test execution failed: {exc}",
+            "errorCode": "execution_error",
+            "source": "executor",
+            "ms": max(0, int(elapsed_ms)),
+            "steps": steps,
+        }
+
     def _execute_definition_once(
         self,
         *,
@@ -494,6 +533,7 @@ class TestExecutor:
                 mode = normalize_text(definition.get("mode") if isinstance(definition, dict) else "", "orchestrate")
                 requires_automation_shell = (mode != "online_probe") and not dry_run
                 definition_context: AutomationRunProtocol | None = None
+                definition_started = time.time()
                 try:
                     if callable(should_cancel) and bool(should_cancel()):
                         raise JobInterrupted("Test execution interrupted before definition setup.")
@@ -509,18 +549,14 @@ class TestExecutor:
                 except Exception as exc:
                     if isinstance(exc, JobInterrupted):
                         raise
+                    elapsed_ms = max(0, int((time.time() - definition_started) * 1000))
                     for spec in grouped_specs:
                         results.append(
-                            {
-                                "id": normalize_text(spec.get("id"), "test"),
-                                "status": "error",
-                                "value": "execution_error",
-                                "details": f"Test execution failed: {exc}",
-                                "errorCode": "execution_error",
-                                "source": "executor",
-                                "ms": 0,
-                                "steps": [],
-                            }
+                            self._build_execution_error_result(
+                                test_id=normalize_text(spec.get("id"), "test"),
+                                exc=exc,
+                                elapsed_ms=elapsed_ms,
+                            )
                         )
                     continue
 
@@ -537,6 +573,7 @@ class TestExecutor:
                         should_cancel=should_cancel,
                     )
                 except HTTPException as exc:
+                    elapsed_ms = max(0, int((time.time() - definition_started) * 1000))
                     for spec in grouped_specs:
                         results.append(
                             {
@@ -546,7 +583,7 @@ class TestExecutor:
                                 "details": exc.detail,
                                 "errorCode": "execution_error",
                                 "source": "executor",
-                                "ms": 0,
+                                "ms": elapsed_ms,
                                 "steps": [],
                             }
                         )
@@ -554,18 +591,14 @@ class TestExecutor:
                 except Exception as exc:
                     if isinstance(exc, JobInterrupted):
                         raise
+                    elapsed_ms = max(0, int((time.time() - definition_started) * 1000))
                     for spec in grouped_specs:
                         results.append(
-                            {
-                                "id": normalize_text(spec.get("id"), "test"),
-                                "status": "error",
-                                "value": "execution_error",
-                                "details": f"Test execution failed: {exc}",
-                                "errorCode": "execution_error",
-                                "source": "executor",
-                                "ms": 0,
-                                "steps": [],
-                            }
+                            self._build_execution_error_result(
+                                test_id=normalize_text(spec.get("id"), "test"),
+                                exc=exc,
+                                elapsed_ms=elapsed_ms,
+                            )
                         )
                     continue
                 finally:
@@ -610,6 +643,7 @@ class TestExecutor:
                         )
                     )
         finally:
+            finished_at = time.time()
             if len(definition_run_metadata) == 1:
                 metadata = dict(definition_run_metadata[0])
             elif definition_run_metadata:
@@ -661,6 +695,11 @@ class TestExecutor:
                         "resetPolicy": "run_scoped_shell",
                     },
                 }
+            session_payload = metadata.get("session") if isinstance(metadata.get("session"), dict) else {}
+            resolved_run_id = normalize_text(metadata.get("runId"), normalize_text(session_payload.get("runId"), fallback_run_id))
+            metadata["runId"] = resolved_run_id
+            metadata["startedAt"] = float(run_started)
+            metadata["finishedAt"] = float(finished_at)
             self._last_run_metadata = metadata
 
         return results

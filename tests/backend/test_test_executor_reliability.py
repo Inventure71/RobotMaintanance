@@ -524,3 +524,104 @@ def test_run_tests_isolates_shell_state_between_definitions():
     metadata = executor.get_last_run_metadata()
     assert metadata["session"]["resetPolicy"] == "definition_scoped_shell"
     assert metadata["session"]["shellCount"] == 2
+
+
+def test_command_failure_preserves_step_debug_context_and_run_metadata():
+    robot_type = {
+        "typeId": "rosbot-2-pro",
+        "tests": [
+            {
+                "id": "broken",
+                "definitionId": "broken_def",
+                "manualOnly": True,
+                "runAtConnection": True,
+                "enabled": True,
+            }
+        ],
+    }
+    definitions = {
+        "broken_def": {
+            "id": "broken_def",
+            "mode": "orchestrate",
+            "execute": [{"id": "fetch_topics", "command": "timeout 12s rostopic list", "saveAs": "topics_raw"}],
+            "checks": [
+                {
+                    "id": "broken",
+                    "read": {"kind": "contains_string", "inputRef": "topics_raw", "needle": "/battery"},
+                    "pass": {"status": "ok", "value": "ok", "details": "ok"},
+                    "fail": {"status": "error", "value": "missing", "details": "missing"},
+                }
+            ],
+        }
+    }
+
+    class FakeRunContext:
+        def run_command(
+            self,
+            command: str,
+            timeout_sec: float | None = None,
+            sudo_password: str | None = None,
+        ) -> AutomationCommandResult:
+            _ = command
+            _ = timeout_sec
+            _ = sudo_password
+            return AutomationCommandResult(
+                output="rostopic: command not found",
+                exit_code=1,
+                timed_out=False,
+                used_sudo=False,
+                sudo_authenticated=False,
+            )
+
+        def close(self) -> None:
+            return None
+
+        def metadata_payload(self) -> dict[str, object]:
+            return {
+                "timing": {"queueMs": 2, "connectMs": 3, "executeMs": 4, "totalMs": 5},
+                "session": {
+                    "runId": "definition-run-1",
+                    "robotId": "r1",
+                    "pageSessionId": "page-1",
+                    "runKind": "test",
+                    "transportReused": False,
+                    "resetPolicy": "run_scoped_shell",
+                },
+            }
+
+    executor = TestExecutor(
+        robot_types_by_id={"rosbot-2-pro": robot_type},
+        resolve_robot_type=lambda _robot_id: robot_type,
+        resolve_credentials=lambda _robot_id: ("10.0.0.1", "u", "p", 22),
+        check_online=lambda _robot_id: {"status": "ok", "value": "reachable", "details": "ok", "ms": 1},
+        create_automation_run_context=lambda **_kwargs: FakeRunContext(),
+        test_definitions_by_id=definitions,
+        check_definitions_by_id={"broken": {"id": "broken", "definitionId": "broken_def"}},
+        orchestrate_connector=OrchestrateConnector(read=ReadConnector(), write=WriteConnector({})),
+    )
+
+    results = executor.run_tests(
+        robot_id="r1",
+        page_session_id="page-1",
+        test_ids=["broken"],
+    )
+
+    assert len(results) == 1
+    result = results[0]
+    assert result["status"] == "error"
+    assert result["value"] == "execution_error"
+    assert "Step 'fetch_topics' failed" in result["details"]
+    assert "rostopic list" in result["details"]
+    assert result["ms"] >= 0
+    assert len(result["steps"]) == 1
+    assert result["steps"][0]["id"] == "fetch_topics"
+    assert result["steps"][0]["status"] == "error"
+    assert result["steps"][0]["value"] == "command_error"
+    assert "rostopic list" in result["steps"][0]["details"]
+    assert result["steps"][0]["output"] == "rostopic: command not found"
+
+    metadata = executor.get_last_run_metadata()
+    assert metadata["runId"] == "definition-run-1"
+    assert metadata["session"]["runId"] == "definition-run-1"
+    assert metadata["startedAt"] > 0
+    assert metadata["finishedAt"] >= metadata["startedAt"]

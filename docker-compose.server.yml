@@ -6,6 +6,7 @@ services:
       - "5010:5010"
     environment:
       PORT: "5010"
+      MODEL_ASSETS_ROOT: "/app/assets/models"
     volumes:
       - type: bind
         source: ./config
@@ -17,6 +18,11 @@ services:
         target: /app/logs
         bind:
           create_host_path: true
+      - type: bind
+        source: ./assets/models
+        target: /app/assets/models
+        bind:
+          create_host_path: true
     restart: unless-stopped
 
   frontend:
@@ -26,4 +32,11 @@ services:
       - "5000:80"
     depends_on:
       - backend
+    volumes:
+      - type: bind
+        source: ./assets/models
+        target: /usr/share/nginx/html/assets/models
+        bind:
+          create_host_path: true
+        read_only: true
     restart: unless-stopped

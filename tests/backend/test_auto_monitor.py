@@ -109,6 +109,198 @@ def test_auto_monitor_skips_robot_when_user_queue_has_pending_work():
     assert check_calls == []
 
 
+def test_run_tests_records_last_debug_snapshot_per_robot_test():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [{"id": "general"}],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    class FakeExecutor:
+        def run_tests(self, **_kwargs):
+            return [
+                {
+                    "id": "general",
+                    "status": "error",
+                    "value": "read_error",
+                    "details": "Parser mismatch",
+                    "errorCode": "definition_output_missing",
+                    "source": "executor",
+                    "read": {"kind": "contains_string", "passed": False},
+                    "steps": [{"id": "topics", "status": "error", "value": "missing", "details": "missing /scan"}],
+                    "ms": 42,
+                }
+            ]
+
+        def get_last_run_metadata(self):
+            return {
+                "runId": "manual-run-1",
+                "startedAt": 10.0,
+                "finishedAt": 11.0,
+                "session": {
+                    "runId": "manual-run-1",
+                    "robotId": "r1",
+                    "pageSessionId": "page-1",
+                    "runKind": "test",
+                    "transportReused": False,
+                    "resetPolicy": "definition_scoped_shell",
+                },
+                "timing": {
+                    "queueMs": 1,
+                    "connectMs": 2,
+                    "executeMs": 39,
+                    "totalMs": 42,
+                },
+            }
+
+    manager.check_online = lambda **_kwargs: {
+        "status": "ok",
+        "value": "reachable",
+        "details": "ok",
+        "ms": 1,
+        "checkedAt": time.time(),
+        "source": "live",
+    }
+    manager._executor = FakeExecutor()
+
+    manager.run_tests(robot_id="r1", page_session_id="page-1", test_ids=["general"])
+
+    runtime = manager.get_runtime_tests("r1")
+    debug = manager.get_runtime_test_debug("r1")
+    assert debug["general"]["runId"] == "manual-run-1"
+    assert debug["general"]["errorCode"] == "definition_output_missing"
+    assert debug["general"]["read"]["kind"] == "contains_string"
+    assert debug["general"]["session"]["pageSessionId"] == "page-1"
+    assert debug["general"]["timing"]["totalMs"] == 42
+    assert debug["general"]["checkedAt"] == runtime["general"]["checkedAt"]
+    assert debug["general"]["checkedAt"] > 0
+
+
+def test_connection_retry_attempt_records_last_debug_snapshot_per_robot_test():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [{"id": "general"}],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    class FakeExecutor:
+        def run_tests(self, **_kwargs):
+            return [
+                {
+                    "id": "general",
+                    "status": "ok",
+                    "value": "clear",
+                    "details": "All good",
+                    "source": "executor",
+                    "steps": [{"id": "topics", "status": "ok", "value": "present", "details": "found /scan"}],
+                    "ms": 25,
+                }
+            ]
+
+        def get_last_run_metadata(self):
+            return {
+                "runId": "auto-run-1",
+                "startedAt": 20.0,
+                "finishedAt": 21.0,
+                "session": {
+                    "runId": "auto-run-1",
+                    "robotId": "r1",
+                    "pageSessionId": manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID,
+                    "runKind": "test",
+                    "transportReused": True,
+                    "resetPolicy": "definition_scoped_shell",
+                },
+                "timing": {
+                    "queueMs": 0,
+                    "connectMs": 1,
+                    "executeMs": 24,
+                    "totalMs": 25,
+                },
+            }
+
+    manager._executor = FakeExecutor()
+
+    manager._run_connection_retry_attempt(
+        robot_id="r1",
+        test_ids=["general"],
+        source="auto-monitor",
+        manage_runtime_activity=False,
+    )
+
+    debug = manager.get_runtime_test_debug("r1")
+    assert debug["general"]["runId"] == "auto-run-1"
+    assert debug["general"]["status"] == "ok"
+    assert debug["general"]["session"]["pageSessionId"] == manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID
+    assert debug["general"]["timing"]["totalMs"] == 25
+
+
+def test_connection_retry_attempt_persists_failure_results_to_runtime_state():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            }
+        },
+        robot_types_by_id={
+            "rosbot-2-pro": {
+                "typeId": "rosbot-2-pro",
+                "tests": [{"id": "general"}],
+            }
+        },
+        auto_monitor=False,
+    )
+
+    class FailingExecutor:
+        def run_tests(self, **_kwargs):
+            raise RuntimeError("ssh boom")
+
+    manager._executor = FailingExecutor()
+
+    results = manager._run_connection_retry_attempt(
+        robot_id="r1",
+        test_ids=["general"],
+        source="auto-monitor",
+        manage_runtime_activity=False,
+    )
+
+    runtime = manager.get_runtime_tests("r1")
+    debug = manager.get_runtime_test_debug("r1")
+    assert results[0]["status"] == "error"
+    assert runtime["general"]["status"] == "error"
+    assert runtime["online"]["status"] == "error"
+    assert debug["general"]["status"] == "error"
+    assert debug["general"]["details"] == "ssh boom"
+    assert debug["general"]["session"]["pageSessionId"] == manager.AUTO_MONITOR_TEST_PAGE_SESSION_ID
+    assert debug["general"]["checkedAt"] == runtime["general"]["checkedAt"]
+
+
 def test_reload_definitions_prunes_runtime_tests_not_in_robot_type_catalog():
     manager = _manager()
     manager._record_runtime_tests(

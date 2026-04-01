@@ -43,6 +43,7 @@ def create_robots_router(
     robot_types_config_path: Path | None = None,
     robot_models_root: Path | None = None,
     runtime_tests_provider: Callable[[str], dict[str, dict[str, Any]]] | None = None,
+    runtime_test_debug_provider: Callable[[str], dict[str, dict[str, Any]]] | None = None,
     runtime_activity_provider: Callable[[str], dict[str, Any]] | None = None,
     runtime_snapshot_provider: Callable[[int], dict[str, Any]] | None = None,
 ) -> APIRouter:
@@ -644,6 +645,27 @@ def create_robots_router(
                 }
             )
         return out
+
+    @router.get("/api/robots/{robot_id}/tests/{test_id}/debug")
+    def get_robot_test_debug(robot_id: str, test_id: str) -> dict[str, Any]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        normalized_test_id = normalize_text(test_id, "")
+        if normalized_robot_id not in robots_by_id:
+            raise HTTPException(status_code=404, detail=f"Robot '{normalized_robot_id}' not found")
+        if not normalized_test_id:
+            raise HTTPException(status_code=400, detail="testId is required")
+
+        runtime_tests = runtime_tests_provider(normalized_robot_id) if runtime_tests_provider else {}
+        runtime_test_debug = runtime_test_debug_provider(normalized_robot_id) if runtime_test_debug_provider else {}
+        result_payload = runtime_tests.get(normalized_test_id) if isinstance(runtime_tests, dict) else None
+        debug_payload = runtime_test_debug.get(normalized_test_id) if isinstance(runtime_test_debug, dict) else None
+
+        return {
+            "robotId": normalized_robot_id,
+            "testId": normalized_test_id,
+            "result": dict(result_payload) if isinstance(result_payload, dict) else None,
+            "debug": dict(debug_payload) if isinstance(debug_payload, dict) else None,
+        }
 
     @router.post("/api/robots", status_code=201)
     async def create_robot(

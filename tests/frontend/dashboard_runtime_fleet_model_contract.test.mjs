@@ -222,6 +222,7 @@ async function withFakeDocument(run) {
   const previousDocument = globalThis.document;
   globalThis.document = {
     createElement: (tagName) => new FakeElement(tagName),
+    querySelectorAll: () => [],
   };
 
   try {
@@ -335,6 +336,7 @@ async function loadApi() {
   const context = {
     console,
     document: globalThis.document,
+    window: globalThis.window,
     module: { exports: {} },
     exports: {},
   };
@@ -350,7 +352,11 @@ function makeRuntime(env) {
       tests: { online: { status: 'ok', value: 'reachable', details: 'ok' } },
       definitions: [],
     }),
-    normalizeRobotActivity: () => ({ searching: false, testing: false }),
+    normalizeRobotActivity: (activity = {}) => ({
+      searching: Boolean(activity?.searching),
+      testing: Boolean(activity?.testing),
+      phase: normalizeText(activity?.phase, ''),
+    }),
     normalizeTestDebugCollection: () => [],
     readRobotField: (robot, key) => robot?.ssh?.[key] ?? robot?.[key],
   };
@@ -407,8 +413,24 @@ function makeEnv() {
         },
       ],
     ]),
+    ONLINE_CHECK_TIMEOUT_MS: 3000,
+    TEST_STEP_TIMEOUT_MS: 12000,
+    TEST_COUNTDOWN_MIN_SECONDS: 3,
+    TEST_COUNTDOWN_MAX_SECONDS: 60,
+    TEST_COUNTDOWN_TICK_MS: 1000,
+    TEST_COUNTDOWN_WARNING_TEXT: {
+      scanning: 'Scan timing out',
+      finding: 'Find timing out',
+      fixing: 'Fix timing out',
+    },
+    TEST_COUNTDOWN_MODE_LABELS: {
+      scanning: 'Scanning',
+      finding: 'Finding',
+      fixing: 'Fixing',
+    },
     state: {
       autoActivityRobotIds: new Set(),
+      autoFixingRobotIds: new Set(),
       autoSearchingRobotIds: new Set(),
       autoTestingRobotIds: new Set(),
       automatedRobotActivityById: new Map(),
@@ -426,6 +448,55 @@ function makeEnv() {
     },
   };
 }
+
+test('syncAutomatedRobotActivityFromState classifies fixing phase as repairing instead of scanning', async () => {
+  await withFakeDocument(async () => {
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      setInterval: () => 1,
+      clearInterval: () => {},
+    };
+
+    try {
+      const createFleetFeature = await loadApi();
+      const env = makeEnv();
+      const runtime = makeRuntime(env);
+      const api = createFleetFeature(runtime, env);
+
+      api.setRobots([
+        {
+          id: 'robot-fix-1',
+          name: 'RepairBot',
+          type: 'Rosbot 2 Pro',
+          typeId: 'rosbot-2-pro',
+          tests: {
+            online: { status: 'ok', value: 'reachable', details: 'up' },
+          },
+          activity: { testing: true, phase: 'fixing' },
+        },
+      ]);
+
+      api.syncAutomatedRobotActivityFromState();
+
+      assert.equal(env.state.autoFixingRobotIds.has('robot-fix-1'), true);
+      assert.equal(env.state.autoTestingRobotIds.has('robot-fix-1'), false);
+      assert.equal(api.isRobotFixing('robot-fix-1'), true);
+      assert.equal(api.isRobotTesting('robot-fix-1'), false);
+      assert.match(api.getTestingCountdownText('robot-fix-1'), /^Fixing \d+s$/);
+      assert.match(
+        api.buildScanOverlayMarkup({
+          isSearching: api.isRobotSearching('robot-fix-1'),
+          isTesting: api.isRobotTesting('robot-fix-1'),
+          isFixing: api.isRobotFixing('robot-fix-1'),
+        }),
+        /repairing\.webm/,
+      );
+    } finally {
+      if (previousWindow === undefined) delete globalThis.window;
+      else globalThis.window = previousWindow;
+    }
+  });
+});
 
 test('normalizeRobotData resolves effective model from overrides then type defaults', async () => {
   const createFleetFeature = await loadApi();

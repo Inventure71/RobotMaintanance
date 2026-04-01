@@ -178,9 +178,18 @@
         flex-wrap: wrap;
       }
 
+      .detail-toolbar-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+
       .detail-status-bar {
         width: 100%;
         justify-content: flex-start;
+        max-width: none;
+        flex-wrap: wrap;
+        overflow: visible;
       }
 
       .test-list {

@@ -8,6 +8,86 @@ from ..normalization import normalize_status, normalize_text
 
 
 class TestRunnerMixin:
+    def _normalize_runtime_debug_session(self, payload: dict[str, Any] | None, *, run_id: str = "") -> dict[str, Any]:
+        session = payload if isinstance(payload, dict) else {}
+        return {
+            "runId": normalize_text(session.get("runId"), run_id),
+            "robotId": normalize_text(session.get("robotId"), ""),
+            "pageSessionId": normalize_text(session.get("pageSessionId"), ""),
+            "runKind": normalize_text(session.get("runKind"), ""),
+            "transportReused": bool(session.get("transportReused")),
+            "resetPolicy": normalize_text(session.get("resetPolicy"), ""),
+        }
+
+    def _normalize_runtime_debug_timing(self, payload: dict[str, Any] | None) -> dict[str, Any]:
+        timing = payload if isinstance(payload, dict) else {}
+        return {
+            "queueMs": max(0, int(timing.get("queueMs") or 0)),
+            "connectMs": max(0, int(timing.get("connectMs") or 0)),
+            "executeMs": max(0, int(timing.get("executeMs") or 0)),
+            "totalMs": max(0, int(timing.get("totalMs") or 0)),
+        }
+
+    def _normalize_runtime_debug_step(self, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+        step = payload if isinstance(payload, dict) else {}
+        step_id = normalize_text(step.get("id"), "")
+        if not step_id:
+            return None
+        return {
+            "id": step_id,
+            "status": normalize_status(step.get("status")),
+            "value": normalize_text(step.get("value"), "n/a"),
+            "details": normalize_text(step.get("details"), "No detail available"),
+            "ms": max(0, int(step.get("ms") or 0)),
+            "output": normalize_text(step.get("output"), ""),
+        }
+
+    def _build_runtime_test_debug_snapshot(
+        self,
+        result: dict[str, Any],
+        *,
+        run_meta: dict[str, Any] | None = None,
+        fallback_source: str,
+        checked_at: float | None = None,
+    ) -> dict[str, Any] | None:
+        payload = result if isinstance(result, dict) else {}
+        test_id = normalize_text(payload.get("id"), "")
+        if not test_id:
+            return None
+        run_metadata = run_meta if isinstance(run_meta, dict) else {}
+        session_payload = run_metadata.get("session") if isinstance(run_metadata.get("session"), dict) else {}
+        timing_payload = run_metadata.get("timing") if isinstance(run_metadata.get("timing"), dict) else {}
+        resolved_run_id = normalize_text(run_metadata.get("runId"), normalize_text(session_payload.get("runId"), ""))
+        steps = []
+        for raw_step in payload.get("steps") if isinstance(payload.get("steps"), list) else []:
+            normalized_step = self._normalize_runtime_debug_step(raw_step)
+            if normalized_step:
+                steps.append(normalized_step)
+        try:
+            resolved_checked_at = float(payload.get("checkedAt") or checked_at or 0.0)
+        except Exception:
+            resolved_checked_at = float(checked_at or 0.0)
+        return {
+            "id": test_id,
+            "status": normalize_status(payload.get("status")),
+            "value": normalize_text(payload.get("value"), "n/a"),
+            "details": normalize_text(payload.get("details"), "No detail available"),
+            "reason": normalize_text(payload.get("reason"), ""),
+            "errorCode": normalize_text(payload.get("errorCode"), ""),
+            "source": normalize_text(payload.get("source"), normalize_text(fallback_source, "")),
+            "checkedAt": resolved_checked_at,
+            "skipped": bool(payload.get("skipped")),
+            "ms": max(0, int(payload.get("ms") or 0)),
+            "read": payload.get("read") if isinstance(payload.get("read"), dict) else {},
+            "raw": payload.get("raw") if isinstance(payload.get("raw"), dict) else {},
+            "steps": steps,
+            "runId": resolved_run_id,
+            "startedAt": float(run_metadata.get("startedAt") or 0.0),
+            "finishedAt": float(run_metadata.get("finishedAt") or 0.0),
+            "session": self._normalize_runtime_debug_session(session_payload, run_id=resolved_run_id),
+            "timing": self._normalize_runtime_debug_timing(timing_payload),
+        }
+
     def _has_background_test_activity(self, robot_id: str) -> bool:
         normalized_robot_id = normalize_text(robot_id, "")
         if not normalized_robot_id:
@@ -91,14 +171,18 @@ class TestRunnerMixin:
             normalized_results = results if isinstance(results, list) else []
             if callable(should_commit) and not bool(should_commit()):
                 return normalized_results
+            metadata = {}
+            if hasattr(self._executor, "get_last_run_metadata"):
+                metadata = self._executor.get_last_run_metadata()
             self._record_runtime_results_from_test_run(
                 robot_id,
                 normalized_results,
                 source=source,
+                run_meta=metadata,
             )
             return normalized_results
         except Exception as exc:
-            return [
+            failure_results = [
                 {
                     "id": normalize_text(test_id, "test"),
                     "status": "error",
@@ -110,6 +194,31 @@ class TestRunnerMixin:
                 for test_id in test_ids
                 if normalize_text(test_id, "")
             ]
+            if callable(should_commit) and not bool(should_commit()):
+                return failure_results
+            self._record_runtime_results_from_test_run(
+                robot_id,
+                failure_results,
+                source=source,
+                run_meta={
+                    "runId": f"test-{robot_id}-{int(started_at * 1000)}",
+                    "startedAt": started_at,
+                    "finishedAt": time.time(),
+                    "session": {
+                        "robotId": robot_id,
+                        "pageSessionId": self.AUTO_MONITOR_TEST_PAGE_SESSION_ID,
+                        "runKind": "test",
+                        "resetPolicy": "definition_scoped_shell",
+                    },
+                    "timing": {
+                        "queueMs": 0,
+                        "connectMs": 0,
+                        "executeMs": max(0, int((time.time() - started_at) * 1000)),
+                        "totalMs": max(0, int((time.time() - started_at) * 1000)),
+                    },
+                },
+            )
+            return failure_results
         finally:
             elapsed = time.time() - started_at
             min_visible_sec = max(0.0, float(self.AUTO_ACTIVITY_MIN_VISIBLE_SEC))
@@ -178,10 +287,12 @@ class TestRunnerMixin:
         results: list[dict[str, Any]],
         *,
         source: str,
+        run_meta: dict[str, Any] | None = None,
     ) -> None:
         now = time.time()
         valid_test_ids = set(self._configured_test_ids(robot_id))
         updates: dict[str, dict[str, Any]] = {}
+        debug_updates: dict[str, dict[str, Any]] = {}
         non_online_results: list[dict[str, Any]] = []
         for result in results:
             if not isinstance(result, dict):
@@ -201,6 +312,14 @@ class TestRunnerMixin:
                 "checkedAt": now,
                 "source": normalize_text(source, "auto-monitor"),
             }
+            debug_payload = self._build_runtime_test_debug_snapshot(
+                result,
+                run_meta=run_meta,
+                fallback_source=source,
+                checked_at=now,
+            )
+            if debug_payload:
+                debug_updates[test_id] = debug_payload
 
         if "online" not in updates and non_online_results:
             any_non_error = any(normalize_status(result.get("status")) != "error" for result in non_online_results)
@@ -234,6 +353,8 @@ class TestRunnerMixin:
                 }
         if updates:
             self._record_runtime_tests(robot_id, updates)
+            if debug_updates:
+                self._record_runtime_test_debug(robot_id, debug_updates)
             configured_non_online_ids = {
                 test_id for test_id in self._configured_test_ids(robot_id) if test_id != "online"
             }
@@ -363,8 +484,12 @@ class TestRunnerMixin:
             return selected
 
         def _record_local_metadata(total_ms: int) -> None:
+            run_id = f"test-{robot_id}-{int(time.time() * 1000)}"
             with self._lock:
                 self._last_test_run_metadata[(robot_id, page_session_id)] = {
+                    "runId": run_id,
+                    "startedAt": started_at,
+                    "finishedAt": time.time(),
                     "timing": {
                         "queueMs": 0,
                         "connectMs": 0,
@@ -372,7 +497,7 @@ class TestRunnerMixin:
                         "totalMs": max(0, int(total_ms)),
                     },
                     "session": {
-                        "runId": f"test-{robot_id}-{int(time.time() * 1000)}",
+                        "runId": run_id,
                         "robotId": robot_id,
                         "pageSessionId": page_session_id,
                         "runKind": "test",
@@ -423,12 +548,13 @@ class TestRunnerMixin:
                     for test_id in selected_non_online_ids
                 ]
                 results = [online_result, *skipped_results]
+                _record_local_metadata(max(0, int((time.time() - started_at) * 1000)))
                 self._record_runtime_results_from_test_run(
                     robot_id=robot_id,
                     results=results,
                     source="manual",
+                    run_meta=self.get_last_test_run_metadata(robot_id, page_session_id),
                 )
-                _record_local_metadata(max(0, int((time.time() - started_at) * 1000)))
                 return results
 
         results = self._executor.run_tests(
@@ -441,6 +567,7 @@ class TestRunnerMixin:
             execute_timeout_sec=execute_timeout_sec,
             should_cancel=should_cancel,
         )
+        metadata: dict[str, Any] = {}
         if hasattr(self._executor, "get_last_run_metadata"):
             metadata = self._executor.get_last_run_metadata()
             with self._lock:
@@ -449,6 +576,7 @@ class TestRunnerMixin:
             robot_id=robot_id,
             results=results if isinstance(results, list) else [],
             source="manual",
+            run_meta=metadata if isinstance(metadata, dict) else {},
         )
         return results
 

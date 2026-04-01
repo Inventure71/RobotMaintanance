@@ -117,3 +117,27 @@ def test_coordinator_isolates_work_per_robot():
 
     robots = {robot_id for robot_id, _job_id in executions}
     assert robots == {"r1", "r2"}
+
+
+def test_coordinator_marks_interrupted_when_token_is_set_during_teardown_error():
+    class TeardownExecutor:
+        def execute_job(self, *, robot_id, job, token):
+            _ = robot_id, job
+            token.request_interrupt()
+            raise RuntimeError("transport closed during teardown")
+
+    coordinator = RobotJobCoordinator(executor=TeardownExecutor())
+    coordinator.enqueue_user_job(
+        robot_id="r1",
+        kind="test",
+        source="manual",
+        label="job1",
+        payload={},
+        page_session_id="p1",
+    )
+
+    _wait_for(lambda: coordinator.has_pending_user_work("r1") is False)
+
+    state = coordinator._states["r1"]
+    assert state._history
+    assert state._history[-1].terminal_status == "interrupted"

@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#06081a" />
-  <title>VIGIL Command Deck</title>
+  <title>VIGIL</title>
   <link rel="icon" type="image/x-icon" href="/assets/Icons/favicon.ico" />
   <script>
     (() => {
@@ -33,10 +33,6 @@
         <div class="dashboard-layout">
           <aside class="dashboard-sidebar" aria-label="Fleet controls">
             <section class="dashboard-sidebar-section panel">
-              <div class="dashboard-sidebar-heading">
-                <h2 class="dashboard-sidebar-title">Fleet health</h2>
-                <p class="dashboard-sidebar-copy">High-level fleet status across all registered robots.</p>
-              </div>
               <div class="status-bar dashboard-kpis-bar">
                 <div class="kpi ok"><span>Fleet healthy</span><span class="kpi-value" id="kpiHealthy">0</span></div>
                 <div class="kpi warn"><span>Warnings</span><span class="kpi-value" id="kpiWarn">0</span></div>
@@ -1194,9 +1190,11 @@
           <button class="button" id="backToFleet" type="button" data-button-intent="navigation">← Back to fleet</button>
           <div id="detailTitleBar" class="detail-title-bar"></div>
         </div>
-        <button class="button" id="runRobotTests" type="button" data-button-intent="run">Run tests</button>
-        <button class="button" id="toggleDetailFixMode" type="button" data-button-intent="fix">Enter fix mode</button>
-        <div id="detailStatusBar" class="detail-status-bar"></div>
+        <div class="detail-toolbar-actions">
+          <button class="button" id="runRobotTests" type="button" data-button-intent="run">Run tests</button>
+          <button class="button" id="toggleDetailFixMode" type="button" data-button-intent="fix">Enter fix mode</button>
+          <div id="detailStatusBar" class="detail-status-bar"></div>
+        </div>
       </div>
       <div id="detailFixModePanel" class="panel fix-mode-panel hidden" aria-live="polite">
         <div class="fix-mode-header">
@@ -1211,7 +1209,10 @@
           <div id="detailModel" class="detail-model-host"></div>
         </div>
         <div class="panel matrix-panel">
-          <h2>Live test matrix</h2>
+          <div class="matrix-panel-header">
+            <h2>Live test matrix</h2>
+            <div id="detailMatrixHeaderBar" class="detail-matrix-header-bar"></div>
+          </div>
           <div id="testList" class="test-list"></div>
         </div>
       </div>

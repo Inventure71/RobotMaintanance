@@ -225,8 +225,12 @@ class RobotJobCoordinator:
             except JobInterrupted:
                 outcome_status = "interrupted"
             except Exception as exc:
-                outcome_status = "failed"
-                outcome_error = normalize_text(str(exc), "Job execution failed")
+                if token is not None and token.is_interrupted():
+                    outcome_status = "interrupted"
+                    outcome_error = normalize_text(str(exc), "") or None
+                else:
+                    outcome_status = "failed"
+                    outcome_error = normalize_text(str(exc), "Job execution failed")
 
             finalize_snapshot: dict[str, Any] | None = None
             with lock:

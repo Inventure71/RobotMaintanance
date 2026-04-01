@@ -31,7 +31,7 @@ from .routers import (
 from .terminal_manager import TerminalManager
 
 
-def create_app() -> FastAPI:
+def create_app(*, auto_monitor_on_startup: bool = True) -> FastAPI:
     config_path = Path(os.getenv("ROBOTS_CONFIG_PATH", str(DEFAULT_ROBOTS_CONFIG_PATH))).resolve()
     robot_types_path = Path(
         os.getenv("ROBOT_TYPES_CONFIG_PATH", str(DEFAULT_ROBOT_TYPES_CONFIG_PATH))
@@ -62,7 +62,7 @@ def create_app() -> FastAPI:
         test_definitions_by_id=catalog.test_definitions_by_id,
         check_definitions_by_id=catalog.check_definitions_by_id,
         fix_definitions_by_id=catalog.fix_definitions_by_id,
-        auto_monitor=True,
+        auto_monitor=False,
     )
     definition_service = DefinitionService(
         terminal_manager=terminal_manager,
@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
             robot_types_config_path=robot_types_path,
             robot_models_root=model_assets_root,
             runtime_tests_provider=terminal_manager.get_runtime_tests,
+            runtime_test_debug_provider=terminal_manager.get_runtime_test_debug,
             runtime_activity_provider=terminal_manager.get_runtime_activity,
             runtime_snapshot_provider=terminal_manager.get_runtime_snapshot_since,
         )
@@ -102,6 +103,13 @@ def create_app() -> FastAPI:
     app.include_router(create_jobs_router(terminal_manager))
     app.include_router(create_definitions_router(definition_service))
     app.include_router(create_bug_reports_router(logs_path))
+
+    @app.on_event("startup")
+    def _on_startup() -> None:
+        if not auto_monitor_on_startup:
+            return
+        terminal_manager._auto_monitor_enabled = True
+        terminal_manager._start_auto_monitor()
 
     @app.on_event("shutdown")
     def _on_shutdown() -> None:

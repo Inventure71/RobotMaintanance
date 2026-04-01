@@ -90,6 +90,7 @@ export function createDetailRefreshApi({
     state.testingRobotIds = new Set(Array.from(state.testingRobotIds).filter((id) => validRobotIds.has(id)));
     state.searchingRobotIds = new Set(Array.from(state.searchingRobotIds).filter((id) => validRobotIds.has(id)));
     state.fixingRobotIds = new Set(Array.from(state.fixingRobotIds).filter((id) => validRobotIds.has(id)));
+    state.autoFixingRobotIds = new Set(Array.from(state.autoFixingRobotIds || []).filter((id) => validRobotIds.has(id)));
     state.autoTestingRobotIds = new Set(Array.from(state.autoTestingRobotIds).filter((id) => validRobotIds.has(id)));
     state.autoSearchingRobotIds = new Set(Array.from(state.autoSearchingRobotIds).filter((id) => validRobotIds.has(id)));
     state.autoActivityRobotIds = new Set(Array.from(state.autoActivityRobotIds).filter((id) => validRobotIds.has(id)));

@@ -19,10 +19,7 @@ export function createDetailFiltersApi(deps) {
 
   function getOwnerTags(value) {
     const tags = getTagList(value);
-    if (!tags.includes('global')) {
-      tags.unshift('global');
-    }
-    return Array.from(new Set(tags));
+    return tags.length ? Array.from(new Set(tags)) : ['global'];
   }
 
   function getPlatformTags(value) {
@@ -34,7 +31,14 @@ export function createDetailFiltersApi(deps) {
     const platformTags = getPlatformTags(definition?.platformTags ?? fallback.platformTags);
     const requiredOwnerTags = getTagList(state?.filter?.ownerTags);
     const requiredPlatformTags = getTagList(state?.filter?.platformTags);
-    const ownerMatch = !requiredOwnerTags.length || requiredOwnerTags.every((tag) => ownerTags.includes(tag));
+    const activeOwnerProfile = normalizeText(state?.filter?.activeOwnerProfile, '').toLowerCase();
+    const effectiveOwnerTags = requiredOwnerTags.length
+      ? requiredOwnerTags
+      : (activeOwnerProfile ? [activeOwnerProfile] : []);
+    const ownerSelection = effectiveOwnerTags.length
+      ? Array.from(new Set([...effectiveOwnerTags, 'global']))
+      : [];
+    const ownerMatch = !ownerSelection.length || ownerSelection.some((tag) => ownerTags.includes(tag));
     const platformMatch = !requiredPlatformTags.length || requiredPlatformTags.every((tag) => platformTags.includes(tag));
     return ownerMatch && platformMatch;
   }

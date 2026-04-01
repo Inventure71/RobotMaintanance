@@ -5,6 +5,45 @@ import time
 from typing import Any, Callable
 
 from ..ssh_client import AutomationCommandResult
+from ..terminal_manager.job_scheduler.cancel import JobInterrupted
+
+
+class CommandExecutionError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        step_id: str,
+        command: str,
+        timeout_sec: float | None,
+        retries: int,
+        duration_ms: int,
+        exit_code: int | None = None,
+        timed_out: bool = False,
+        output: str = "",
+        cause: Exception | None = None,
+    ) -> None:
+        self.step_id = str(step_id or "command")
+        self.command = str(command or "").strip()
+        self.timeout_sec = timeout_sec
+        self.retries = max(0, int(retries))
+        self.duration_ms = max(0, int(duration_ms))
+        self.exit_code = exit_code if exit_code is None else int(exit_code)
+        self.timed_out = bool(timed_out)
+        self.output = str(output or "")
+        self.cause = cause
+
+        if self.timed_out:
+            reason = f"timed out after {timeout_sec if timeout_sec is not None else 'default'} seconds"
+        elif self.exit_code is None and cause is None:
+            reason = "completed without a readable exit code"
+        elif self.exit_code is not None:
+            reason = f"exited with status {self.exit_code}"
+        elif cause is not None:
+            reason = str(cause) or cause.__class__.__name__
+        else:
+            reason = "execution failed"
+
+        super().__init__(f"Step '{self.step_id}' failed for command `{self.command}`: {reason}")
 
 
 class WriteConnector:
@@ -97,30 +136,74 @@ class WriteConnector:
             }
 
         started_at = int(time.time() * 1000)
-        last_error: Exception | None = None
+        last_error: CommandExecutionError | None = None
         execution: AutomationCommandResult | None = None
+        last_output = ""
         attempts = retries + 1
         for _ in range(attempts):
             try:
                 execution = run_command(resolved_command, timeout_sec)
+                last_output = str(execution.output or "")
                 if execution.timed_out:
-                    raise RuntimeError(
-                        f"execute_timeout: command timed out after {timeout_sec if timeout_sec is not None else 'default'} seconds"
+                    raise CommandExecutionError(
+                        step_id=step_id,
+                        command=resolved_command,
+                        timeout_sec=timeout_sec,
+                        retries=retries,
+                        duration_ms=max(0, int(time.time() * 1000 - started_at)),
+                        timed_out=True,
+                        output=execution.output,
                     )
                 if execution.exit_code is None:
-                    raise RuntimeError("Command completed without a readable exit code")
+                    raise CommandExecutionError(
+                        step_id=step_id,
+                        command=resolved_command,
+                        timeout_sec=timeout_sec,
+                        retries=retries,
+                        duration_ms=max(0, int(time.time() * 1000 - started_at)),
+                        output=execution.output,
+                    )
                 if execution.exit_code != 0:
-                    raise RuntimeError(f"Command exited with status {execution.exit_code}")
+                    raise CommandExecutionError(
+                        step_id=step_id,
+                        command=resolved_command,
+                        timeout_sec=timeout_sec,
+                        retries=retries,
+                        duration_ms=max(0, int(time.time() * 1000 - started_at)),
+                        exit_code=execution.exit_code,
+                        output=execution.output,
+                    )
                 last_error = None
                 break
+            except JobInterrupted:
+                raise
+            except CommandExecutionError as exc:
+                last_error = exc
             except Exception as exc:
                 last_error = exc
 
         elapsed = max(0, int(time.time() * 1000 - started_at))
         if last_error is not None:
-            raise RuntimeError(f"Command failed: {last_error}")
+            if isinstance(last_error, CommandExecutionError):
+                raise last_error
+            raise CommandExecutionError(
+                step_id=step_id,
+                command=resolved_command,
+                timeout_sec=timeout_sec,
+                retries=retries,
+                duration_ms=elapsed,
+                output=last_output,
+                cause=last_error,
+            ) from last_error
         if execution is None:
-            raise RuntimeError("Command failed: no execution result")
+            raise CommandExecutionError(
+                step_id=step_id,
+                command=resolved_command,
+                timeout_sec=timeout_sec,
+                retries=retries,
+                duration_ms=elapsed,
+                cause=RuntimeError("no execution result"),
+            )
 
         output = execution.output
 

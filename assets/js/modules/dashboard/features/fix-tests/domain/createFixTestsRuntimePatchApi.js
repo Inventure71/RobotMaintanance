@@ -2,6 +2,8 @@ export function createFixTestsRuntimePatchApi({
   $,
   detail,
   state,
+  appendTerminalLine,
+  stopCurrentJob,
   normalizeStatus,
   normalizeText,
   patchDashboardForChangedRobots,
@@ -90,13 +92,9 @@ export function createFixTestsRuntimePatchApi({
       lastFullTestPill.textContent = buildLastFullTestPillLabel(robot);
     }
     const queueStripHost = card.querySelector('[data-role="card-job-queue-strip"]');
-    if (queueStripHost) {
-      queueStripHost.innerHTML = renderRobotJobQueueStrip(robot?.activity, { maxQueued: 2 });
-    }
+    if (queueStripHost) queueStripHost.innerHTML = '';
     const stopJobHost = card.querySelector('[data-role="card-stop-current-job"]');
-    if (stopJobHost) {
-      stopJobHost.innerHTML = renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId);
-    }
+    if (stopJobHost) stopJobHost.innerHTML = '';
 
     const summaryBatteryHost = card.querySelector('[data-role="summary-battery-pill"]');
     if (summaryBatteryHost) {
@@ -161,11 +159,11 @@ export function createFixTestsRuntimePatchApi({
     if (robotId(robot) !== state.detailRobotId) return;
 
     const statusBar = $('#detailStatusBar');
+    const matrixHeaderBar = $('#detailMatrixHeaderBar');
     const testList = $('#testList');
     const modelHost = $('#detailModel');
     const stateKey = statusFromScore(robot);
     const batteryState = getRobotBatteryState(robot) || robot?.tests?.battery || {};
-    const errorCount = nonBatteryTestEntries(robot).filter(([, t]) => normalizeStatus(t?.status) !== 'ok').length;
     const isOffline = normalizeStatus(robot?.tests?.online?.status) !== 'ok';
     const normalizedRobotId = robotId(robot);
     const isTesting = isRobotTesting(normalizedRobotId);
@@ -177,15 +175,48 @@ export function createFixTestsRuntimePatchApi({
 
     if (statusBar) {
       statusBar.innerHTML = `
-            ${statusChip(stateKey, 'detail-status-chip')}
             ${renderBatteryPill({
               value: batteryState.value,
               status: batteryState.status,
               reason: batteryState.reason,
               size: 'small',
             })}
+            `.trim().replace(/>\s+</g, '><');
+      statusBar.insertAdjacentHTML(
+        'beforeend',
+        `
+            <span data-role="detail-stop-current-job">${renderRobotStopCurrentJobButton(robot?.activity, normalizedRobotId)}</span>
+            <span data-role="detail-job-queue-strip">${renderRobotJobQueueStrip(robot?.activity, { maxQueued: 6, includeEmpty: true })}</span>
+        `.trim().replace(/>\s+</g, '><'),
+      );
+      const stopButton = statusBar.querySelector('[data-action="stop-current-job"]');
+      if (stopButton) {
+        stopButton.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const targetRobotId = normalizeText(stopButton.getAttribute('data-robot-id'), normalizedRobotId);
+          const previousLabel = normalizeText(stopButton.textContent, 'Stop');
+          stopButton.disabled = true;
+          stopButton.textContent = 'Stopping...';
+          try {
+            await stopCurrentJob(targetRobotId);
+            appendTerminalLine(`Stop requested for ${robot.name || targetRobotId}.`, 'warn');
+          } catch (error) {
+            stopButton.disabled = false;
+            stopButton.textContent = previousLabel;
+            appendTerminalLine(
+              `Failed to stop job for ${robot.name || targetRobotId}: ${error instanceof Error ? error.message : String(error)}`,
+              'err',
+            );
+          }
+        });
+      }
+    }
+    if (matrixHeaderBar) {
+      matrixHeaderBar.innerHTML = `
+            ${statusChip(stateKey, 'detail-status-chip')}
             <span class="pill" data-role="detail-last-full-test-pill">${buildLastFullTestPillLabel(robot, true)}</span>
-            <span class="detail-issue-count">${errorCount} issue(s)</span>`.trim().replace(/>\s+</g, '><');
+          `.trim().replace(/>\s+</g, '><');
     }
 
     const modelContainer = modelHost?.querySelector('.robot-model-slot, .robot-3d') || null;

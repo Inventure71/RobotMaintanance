@@ -63,21 +63,28 @@ export function createFixTestsRunStateApi(deps) {
         : actionKind === 'online'
           ? 'online check'
           : 'tests';
+    const queueTitle = actionKind === 'fix' ? 'Queue fix job' : 'Queue test job';
     const activity = normalizeRobotActivity(robot?.activity);
     const phase = normalizeText(activity?.phase, '');
     const hasQueuedUserWork = Boolean(activity?.activeJob)
       || (Array.isArray(activity?.queuedJobs) && activity.queuedJobs.length > 0);
+    const autoFixing = state.autoFixingRobotIds?.has(id) === true;
+    const autoTesting = state.autoTestingRobotIds.has(id);
+    const autoSearching = state.autoSearchingRobotIds.has(id);
+    const isFixing = state.fixingRobotIds.has(id) || autoFixing || phase === 'fixing';
+    const isTesting = state.testingRobotIds.has(id);
+    const isSearching = state.searchingRobotIds.has(id);
 
     if (actionKind !== 'online' && hasQueuedUserWork) {
       return {
         allowed: true,
         blocked: false,
         preemptableAuto: false,
-        title: actionKind === 'fix' ? 'Queue fix job' : 'Queue test job',
+        title: queueTitle,
       };
     }
 
-    if (state.fixingRobotIds.has(id) || phase === 'fixing') {
+    if (actionKind === 'online' && isFixing) {
       return {
         allowed: false,
         blocked: true,
@@ -96,7 +103,16 @@ export function createFixTestsRunStateApi(deps) {
       };
     }
 
-    if (state.testingRobotIds.has(id)) {
+    if (actionKind !== 'online' && (isFixing || isTesting || isSearching || autoTesting || autoSearching)) {
+      return {
+        allowed: true,
+        blocked: false,
+        preemptableAuto: false,
+        title: queueTitle,
+      };
+    }
+
+    if (isTesting) {
       return {
         allowed: false,
         blocked: true,
@@ -104,7 +120,7 @@ export function createFixTestsRunStateApi(deps) {
         title: 'Tests are already running for this robot.',
       };
     }
-    if (state.searchingRobotIds.has(id)) {
+    if (isSearching) {
       return {
         allowed: false,
         blocked: true,
@@ -113,8 +129,7 @@ export function createFixTestsRunStateApi(deps) {
       };
     }
 
-    const autoTesting = state.autoTestingRobotIds.has(id);
-    if (autoTesting || state.autoSearchingRobotIds.has(id)) {
+    if (autoTesting || autoSearching) {
       return {
         allowed: false,
         blocked: true,

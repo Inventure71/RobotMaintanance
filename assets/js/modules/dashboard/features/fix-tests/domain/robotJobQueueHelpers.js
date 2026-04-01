@@ -111,11 +111,24 @@ export function createRobotJobQueueRenderer({ normalizeText }) {
       .replaceAll("'", '&#39;');
   }
 
+  function compactLabel(value, fallback = 'job', maxLen = 20) {
+    const normalized = normalizeText(value, fallback) || fallback;
+    if (normalized.length <= maxLen) return normalized;
+    return `${normalized.slice(0, Math.max(1, maxLen - 3))}...`;
+  }
+
   function renderJobChip(prefix, job) {
     if (!job || typeof job !== 'object') return '';
-    const label = escapeHtml(normalizeText(job.label, normalizeText(job.id, 'job')) || 'job');
-    const status = escapeHtml(normalizeText(job.status, 'queued'));
-    return `<span class="pill robot-job-chip">${prefix}: ${label} (${status})</span>`;
+    const normalizedStatus = normalizeText(job.status, 'queued').toLowerCase();
+    const status = escapeHtml(normalizedStatus);
+    const kind = escapeHtml(compactLabel(job.kind, 'job', 8));
+    const label = escapeHtml(compactLabel(job.label, normalizeText(job.id, 'job'), 18));
+    const slot = escapeHtml(prefix);
+    return (
+      `<span class="pill robot-job-chip robot-job-chip--${status}" title="${slot} ${label} (${kind}) · ${status}">`
+      + `${slot} ${label} · ${kind} · ${status}`
+      + '</span>'
+    );
   }
 
   function renderQueueStrip(activity, options = {}) {
@@ -127,7 +140,7 @@ export function createRobotJobQueueRenderer({ normalizeText }) {
 
     const chips = [];
     if (activeJob) {
-      chips.push(renderJobChip('Active', activeJob));
+      chips.push(renderJobChip('A', activeJob));
     }
     queuedJobs.slice(0, maxQueued).forEach((job, index) => {
       chips.push(renderJobChip(`Q${index + 1}`, job));
@@ -138,10 +151,10 @@ export function createRobotJobQueueRenderer({ normalizeText }) {
 
     if (!chips.length && !includeEmpty) return '';
     if (!chips.length) {
-      chips.push('<span class="pill robot-job-chip">No queued manual jobs</span>');
+      chips.push('<span class="pill robot-job-chip robot-job-chip--empty">Queue empty</span>');
     }
 
-    return `<div class="robot-job-queue-strip" data-role="job-queue-strip">${chips.join('')}</div>`;
+    return `<div class="robot-job-queue-strip robot-job-queue-strip--compact" data-role="job-queue-strip">${chips.join('')}</div>`;
   }
 
   function hasStoppableActiveJob(activity) {
@@ -154,10 +167,10 @@ export function createRobotJobQueueRenderer({ normalizeText }) {
     if (!hasStoppableActiveJob(activity)) return '';
     const status = normalizeText(activity?.activeJob?.status, 'running');
     const normalizedRobotId = escapeHtml(normalizeText(robotId, ''));
-    const label = status === 'interrupting' ? 'Stopping current job...' : 'Stop current job';
+    const label = status === 'interrupting' ? 'Stopping...' : 'Stop';
     const disabled = status === 'interrupting' ? ' disabled' : '';
     return (
-      `<button class="button stop-current-job-btn" type="button" data-button-intent="danger" `
+      `<button class="button button-compact stop-current-job-btn" type="button" data-button-intent="danger" `
       + `data-action="stop-current-job" data-robot-id="${normalizedRobotId}"${disabled}>${label}</button>`
     );
   }

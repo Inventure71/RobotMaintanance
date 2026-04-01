@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import time
 from typing import Any
 
@@ -144,6 +145,35 @@ class RuntimeStateMixin:
             existing = self._runtime_tests.get(normalized_robot_id, {})
             return {
                 test_id: dict(payload)
+                for test_id, payload in existing.items()
+                if isinstance(payload, dict)
+            }
+
+    def _record_runtime_test_debug(self, robot_id: str, updates: dict[str, dict[str, Any]]) -> None:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return
+        with self._lock:
+            existing = self._runtime_test_debug.get(normalized_robot_id)
+            if not isinstance(existing, dict):
+                existing = {}
+                self._runtime_test_debug[normalized_robot_id] = existing
+            for test_id, payload in updates.items():
+                normalized_test_id = normalize_text(test_id, "")
+                if not normalized_test_id:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                existing[normalized_test_id] = deepcopy(payload)
+
+    def get_runtime_test_debug(self, robot_id: str) -> dict[str, dict[str, Any]]:
+        normalized_robot_id = normalize_text(robot_id, "")
+        if not normalized_robot_id:
+            return {}
+        with self._lock:
+            existing = self._runtime_test_debug.get(normalized_robot_id, {})
+            return {
+                test_id: deepcopy(payload)
                 for test_id, payload in existing.items()
                 if isinstance(payload, dict)
             }

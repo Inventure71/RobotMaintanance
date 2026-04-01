@@ -301,6 +301,7 @@ export function createFleetMonitorActivityApi(deps) {
   function syncAutomatedRobotActivityFromState() {
     const now = Date.now();
     const nextAutoSearching = new Set();
+    const nextAutoFixing = new Set();
     const nextAutoTesting = new Set();
     const nextAutoActivityIds = new Set();
 
@@ -325,7 +326,16 @@ export function createFleetMonitorActivityApi(deps) {
           totalMs: safeCountdownMs,
         });
       }
-      if (activity.testing) {
+      if (activity.phase === 'fixing') {
+        nextAutoFixing.add(id);
+        nextAutoActivityIds.add(id);
+        const safeCountdownMs = normalizeCountdownMs(TEST_STEP_TIMEOUT_MS * 2, TEST_STEP_TIMEOUT_MS * 2);
+        state.testingCountdowns.set(id, {
+          mode: 'fixing',
+          expiresAt: now + safeCountdownMs,
+          totalMs: safeCountdownMs,
+        });
+      } else if (activity.testing) {
         nextAutoTesting.add(id);
         nextAutoActivityIds.add(id);
         const safeCountdownMs = normalizeCountdownMs(TEST_STEP_TIMEOUT_MS, TEST_STEP_TIMEOUT_MS);
@@ -349,6 +359,7 @@ export function createFleetMonitorActivityApi(deps) {
     });
 
     state.autoSearchingRobotIds = nextAutoSearching;
+    state.autoFixingRobotIds = nextAutoFixing;
     state.autoTestingRobotIds = nextAutoTesting;
     state.autoActivityRobotIds = nextAutoActivityIds;
 

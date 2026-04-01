@@ -416,7 +416,7 @@ export function createDetailTerminalDebugApi(deps) {
           `checkedAt: ${checkedAtLabel}`,
           `skipped: ${Boolean(debugResult.skipped)}`,
         ].join('\n')
-      : 'No detailed backend output recorded yet for this test. Run tests once from this page.';
+      : 'No saved backend debug output recorded yet for this test.';
     testDebugBody.appendChild(summaryBlock);
 
     const sessionResult = debugResult?.session && typeof debugResult.session === 'object' ? debugResult.session : null;
@@ -519,6 +519,51 @@ export function createDetailTerminalDebugApi(deps) {
     syncModalScrollLock();
   }
 
+  async function openLatestTestDebugModal(robot, testId) {
+    const fallbackRobot = robot && typeof robot === 'object' ? robot : null;
+    const normalizedRobotId = robotId(fallbackRobot);
+    const normalizedTestId = normalizeText(testId, '');
+    if (!fallbackRobot || !normalizedRobotId || !normalizedTestId || typeof fetch !== 'function') {
+      openTestDebugModal(fallbackRobot, normalizedTestId);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/robots/${encodeURIComponent(normalizedRobotId)}/tests/${encodeURIComponent(normalizedTestId)}/debug`),
+      );
+      if (!response.ok) {
+        openTestDebugModal(fallbackRobot, normalizedTestId);
+        return;
+      }
+
+      const payload = await response.json();
+      const latestResult = payload?.result && typeof payload.result === 'object' ? payload.result : null;
+      const latestDebug = payload?.debug && typeof payload.debug === 'object' ? payload.debug : null;
+      const nextTests = { ...(fallbackRobot?.tests || {}) };
+      const nextTestDebug = { ...(fallbackRobot?.testDebug || {}) };
+      if (latestResult) {
+        nextTests[normalizedTestId] = latestResult;
+      }
+      if (latestDebug) {
+        nextTestDebug[normalizedTestId] = latestDebug;
+      } else {
+        delete nextTestDebug[normalizedTestId];
+      }
+
+      openTestDebugModal(
+        {
+          ...fallbackRobot,
+          tests: nextTests,
+          testDebug: nextTestDebug,
+        },
+        normalizedTestId,
+      );
+    } catch (_error) {
+      openTestDebugModal(fallbackRobot, normalizedTestId);
+    }
+  }
+
   return {
     getTimestamp,
     appendTerminalLine,
@@ -538,5 +583,6 @@ export function createDetailTerminalDebugApi(deps) {
     openBugReportModal,
     submitBugReport,
     openTestDebugModal,
+    openLatestTestDebugModal,
   };
 }

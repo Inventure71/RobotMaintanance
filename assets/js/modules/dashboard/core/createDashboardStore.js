@@ -16,6 +16,7 @@ export function createDashboardStore(state) {
       if (activity.testingRobotIds) state.testingRobotIds = new Set(activity.testingRobotIds);
       if (activity.searchingRobotIds) state.searchingRobotIds = new Set(activity.searchingRobotIds);
       if (activity.fixingRobotIds) state.fixingRobotIds = new Set(activity.fixingRobotIds);
+      if (activity.autoFixingRobotIds) state.autoFixingRobotIds = new Set(activity.autoFixingRobotIds);
       if (activity.autoTestingRobotIds) state.autoTestingRobotIds = new Set(activity.autoTestingRobotIds);
       if (activity.autoSearchingRobotIds) state.autoSearchingRobotIds = new Set(activity.autoSearchingRobotIds);
       if (activity.autoActivityRobotIds) state.autoActivityRobotIds = new Set(activity.autoActivityRobotIds);
