@@ -4,6 +4,14 @@
   "enabled": true,
   "description": "Flash firmware and restart docker stack, then rerun diagnostics.",
   "runAtConnection": false,
+  "requires": [
+    "bash",
+    "docker"
+  ],
+  "sideEffects": "mutating",
+  "risk": "high",
+  "requiresApproval": true,
+  "expectedDowntimeSec": 90,
   "execute": [
     {
       "id": "docker_down",

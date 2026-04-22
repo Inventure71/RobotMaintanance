@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 from fastapi import HTTPException
 
 from ..models import ShellHandle
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SessionStoreMixin:
@@ -122,20 +125,41 @@ class SessionStoreMixin:
         with self._lock:
             self._close_handle((page_session_id, robot_id))
 
-    def close_all(self) -> None:
+    def close_all(self, *, drain_timeout_sec: float = 10.0) -> None:
+        """Shut down the terminal manager in an orderly fashion.
+
+        Order of operations:
+          1. Stop the auto-monitor loop so it no longer issues new probes.
+          2. Drain the job coordinator (interrupts active jobs and joins workers).
+          3. Close all interactive shell handles.
+          4. Close the SSH transport pool.
+        """
+        LOGGER.info("TerminalManager shutdown initiated")
+        try:
+            self._stop_auto_monitor()
+        except Exception:
+            LOGGER.exception("Failed to stop auto-monitor")
+
         job_coordinator = getattr(self, "_job_coordinator", None)
         if job_coordinator is not None:
             try:
-                job_coordinator.close()
+                job_coordinator.close(drain_timeout_sec=drain_timeout_sec)
+            except TypeError:
+                try:
+                    job_coordinator.close()
+                except Exception:
+                    LOGGER.exception("Job coordinator close failed")
             except Exception:
-                pass
-        self._stop_auto_monitor()
+                LOGGER.exception("Job coordinator close failed")
+
         with self._lock:
             for key in list(self._handles.keys()):
                 self._close_handle(key)
+
         transport_pool = getattr(self, "_transport_pool", None)
         if transport_pool is not None:
             try:
                 transport_pool.close_all()
             except Exception:
-                pass
+                LOGGER.exception("Transport pool close failed")
+        LOGGER.info("TerminalManager shutdown completed")

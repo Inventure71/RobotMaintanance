@@ -3,9 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from fastapi import HTTPException
-
 from ..normalization import normalize_text, strip_ansi
+from .transport_pool import CircuitOpenError
 
 
 class BatteryParserMixin:
@@ -181,15 +180,16 @@ class BatteryParserMixin:
             )
             return
         try:
-            output = self.run_command(
-                page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
+            outputs = self.run_monitor_probe(
                 robot_id=robot_id,
-                command=battery_command,
-                timeout_sec=self.AUTO_MONITOR_BATTERY_TIMEOUT_SEC,
+                commands=[(battery_command, self.AUTO_MONITOR_BATTERY_TIMEOUT_SEC)],
+                run_kind="monitor-battery",
             )
-        except HTTPException as exc:
-            detail = normalize_text(exc.detail, "Unable to read /battery topic.")
-            self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
+            output = outputs[0] if outputs else ""
+        except CircuitOpenError:
+            return
+        except Exception as exc:
+            detail = normalize_text(str(exc), "Unable to read /battery topic.")
             self._record_runtime_tests(
                 robot_id=robot_id,
                 updates={

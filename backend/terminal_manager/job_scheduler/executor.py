@@ -110,23 +110,41 @@ class RobotJobExecutor:
             run_metadata = run_context.metadata_payload()
 
             token.throw_if_interrupted()
-            post_test_ids = self._tm._default_fix_test_ids(robot_id)
-            test_results = self._tm.run_tests(
-                robot_id=robot_id,
-                page_session_id=page_session_id,
-                test_ids=post_test_ids,
-                dry_run=False,
-                queue_timeout_sec=payload.get("queueTimeoutSec"),
-                connect_timeout_sec=payload.get("connectTimeoutSec"),
-                execute_timeout_sec=payload.get("executeTimeoutSec") or payload.get("timeoutSec"),
-                should_cancel=token.is_interrupted,
-            )
+            raw_payload_post_test_ids = payload.get("postTestIds") if isinstance(payload.get("postTestIds"), list) else None
+            if raw_payload_post_test_ids is not None:
+                seen_post_test_ids: set[str] = set()
+                post_test_ids = []
+                for raw_test_id in raw_payload_post_test_ids:
+                    test_id = normalize_text(raw_test_id, "")
+                    if not test_id or test_id in seen_post_test_ids:
+                        continue
+                    seen_post_test_ids.add(test_id)
+                    post_test_ids.append(test_id)
+                used_default_post_tests = False
+            else:
+                post_test_ids, used_default_post_tests = self._tm._resolve_post_fix_test_ids(robot_id, fix_spec)
+
+            if post_test_ids:
+                test_results = self._tm.run_tests(
+                    robot_id=robot_id,
+                    page_session_id=page_session_id,
+                    test_ids=post_test_ids,
+                    dry_run=False,
+                    queue_timeout_sec=payload.get("queueTimeoutSec"),
+                    connect_timeout_sec=payload.get("connectTimeoutSec"),
+                    execute_timeout_sec=payload.get("executeTimeoutSec") or payload.get("timeoutSec"),
+                    should_cancel=token.is_interrupted,
+                )
+            else:
+                test_results = []
             token.throw_if_interrupted()
 
             commands = execution.get("commandsExecuted") if isinstance(execution.get("commandsExecuted"), list) else []
             metadata = {
                 "fixId": fix_id,
                 "commandsExecuted": commands,
+                "postTestIds": post_test_ids,
+                "usedDefaultPostTests": used_default_post_tests,
                 "testRun": {
                     "results": test_results if isinstance(test_results, list) else [],
                     "count": len(test_results if isinstance(test_results, list) else []),

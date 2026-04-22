@@ -445,9 +445,9 @@ export function createDetailTestAndRenderApi(deps) {
 
       if (terminal) {
         if (failureCount === 0) {
-          appendTerminalLine(`Test run complete (${successCount}/${actionableRunTargets.length} robots).`, 'ok');
+          appendTerminalLine(`Submitted test jobs for ${successCount}/${actionableRunTargets.length} robots.`, 'ok');
         } else {
-          appendTerminalLine(`Test run complete (${successCount} succeeded, ${failureCount} failed).`, 'warn');
+          appendTerminalLine(`Submitted test jobs for ${successCount} robots; ${failureCount} submissions failed.`, 'warn');
         }
       }
 

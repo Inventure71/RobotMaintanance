@@ -48,6 +48,122 @@ def test_check_online_uses_cache_and_force_refresh(monkeypatch):
     assert connect_calls["count"] == 2
 
 
+def test_runtime_metrics_reports_online_status_and_queue_depth():
+    manager = TerminalManager(
+        robots_by_id={
+            "r1": {
+                "id": "r1",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.1",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            },
+            "r2": {
+                "id": "r2",
+                "type": "rosbot-2-pro",
+                "ip": "10.0.0.2",
+                "ssh": {"username": "u", "password": "p", "port": 22},
+            },
+        },
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+    )
+    manager._record_runtime_tests(
+        "r1",
+        {"online": {"status": "ok", "value": "reachable", "details": "ok", "checkedAt": 10.0}},
+    )
+    manager._set_runtime_job_queue_snapshot(
+        "r1",
+        active_job={
+            "id": "job-1",
+            "kind": "test",
+            "status": "running",
+            "source": "manual",
+            "label": "Run tests",
+            "enqueuedAt": 1.0,
+            "startedAt": 2.0,
+            "updatedAt": 2.0,
+        },
+        queued_jobs=[
+            {
+                "id": "job-2",
+                "kind": "fix",
+                "status": "queued",
+                "source": "manual",
+                "label": "Run fix",
+                "enqueuedAt": 3.0,
+                "startedAt": 0.0,
+                "updatedAt": 3.0,
+            }
+        ],
+        last_completed_job=None,
+        queue_version=2,
+    )
+
+    metrics = manager.get_runtime_metrics()
+
+    assert metrics["robots"]["total"] == 2
+    assert metrics["robots"]["online"] == 1
+    assert metrics["jobs"]["queueDepth"] == 2
+    queue_depths = {
+        item["robotId"]: item["value"]
+        for item in metrics["metrics"]["vigil_job_queue_depth"]
+    }
+    assert queue_depths == {"r1": 2, "r2": 0}
+
+
+def test_runtime_snapshot_keeps_twenty_robot_results_isolated():
+    robots = {
+        f"r{i:02d}": {
+            "id": f"r{i:02d}",
+            "type": "rosbot-2-pro",
+            "ip": f"10.0.0.{i}",
+            "ssh": {"username": "u", "password": "p", "port": 22},
+        }
+        for i in range(20)
+    }
+    manager = TerminalManager(
+        robots_by_id=robots,
+        robot_types_by_id={"rosbot-2-pro": {"typeId": "rosbot-2-pro", "tests": []}},
+    )
+
+    for i, robot_id in enumerate(robots):
+        status = "ok" if i % 2 == 0 else "error"
+        manager._record_runtime_tests(
+            robot_id,
+            {
+                "online": {
+                    "status": status,
+                    "value": "reachable" if status == "ok" else "unreachable",
+                    "details": f"{robot_id} status",
+                    "checkedAt": 100.0 + i,
+                    "source": "manual",
+                },
+                "custom_check": {
+                    "status": status,
+                    "value": f"value-{robot_id}",
+                    "details": f"details-{robot_id}",
+                    "checkedAt": 100.0 + i,
+                    "source": "manual",
+                },
+            },
+        )
+
+    snapshot = manager.get_runtime_snapshot_since(0)
+    by_robot = {robot["id"]: robot for robot in snapshot["robots"]}
+
+    assert len(by_robot) == 20
+    for i in range(20):
+        robot_id = f"r{i:02d}"
+        expected_status = "ok" if i % 2 == 0 else "error"
+        assert by_robot[robot_id]["tests"]["online"]["status"] == expected_status
+        assert by_robot[robot_id]["tests"]["custom_check"]["value"] == f"value-{robot_id}"
+        assert by_robot[robot_id]["tests"]["custom_check"]["details"] == f"details-{robot_id}"
+
+    metrics = manager.get_runtime_metrics()
+    assert metrics["robots"]["total"] == 20
+    assert metrics["robots"]["online"] == 10
+    assert metrics["robots"]["offline"] == 10
+
+
 def test_online_batch_endpoint_returns_mixed_results():
     class FakeManager:
         def run_tests(self, *_args, **_kwargs):  # pragma: no cover - not used here

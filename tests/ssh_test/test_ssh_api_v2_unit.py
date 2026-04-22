@@ -61,6 +61,26 @@ class PartialSendChannel(FakeChannel):
         return len(chunk)
 
 
+class DirectAutomationChannel(FakeChannel):
+    def __init__(self, responder):
+        super().__init__()
+        self._responder = responder
+        self._outputs: list[bytes] = []
+
+    def recv(self, nbytes: int) -> bytes:
+        _ = nbytes
+        if self._outputs:
+            return self._outputs.pop(0)
+        raise socket.timeout()
+
+    def send(self, text: str) -> int:
+        self.sent.append(text)
+        outputs = self._responder(text, self)
+        for output in outputs or []:
+            self._outputs.append(str(output).encode())
+        return len(text)
+
+
 class FakeClient:
     def __init__(self, shell: FakeChannel | None = None):
         self.connected_kwargs: dict[str, Any] | None = None
@@ -79,6 +99,12 @@ class FakeClient:
 
     def close(self) -> None:
         self.closed = True
+
+
+def _use_queue_backed_reader(shell: InteractiveShell) -> None:
+    """Put a hand-built shell in the legacy reader-thread mode used by these fakes."""
+    shell._out_queue = Queue()
+    shell._reader_thread = object()  # type: ignore[assignment]
 
 
 def _sent_completion_marker(sent_payload: str) -> str:
@@ -305,7 +331,7 @@ def test_run_command_returns_prompt_bound_output():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -338,7 +364,7 @@ def test_run_command_times_out_and_returns_partial_output():
     shell._time = lambda: now.__setitem__("v", now["v"] + 0.3) or now["v"]  # deterministic timeout
     shell.client = fake_client
     shell.chan = FakeChannel()
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -368,7 +394,7 @@ def test_run_automation_command_wraps_markers_inside_single_shell_block():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -402,7 +428,7 @@ def test_run_automation_command_supports_multiline_command_wrapper():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -435,7 +461,7 @@ def test_run_automation_command_handles_flash_style_transcript():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -490,7 +516,7 @@ def test_run_command_waits_for_prompt_at_end_not_echoed_prompt():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._out_queue.put("husarion@agamemnon:~$ timeout 12s rostopic list\r\n")
 
     sleep_calls = {"count": 0}
@@ -527,7 +553,7 @@ def test_run_command_ignores_late_prompt_noise_until_completion_marker():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -563,7 +589,7 @@ def test_run_automation_command_returns_exit_code_and_strips_markers():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -599,7 +625,7 @@ def test_run_automation_command_authenticates_sudo_once():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     sleep_calls = {"count": 0}
@@ -646,7 +672,7 @@ def test_run_automation_command_ignores_sudo_marker_in_echoed_command():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     sleep_calls = {"count": 0}
@@ -692,7 +718,7 @@ def test_run_automation_command_waits_for_complete_sudo_prompt_line():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
     shell.SUDO_PROMPT_SETTLE_SEC = 0.0
 
@@ -738,7 +764,7 @@ def test_run_automation_command_waits_for_standalone_sudo_prompt_after_split_ech
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     sleep_calls = {"count": 0}
@@ -785,7 +811,7 @@ def test_run_automation_command_ignores_stale_shell_prompt_before_sudo_prompt():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     sleep_calls = {"count": 0}
@@ -830,7 +856,7 @@ def test_run_automation_command_preserves_output_after_scaffold_echo():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -875,7 +901,7 @@ def test_run_automation_command_preserves_shell_state_across_calls():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -900,6 +926,218 @@ def test_run_automation_command_preserves_shell_state_across_calls():
     assert second.exit_code == 0
 
 
+def test_run_automation_command_direct_channel_handles_rewriting_output():
+    def responder(text: str, _channel: DirectAutomationChannel) -> list[str]:
+        if "__VIGIL_AUTO_DONE__" not in text:
+            return []
+        exit_marker, done_marker = _sent_automation_markers(text)
+        return [
+            "progress 10%\rprogress 40%\rprogress 100%\n"
+            f"{exit_marker}0\n"
+            f"{done_marker}\n$ "
+        ]
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+
+    result = shell.run_automation_command("flash-with-progress", timeout=2.0)
+
+    assert result.exit_code == 0
+    assert result.timed_out is False
+    assert "__VIGIL_AUTO_DONE__" not in result.output
+    assert "\r" not in result.output
+    assert "progress 100%" in result.output
+
+
+def test_run_automation_command_direct_channel_authenticates_sudo_once():
+    def responder(text: str, _channel: DirectAutomationChannel) -> list[str]:
+        if text.startswith("sudo -S -p '"):
+            prompt_marker = _sent_auth_prompt_marker(text)
+            return [f"{prompt_marker}\n"]
+        if text == "pw\n":
+            return ["$ "]
+        if "__VIGIL_AUTO_DONE__" in text:
+            exit_marker, done_marker = _sent_automation_markers(text)
+            return [f"root\n{exit_marker}0\n{done_marker}\n$ "]
+        return []
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._reset_sudo_timestamp = lambda: None
+
+    first = shell.run_automation_command("sudo whoami", timeout=2.0, sudo_password="pw")
+    second = shell.run_automation_command("sudo id -u", timeout=2.0, sudo_password="pw")
+
+    assert first.output == "root"
+    assert first.used_sudo is True
+    assert first.sudo_authenticated is True
+    assert second.output == "root"
+    assert second.used_sudo is True
+    assert second.sudo_authenticated is True
+    assert fake_channel.sent.count("pw\n") == 1
+    wrapped_commands = [item for item in fake_channel.sent if "__VIGIL_AUTO_DONE__" in item]
+    assert len(wrapped_commands) == 2
+    assert all(command.startswith("{\nsudo -n ") for command in wrapped_commands)
+
+
+def test_run_automation_command_direct_channel_handles_split_markers_and_ansi():
+    def responder(text: str, _channel: DirectAutomationChannel) -> list[str]:
+        if "__VIGIL_AUTO_DONE__" not in text:
+            return []
+        exit_marker, done_marker = _sent_automation_markers(text)
+        return [
+            "\x1b[32mline one\x1b[0m\n",
+            f"line two\n{exit_marker}",
+            f"0\n{done_marker}\n$ ",
+        ]
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+
+    result = shell.run_automation_command("printf lines", timeout=2.0)
+
+    assert result.output == "line one\nline two"
+    assert result.exit_code == 0
+    assert result.timed_out is False
+
+
+def test_run_automation_command_direct_channel_returns_timeout_without_done_marker():
+    fake_channel = DirectAutomationChannel(lambda _text, _channel: ["still running\n"])
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+
+    result = shell.run_automation_command("tail -f /tmp/log", timeout=0.5)
+
+    assert result.timed_out is True
+    assert result.exit_code is None
+    assert "still running" in result.output
+
+
+def test_run_automation_command_direct_channel_preserves_nonzero_exit_code():
+    def responder(text: str, _channel: DirectAutomationChannel) -> list[str]:
+        if "__VIGIL_AUTO_DONE__" not in text:
+            return []
+        exit_marker, done_marker = _sent_automation_markers(text)
+        return [f"failed\n{exit_marker}17\n{done_marker}\n$ "]
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+
+    result = shell.run_automation_command("false", timeout=2.0)
+
+    assert result.output == "failed"
+    assert result.exit_code == 17
+    assert result.timed_out is False
+
+
+def test_run_automation_command_direct_channel_rejects_bad_sudo_password():
+    state = {"prompt": ""}
+
+    def responder(text: str, _channel: DirectAutomationChannel) -> list[str]:
+        if text.startswith("sudo -S -p '"):
+            state["prompt"] = _sent_auth_prompt_marker(text)
+            return [f"{state['prompt']}\n"]
+        if text == "wrong\n":
+            return [f"{state['prompt']}\n"]
+        return []
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+    shell._reset_sudo_timestamp = lambda: None
+
+    with pytest.raises(RuntimeError, match="password was rejected"):
+        shell.run_automation_command("sudo whoami", timeout=2.0, sudo_password="wrong")
+
+
+def test_run_automation_command_direct_channel_fails_fast_on_closed_channel():
+    def responder(_text: str, channel: DirectAutomationChannel) -> list[str]:
+        channel.closed = True
+        return []
+
+    fake_channel = DirectAutomationChannel(responder)
+    fake_client = FakeClient()
+    clock = {"v": 0.0}
+    shell = InteractiveShell(
+        host="h",
+        username="u",
+        password="p",
+        client_factory=lambda: fake_client,
+        time_fn=lambda: clock.__setitem__("v", clock["v"] + 0.1) or clock["v"],
+        start_reader_thread=False,
+    )
+    shell.client = fake_client
+    shell.chan = fake_channel
+
+    with pytest.raises(RuntimeError, match="SSH channel closed"):
+        shell.run_automation_command("echo never-finishes", timeout=30.0)
+    assert clock["v"] < 5.0
+
+
 def test_strip_prompt_prefix_handles_tilde_subdirectories():
     raw = "husarion@alexander:~/husarion_ws$ __VIGIL_AUTOMATION_STATUS=$?"
 
@@ -920,7 +1158,7 @@ def test_run_automation_command_rejects_repeated_sudo_prompt():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     sleep_calls = {"count": 0}
@@ -953,7 +1191,7 @@ def test_run_automation_command_unwinds_immediately_when_channel_closes():
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
 
     sleep_calls = {"count": 0}
 
@@ -984,7 +1222,7 @@ def test_run_automation_command_unwinds_immediately_when_channel_closes_during_s
     )
     shell.client = fake_client
     shell.chan = fake_channel
-    shell._out_queue = Queue()
+    _use_queue_backed_reader(shell)
     shell._reset_sudo_timestamp = lambda: None
 
     def fake_sleep(_: float) -> None:

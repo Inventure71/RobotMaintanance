@@ -26,6 +26,17 @@ def test_jobs_router_enqueues_and_reads_snapshot():
                     "updatedAt": 1.1,
                 },
                 "queuedJobs": [],
+                "lastCompletedJob": {
+                    "id": "job-0",
+                    "kind": "fix",
+                    "status": "succeeded",
+                    "source": "manual",
+                    "label": "Run fix",
+                    "enqueuedAt": 0.1,
+                    "startedAt": 0.2,
+                    "updatedAt": 0.3,
+                    "metadata": {"testRun": {"count": 1}},
+                },
                 "jobQueueVersion": 2,
             }
 
@@ -34,6 +45,17 @@ def test_jobs_router_enqueues_and_reads_snapshot():
             return {
                 "activeJob": None,
                 "queuedJobs": [],
+                "lastCompletedJob": {
+                    "id": "job-0",
+                    "kind": "fix",
+                    "status": "failed",
+                    "source": "manual",
+                    "label": "Run fix",
+                    "enqueuedAt": 0.1,
+                    "startedAt": 0.2,
+                    "updatedAt": 0.4,
+                    "metadata": {"error": "boom"},
+                },
                 "jobQueueVersion": 2,
             }
 
@@ -58,6 +80,7 @@ def test_jobs_router_enqueues_and_reads_snapshot():
     get_snapshot = client.get("/api/robots/r1/jobs")
     assert get_snapshot.status_code == 200
     assert get_snapshot.json()["jobQueueVersion"] == 2
+    assert get_snapshot.json()["lastCompletedJob"]["metadata"]["error"] == "boom"
 
 
 def test_jobs_router_returns_400_for_invalid_enqueue_payload():

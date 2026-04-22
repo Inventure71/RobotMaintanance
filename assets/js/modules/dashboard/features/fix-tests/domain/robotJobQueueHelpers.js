@@ -82,9 +82,11 @@ export function createRobotJobQueueStore({ normalizeText, jobQueueActivity }) {
       jobQueueVersion: normalizedSnapshot.jobQueueVersion,
       activeJob: normalizedSnapshot.activeJob,
       queuedJobs: normalizedSnapshot.queuedJobs,
+      lastCompletedJob: normalizedSnapshot.lastCompletedJob,
       updatedAt: Math.max(
         Number(previousActivity.updatedAt || 0),
         Number(normalizedSnapshot.activeJob?.updatedAt || 0),
+        Number(normalizedSnapshot.lastCompletedJob?.updatedAt || 0),
         ...normalizedSnapshot.queuedJobs.map((item) => Number(item?.updatedAt || 0)),
       ),
     };

@@ -47,6 +47,19 @@ class RuntimeStateMixin:
             "updatedAt": updated_at if updated_at > 0 else 0.0,
         }
 
+    def _normalize_runtime_completed_job_summary(self, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+        normalized = self._normalize_runtime_job_summary(payload)
+        if not normalized:
+            return None
+        status = normalize_text(normalized.get("status"), "").lower()
+        if status not in {"succeeded", "failed", "interrupted"}:
+            return None
+        metadata = payload.get("metadata") if isinstance(payload, dict) and isinstance(payload.get("metadata"), dict) else {}
+        return {
+            **normalized,
+            "metadata": deepcopy(metadata),
+        }
+
     def _normalize_runtime_queued_jobs(self, payload: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
         raw = payload if isinstance(payload, list) else []
         normalized: list[dict[str, Any]] = []
@@ -189,6 +202,7 @@ class RuntimeStateMixin:
         except Exception:
             job_queue_version = 0
         active_job = self._normalize_runtime_job_summary(existing.get("activeJob"))
+        last_completed_job = self._normalize_runtime_completed_job_summary(existing.get("lastCompletedJob"))
         if active_job and normalize_text(active_job.get("status"), "") not in {"running", "interrupting"}:
             active_job = None
         return {
@@ -201,6 +215,7 @@ class RuntimeStateMixin:
             "jobQueueVersion": max(0, job_queue_version),
             "activeJob": active_job,
             "queuedJobs": self._normalize_runtime_queued_jobs(existing.get("queuedJobs")),
+            "lastCompletedJob": last_completed_job,
         }
 
     def _set_runtime_activity(
@@ -223,6 +238,7 @@ class RuntimeStateMixin:
             current["jobQueueVersion"] = max(0, int(current.get("jobQueueVersion") or 0))
             current["activeJob"] = self._normalize_runtime_job_summary(current.get("activeJob"))
             current["queuedJobs"] = self._normalize_runtime_queued_jobs(current.get("queuedJobs"))
+            current["lastCompletedJob"] = self._normalize_runtime_completed_job_summary(current.get("lastCompletedJob"))
             if searching is not None:
                 current["searching"] = bool(searching)
             if testing is not None:
@@ -274,6 +290,7 @@ class RuntimeStateMixin:
         *,
         active_job: dict[str, Any] | None,
         queued_jobs: list[dict[str, Any]] | None,
+        last_completed_job: dict[str, Any] | None,
         queue_version: int,
     ) -> None:
         normalized_robot_id = normalize_text(robot_id, "")
@@ -287,6 +304,7 @@ class RuntimeStateMixin:
         }:
             normalized_active_job = None
         normalized_queued_jobs = self._normalize_runtime_queued_jobs(queued_jobs)
+        normalized_last_completed_job = self._normalize_runtime_completed_job_summary(last_completed_job)
         safe_queue_version = max(0, int(queue_version or 0))
         with self._lock:
             current = dict(self._runtime_activity.get(normalized_robot_id, {}))
@@ -295,6 +313,7 @@ class RuntimeStateMixin:
             current["phase"] = normalize_text(current.get("phase"), "") or None
             current["activeJob"] = normalized_active_job
             current["queuedJobs"] = normalized_queued_jobs
+            current["lastCompletedJob"] = normalized_last_completed_job
             current["jobQueueVersion"] = safe_queue_version
             current["updatedAt"] = now
             if self._runtime_activity.get(normalized_robot_id) != current:
@@ -351,6 +370,115 @@ class RuntimeStateMixin:
             "version": current_version,
             "full": full,
             "robots": robots,
+        }
+
+    def get_runtime_metrics(self) -> dict[str, Any]:
+        now = time.time()
+        with self._lock:
+            robot_ids = sorted(set(getattr(self, "robots_by_id", {}).keys()))
+            runtime_tests = {
+                robot_id: {
+                    test_id: dict(payload)
+                    for test_id, payload in self._runtime_tests.get(robot_id, {}).items()
+                    if isinstance(payload, dict)
+                }
+                for robot_id in robot_ids
+            }
+            runtime_activity = {
+                robot_id: self._build_runtime_activity_payload(self._runtime_activity.get(robot_id, {}))
+                for robot_id in robot_ids
+            }
+
+        online_status_by_robot: list[dict[str, Any]] = []
+        queue_depth_by_robot: list[dict[str, Any]] = []
+        job_status_counts: dict[str, int] = {
+            "running": 0,
+            "interrupting": 0,
+            "queued": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "interrupted": 0,
+        }
+        robot_counts = {
+            "total": len(robot_ids),
+            "online": 0,
+            "offline": 0,
+            "warning": 0,
+            "unknown": 0,
+        }
+        test_status_counts: dict[str, int] = {}
+
+        for robot_id in robot_ids:
+            tests = runtime_tests.get(robot_id, {})
+            activity = runtime_activity.get(robot_id, {})
+            online_payload = tests.get("online") if isinstance(tests, dict) else {}
+            online_status = normalize_status((online_payload or {}).get("status"))
+            if online_status == "ok":
+                online_value = 1
+                robot_counts["online"] += 1
+            elif online_status == "error":
+                online_value = 0
+                robot_counts["offline"] += 1
+            elif online_status == "warning":
+                online_value = -1
+                robot_counts["warning"] += 1
+            else:
+                online_value = -1
+                robot_counts["unknown"] += 1
+
+            online_status_by_robot.append(
+                {
+                    "robotId": robot_id,
+                    "value": online_value,
+                    "status": online_status,
+                    "checkedAt": float((online_payload or {}).get("checkedAt") or 0.0),
+                }
+            )
+
+            queued_jobs = activity.get("queuedJobs") if isinstance(activity.get("queuedJobs"), list) else []
+            active_job = activity.get("activeJob") if isinstance(activity.get("activeJob"), dict) else None
+            last_completed_job = (
+                activity.get("lastCompletedJob") if isinstance(activity.get("lastCompletedJob"), dict) else None
+            )
+            queue_depth = len(queued_jobs) + (1 if active_job else 0)
+            queue_depth_by_robot.append({"robotId": robot_id, "value": queue_depth})
+
+            for job in [active_job, *queued_jobs, last_completed_job]:
+                if not isinstance(job, dict):
+                    continue
+                status = normalize_text(job.get("status"), "").lower()
+                if status:
+                    job_status_counts[status] = int(job_status_counts.get(status, 0)) + 1
+
+            for payload in tests.values():
+                if not isinstance(payload, dict):
+                    continue
+                status = normalize_status(payload.get("status"))
+                test_status_counts[status] = int(test_status_counts.get(status, 0)) + 1
+
+        total_queue_depth = sum(item["value"] for item in queue_depth_by_robot)
+        return {
+            "generatedAt": now,
+            "robots": robot_counts,
+            "jobs": {
+                "queueDepth": total_queue_depth,
+                "statusCounts": job_status_counts,
+            },
+            "tests": {
+                "statusCounts": test_status_counts,
+            },
+            "metrics": {
+                "vigil_robot_online_status": online_status_by_robot,
+                "vigil_job_queue_depth": queue_depth_by_robot,
+                "vigil_job_status_total": [
+                    {"status": status, "value": count}
+                    for status, count in sorted(job_status_counts.items())
+                ],
+                "vigil_test_status_total": [
+                    {"status": status, "value": count}
+                    for status, count in sorted(test_status_counts.items())
+                ],
+            },
         }
 
     def get_runtime_probe_state(self, robot_id: str) -> dict[str, Any]:

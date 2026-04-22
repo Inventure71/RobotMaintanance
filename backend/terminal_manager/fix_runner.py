@@ -40,3 +40,9 @@ class FixRunnerMixin:
                 and normalize_text(test.get("id"), "")
             )
         ]
+
+    def _resolve_post_fix_test_ids(self, robot_id: str, fix_spec: dict[str, Any]) -> tuple[list[str], bool]:
+        raw_post_test_ids = fix_spec.get("postTestIds") if isinstance(fix_spec.get("postTestIds"), list) else None
+        if raw_post_test_ids is None:
+            return self._default_fix_test_ids(robot_id), True
+        return [normalize_text(test_id, "") for test_id in raw_post_test_ids if normalize_text(test_id, "")], False

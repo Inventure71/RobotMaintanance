@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
@@ -10,6 +11,10 @@ from ...normalization import normalize_text
 from .cancel import CancellationToken, JobInterrupted
 from .models import NoActiveUserJobError, StopResult, UserJob
 from .state import RobotJobState
+
+LOGGER = logging.getLogger(__name__)
+
+_CTRL_C_SETTLE_SEC = 0.5
 
 
 @dataclass(slots=True)
@@ -26,11 +31,15 @@ class RobotJobCoordinator:
         on_snapshot: Callable[[str, dict[str, Any]], None] | None = None,
         close_session: Callable[[str, str], None] | None = None,
         hard_reset_transport: Callable[[str], None] | None = None,
+        soft_interrupt_automation: Callable[[str], None] | None = None,
+        ctrl_c_settle_sec: float = _CTRL_C_SETTLE_SEC,
     ) -> None:
         self._executor = executor
         self._on_snapshot = on_snapshot
         self._close_session = close_session
         self._hard_reset_transport = hard_reset_transport
+        self._soft_interrupt_automation = soft_interrupt_automation
+        self._ctrl_c_settle_sec = max(0.0, float(ctrl_c_settle_sec))
 
         self._registry_lock = threading.Lock()
         self._states: dict[str, RobotJobState] = {}
@@ -113,7 +122,7 @@ class RobotJobCoordinator:
         if should_start_worker:
             worker.start()
 
-        return job.id, snapshot or {"activeJob": None, "queuedJobs": [], "jobQueueVersion": 0}
+        return job.id, snapshot or {"activeJob": None, "queuedJobs": [], "lastCompletedJob": None, "jobQueueVersion": 0}
 
     def get_snapshot(self, robot_id: str) -> dict[str, Any]:
         normalized_robot_id = normalize_text(robot_id, "")
@@ -152,6 +161,17 @@ class RobotJobCoordinator:
 
         if handle is not None:
             handle.token.request_interrupt()
+
+            # Send Ctrl-C first so the running process can terminate gracefully
+            # before we close the SSH transport.
+            if callable(self._soft_interrupt_automation):
+                try:
+                    self._soft_interrupt_automation(normalized_robot_id)
+                except Exception:
+                    pass
+                if self._ctrl_c_settle_sec > 0:
+                    time.sleep(self._ctrl_c_settle_sec)
+
             if callable(self._close_session):
                 try:
                     self._close_session(handle.page_session_id, normalized_robot_id)
@@ -162,22 +182,53 @@ class RobotJobCoordinator:
                     self._hard_reset_transport(normalized_robot_id)
                 except Exception:
                     pass
+            LOGGER.info(
+                "Job stop issued (robot_id=%s, job_id=%s)",
+                normalized_robot_id,
+                handle.page_session_id,
+            )
 
         return StopResult(
-            snapshot=snapshot or {"activeJob": None, "queuedJobs": [], "jobQueueVersion": 0},
+            snapshot=snapshot or {"activeJob": None, "queuedJobs": [], "lastCompletedJob": None, "jobQueueVersion": 0},
             already_interrupting=already_interrupting,
         )
 
-    def close(self) -> None:
+    def close(self, *, drain_timeout_sec: float = 10.0) -> None:
+        """Request a graceful shutdown of all per-robot workers.
+
+        1. Send an interrupt to every active job (Ctrl-C + hard reset).
+        2. Wait up to ``drain_timeout_sec`` for worker threads to finish.
+        3. Best-effort logging if any worker fails to exit in time.
+        """
         with self._registry_lock:
             robots = list(self._states.keys())
+            workers = dict(self._workers)
+
         for robot_id in robots:
             try:
                 self.stop_active_job(robot_id)
             except NoActiveUserJobError:
                 continue
             except Exception:
+                LOGGER.exception(
+                    "Job coordinator close: stop_active_job failed (robot_id=%s)",
+                    robot_id,
+                )
                 continue
+
+        deadline = time.time() + max(0.0, float(drain_timeout_sec))
+        for robot_id, worker in workers.items():
+            if worker is None or not worker.is_alive():
+                continue
+            remaining = max(0.0, deadline - time.time())
+            worker.join(timeout=remaining)
+            if worker.is_alive():
+                LOGGER.warning(
+                    "Job worker did not drain within %.1fs (robot_id=%s); "
+                    "proceeding with shutdown",
+                    drain_timeout_sec,
+                    robot_id,
+                )
 
     def _worker_loop(self, robot_id: str) -> None:
         state, lock = self._get_state_and_lock(robot_id)
@@ -215,6 +266,15 @@ class RobotJobCoordinator:
             outcome_metadata: dict[str, Any] = {}
             outcome_error: str | None = None
 
+            job_started_at = time.time()
+            LOGGER.info(
+                "Job started (robot_id=%s, job_id=%s, kind=%s, label=%r)",
+                robot_id,
+                job.id if job else "?",
+                job.kind if job else "?",
+                job.label if job else "?",
+            )
+
             try:
                 assert job is not None
                 assert token is not None
@@ -231,6 +291,16 @@ class RobotJobCoordinator:
                 else:
                     outcome_status = "failed"
                     outcome_error = normalize_text(str(exc), "Job execution failed")
+
+            duration_ms = max(0, int((time.time() - job_started_at) * 1000))
+            LOGGER.info(
+                "Job finished (robot_id=%s, job_id=%s, status=%s, duration_ms=%d%s)",
+                robot_id,
+                job.id if job else "?",
+                outcome_status,
+                duration_ms,
+                f", error={outcome_error!r}" if outcome_error else "",
+            )
 
             finalize_snapshot: dict[str, Any] | None = None
             with lock:

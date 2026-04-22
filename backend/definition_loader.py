@@ -12,6 +12,9 @@ from .normalization import normalize_owner_tags, normalize_platform_tags, normal
 TOKEN_PATTERN = re.compile(r"^\$([A-Za-z0-9_.-]+)\$$")
 BASE_READ_KINDS = {"contains_string", "contains_lines_unordered", "contains_any_string"}
 VALID_READ_KINDS = set(BASE_READ_KINDS) | {"all_of"}
+VALID_SIDE_EFFECTS = {"read_only", "mutating"}
+VALID_ISOLATION = {"definition_shell"}
+VALID_FIX_RISK = {"low", "medium", "high", "destructive"}
 
 
 @dataclass
@@ -63,6 +66,57 @@ def _normalize_possible_results(raw: Any) -> list[dict[str, str]]:
             }
         )
     return out
+
+
+def _normalize_string_list(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = normalize_text(item, "")
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _normalize_enum_field(
+    raw: Any,
+    *,
+    field_name: str,
+    owner_kind: str,
+    owner_id: str,
+    allowed: set[str],
+    default: str,
+) -> str:
+    value = normalize_text(raw, default).lower()
+    if value not in allowed:
+        allowed_values = ", ".join(sorted(allowed))
+        raise ValueError(
+            f"{owner_kind} '{owner_id}' has invalid {field_name} '{value}'. "
+            f"Expected one of: {allowed_values}"
+        )
+    return value
+
+
+def _normalize_optional_non_negative_float(
+    raw: Any,
+    *,
+    field_name: str,
+    owner_kind: str,
+    owner_id: str,
+) -> float | None:
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except Exception as exc:
+        raise ValueError(f"{owner_kind} '{owner_id}' has invalid numeric {field_name}") from exc
+    if value < 0:
+        raise ValueError(f"{owner_kind} '{owner_id}' {field_name} must be non-negative")
+    return value
 
 
 def _normalize_primitive(raw: dict[str, Any]) -> dict[str, Any]:
@@ -202,6 +256,23 @@ def _normalize_test(raw: dict[str, Any]) -> dict[str, Any]:
         "enabled": bool(raw.get("enabled", True)),
         "ownerTags": owner_tags,
         "platformTags": platform_tags,
+        "requires": _normalize_string_list(raw.get("requires")),
+        "sideEffects": _normalize_enum_field(
+            raw.get("sideEffects"),
+            field_name="sideEffects",
+            owner_kind="Test definition",
+            owner_id=definition_id,
+            allowed=VALID_SIDE_EFFECTS,
+            default="read_only",
+        ),
+        "isolation": _normalize_enum_field(
+            raw.get("isolation"),
+            field_name="isolation",
+            owner_kind="Test definition",
+            owner_id=definition_id,
+            allowed=VALID_ISOLATION,
+            default="definition_shell",
+        ),
         "mode": mode,
         "execute": normalized_execute,
         "checks": normalized_checks,
@@ -241,24 +312,65 @@ def _normalize_fix(raw: dict[str, Any]) -> dict[str, Any]:
     run_at_connection = raw.get("runAtConnection", False)
     if not isinstance(run_at_connection, bool):
         raise ValueError(f"Fix definition '{fix_id}' must define boolean runAtConnection")
+    raw_post_test_ids = raw.get("postTestIds")
+    normalized_post_test_ids = None
+    if isinstance(raw_post_test_ids, list):
+        normalized_post_test_ids = []
+        seen_post_test_ids: set[str] = set()
+        for raw_test_id in raw_post_test_ids:
+            test_id = normalize_text(raw_test_id, "")
+            if not test_id or test_id in seen_post_test_ids:
+                continue
+            seen_post_test_ids.add(test_id)
+            normalized_post_test_ids.append(test_id)
 
-    return {
+    payload = {
         "id": fix_id,
         "label": normalize_text(raw.get("label"), fix_id),
         "description": normalize_text(raw.get("description"), ""),
         "enabled": bool(raw.get("enabled", True)),
         "ownerTags": owner_tags,
         "platformTags": platform_tags,
+        "requires": _normalize_string_list(raw.get("requires")),
+        "sideEffects": _normalize_enum_field(
+            raw.get("sideEffects"),
+            field_name="sideEffects",
+            owner_kind="Fix definition",
+            owner_id=fix_id,
+            allowed=VALID_SIDE_EFFECTS,
+            default="mutating",
+        ),
+        "risk": _normalize_enum_field(
+            raw.get("risk"),
+            field_name="risk",
+            owner_kind="Fix definition",
+            owner_id=fix_id,
+            allowed=VALID_FIX_RISK,
+            default="medium",
+        ),
+        "requiresApproval": bool(raw.get("requiresApproval", False)),
         "runAtConnection": run_at_connection,
         "execute": normalized_execute,
         "params": raw.get("params") if isinstance(raw.get("params"), dict) else {},
     }
+    expected_downtime_sec = _normalize_optional_non_negative_float(
+        raw.get("expectedDowntimeSec"),
+        field_name="expectedDowntimeSec",
+        owner_kind="Fix definition",
+        owner_id=fix_id,
+    )
+    if expected_downtime_sec is not None:
+        payload["expectedDowntimeSec"] = expected_downtime_sec
+    if normalized_post_test_ids is not None:
+        payload["postTestIds"] = normalized_post_test_ids
+    return payload
 
 
 def _validate_command_refs(
     *,
     command_primitives_by_id: dict[str, dict[str, Any]],
     test_definitions_by_id: dict[str, dict[str, Any]],
+    check_definitions_by_id: dict[str, dict[str, Any]],
     fix_definitions_by_id: dict[str, dict[str, Any]],
 ) -> None:
     def _validate_steps(owner_kind: str, owner_id: str, steps: list[dict[str, Any]]) -> None:
@@ -273,6 +385,13 @@ def _validate_command_refs(
         _validate_steps("Test definition", definition_id, definition.get("execute") or [])
     for fix_id, definition in fix_definitions_by_id.items():
         _validate_steps("Fix definition", fix_id, definition.get("execute") or [])
+        post_test_ids = definition.get("postTestIds") if isinstance(definition.get("postTestIds"), list) else []
+        for post_test_id in post_test_ids:
+            normalized_post_test_id = normalize_text(post_test_id, "")
+            if normalized_post_test_id and normalized_post_test_id not in check_definitions_by_id:
+                raise ValueError(
+                    f"Fix definition '{fix_id}' references unknown postTestId '{normalized_post_test_id}'"
+                )
 
 
 def load_definition_catalog(
@@ -318,6 +437,7 @@ def load_definition_catalog(
     _validate_command_refs(
         command_primitives_by_id=command_primitives_by_id,
         test_definitions_by_id=test_definitions_by_id,
+        check_definitions_by_id=check_definitions_by_id,
         fix_definitions_by_id=fix_definitions_by_id,
     )
 

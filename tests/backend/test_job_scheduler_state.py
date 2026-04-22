@@ -42,6 +42,8 @@ def test_state_enforces_transition_legality_and_queue_versioning():
     state.mark_active_interrupted({"reason": "operator stop"})
     assert state.queue_version == 4
     assert state.snapshot()["activeJob"] is None
+    assert state.snapshot()["lastCompletedJob"]["status"] == "interrupted"
+    assert state.snapshot()["lastCompletedJob"]["metadata"]["reason"] == "operator stop"
 
     with pytest.raises(JobStateError):
         state.mark_active_succeeded()
@@ -64,3 +66,5 @@ def test_state_enforces_fifo_ordering():
 
     assert state.snapshot()["queuedJobs"] == []
     assert state.snapshot()["activeJob"] is None
+    assert state.snapshot()["lastCompletedJob"]["id"] == "job-2"
+    assert state.snapshot()["lastCompletedJob"]["status"] == "succeeded"

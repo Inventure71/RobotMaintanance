@@ -48,6 +48,12 @@ class CompletedJobRecord:
     terminal_status: TerminalJobStatus
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def summary(self) -> dict[str, Any]:
+        payload = self.job.summary()
+        payload["status"] = self.terminal_status
+        payload["metadata"] = dict(self.metadata or {})
+        return payload
+
 
 @dataclass(slots=True)
 class JobExecutionOutcome:

@@ -286,6 +286,8 @@ export function createRecorderDefinitionMutationApi(deps) {
         throw new Error('Fix ID is required.');
       }
       const execute = parseJsonInput(manageFixExecuteJsonInput, 'Execute steps');
+      const existingFixDefinition = (Array.isArray(state.definitionsSummary?.fixes) ? state.definitionsSummary.fixes : [])
+        .find((definition) => normalizeText(definition?.id, '') === (normalizeText(state.editingFixSourceId, '') || fixId));
       const payload = {
         id: fixId,
         previousId: normalizeText(state.editingFixSourceId, '') || undefined,
@@ -295,6 +297,7 @@ export function createRecorderDefinitionMutationApi(deps) {
         runAtConnection: Boolean(manageFixRunAtConnectionInput?.checked),
         ownerTags: parseTagInput(manageFixOwnerTagsInput),
         platformTags: parseTagInput(manageFixPlatformTagsInput),
+        postTestIds: Array.isArray(existingFixDefinition?.postTestIds) ? existingFixDefinition.postTestIds : undefined,
         execute,
       };
       const response = await fetch(buildApiUrl('/api/definitions/fixes'), {

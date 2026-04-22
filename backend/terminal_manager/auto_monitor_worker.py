@@ -112,8 +112,27 @@ class AutoMonitorWorkerMixin:
             try:
                 self._run_auto_monitor_tick()
             except Exception:
-                # Monitor is best-effort; do not kill the background thread on one robot failure.
                 LOGGER.exception("Auto-monitor loop failure (phase=auto_monitor_loop_tick)")
+
+            # Periodically sweep idle SSH transports to prevent dead-entry accumulation
+            # in long-running services where robots go offline and never reconnect.
+            sweep_interval = float(
+                getattr(self, "TRANSPORT_IDLE_SWEEP_INTERVAL_SEC", 60.0)
+            )
+            last_sweep = float(getattr(self, "_last_transport_sweep_at", 0.0))
+            if (time.time() - last_sweep) >= sweep_interval:
+                try:
+                    pool = getattr(self, "_transport_pool", None)
+                    if pool is not None and callable(getattr(pool, "sweep_idle", None)):
+                        pool.sweep_idle()
+                        LOGGER.debug("Transport idle sweep completed")
+                except Exception:
+                    LOGGER.exception("Transport idle sweep failed")
+                try:
+                    self._last_transport_sweep_at = time.time()
+                except Exception:
+                    pass
+
             elapsed = time.time() - started
             wait_sec = max(0.0, self._auto_monitor_interval_sec - elapsed)
             self._auto_monitor_stop.wait(wait_sec)
@@ -122,10 +141,13 @@ class AutoMonitorWorkerMixin:
         if self._auto_monitor_stop.is_set():
             return
         if hasattr(self, "has_pending_user_work") and bool(self.has_pending_user_work(robot_id)):
+            LOGGER.debug("Auto-monitor skip (robot_id=%s, reason=pending_user_work)", robot_id)
             return
         if self._has_foreground_robot_activity(robot_id):
+            LOGGER.debug("Auto-monitor skip (robot_id=%s, reason=foreground_activity)", robot_id)
             return
         if self._is_manual_activity_recent(robot_id, now):
+            LOGGER.debug("Auto-monitor skip (robot_id=%s, reason=recent_manual_activity)", robot_id)
             return
 
         with self._lock:

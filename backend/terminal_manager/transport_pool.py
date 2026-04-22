@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -8,6 +9,15 @@ from typing import Callable
 import paramiko
 
 from ..ssh_client import ShellClient
+
+LOGGER = logging.getLogger(__name__)
+
+# Backoff durations indexed by failure count (0-based, clamped at index 2).
+_BACKOFF_SCHEDULE = [15.0, 60.0, 300.0]
+
+
+class CircuitOpenError(Exception):
+    """Raised when the circuit breaker is open and SSH will not be attempted."""
 
 
 @dataclass
@@ -45,13 +55,18 @@ class SshTransportPool:
         self._client_factory = client_factory
         self._idle_ttl_sec = max(1.0, float(idle_ttl_sec))
         self._default_connect_timeout_sec = max(0.1, float(default_connect_timeout_sec))
+        # max_failures_before_reset is kept for API compatibility but the
+        # circuit-breaker logic below supersedes its original purpose.
         self._max_failures_before_reset = max(1, int(max_failures_before_reset))
         self._time = time_fn
 
         self._lock = threading.Lock()
         self._entries: dict[str, _TransportEntry] = {}
         self._robot_locks: dict[str, threading.Lock] = {}
-        self._failure_streaks: dict[str, int] = {}
+
+        # Circuit-breaker state: how many consecutive failures and when to retry.
+        self._failure_count: dict[str, int] = {}
+        self._backoff_until: dict[str, float] = {}
 
     def _get_robot_lock(self, robot_id: str) -> threading.Lock:
         with self._lock:
@@ -96,6 +111,7 @@ class SshTransportPool:
         for robot_id in to_evict:
             entry = self._entries.pop(robot_id, None)
             if entry is not None:
+                LOGGER.debug("Transport evicted (idle, robot_id=%s)", robot_id)
                 self._close_client_quietly(entry.client)
 
     def _invalidate_locked(self, robot_id: str) -> None:
@@ -103,10 +119,24 @@ class SshTransportPool:
         if entry is not None:
             self._close_client_quietly(entry.client)
 
+    def _backoff_sec_for_count(self, count: int) -> float:
+        idx = min(max(0, int(count) - 1), len(_BACKOFF_SCHEDULE) - 1)
+        return _BACKOFF_SCHEDULE[idx]
+
+    def is_circuit_open(self, robot_id: str) -> bool:
+        with self._lock:
+            return self._time() < float(self._backoff_until.get(robot_id, 0.0))
+
     def hard_reset_robot(self, robot_id: str) -> None:
         with self._lock:
             self._invalidate_locked(robot_id)
-            self._failure_streaks[robot_id] = 0
+            self._failure_count[robot_id] = 0
+            self._backoff_until[robot_id] = 0.0
+
+    def sweep_idle(self) -> None:
+        """Evict idle transport entries. Safe to call from any thread at any time."""
+        with self._lock:
+            self._evict_idle_locked(self._time())
 
     def _connect_client(
         self,
@@ -157,6 +187,22 @@ class SshTransportPool:
         )
         queue_timeout = None if queue_timeout_sec is None else max(0.0, float(queue_timeout_sec))
 
+        # Circuit-breaker check: avoid hammering an unreachable robot.
+        with self._lock:
+            retry_at = float(self._backoff_until.get(robot_id, 0.0))
+            now = self._time()
+            if now < retry_at:
+                fail_count = int(self._failure_count.get(robot_id, 0))
+                remaining = retry_at - now
+                LOGGER.debug(
+                    "Circuit open (robot_id=%s, failures=%d, retry_in_sec=%.0f)",
+                    robot_id, fail_count, remaining,
+                )
+                raise CircuitOpenError(
+                    f"Robot '{robot_id}' is in SSH backoff "
+                    f"(failures={fail_count}, retry_in={remaining:.0f}s)"
+                )
+
         queue_started = self._time()
         lock = self._get_robot_lock(robot_id)
         if queue_timeout is None:
@@ -178,7 +224,8 @@ class SshTransportPool:
                     fresh_entry = self._entries.get(robot_id)
                     if fresh_entry is not None:
                         fresh_entry.last_used = self._time()
-                        self._failure_streaks[robot_id] = 0
+                        self._failure_count[robot_id] = 0
+                        self._backoff_until[robot_id] = 0.0
                         return TransportAcquireResult(
                             client=fresh_entry.client,
                             reused=True,
@@ -190,6 +237,7 @@ class SshTransportPool:
                 self._invalidate_locked(robot_id)
 
             connect_started = self._time()
+            LOGGER.debug("Connecting SSH transport (robot_id=%s, host=%s)", robot_id, host)
             client = self._connect_client(
                 host=host,
                 username=username,
@@ -198,22 +246,32 @@ class SshTransportPool:
                 connect_timeout_sec=timeout,
             )
             connect_ms = max(0, int((self._time() - connect_started) * 1000))
+            LOGGER.debug(
+                "SSH transport connected (robot_id=%s, connect_ms=%d)", robot_id, connect_ms
+            )
             with self._lock:
                 self._entries[robot_id] = _TransportEntry(client=client, last_used=self._time())
-                self._failure_streaks[robot_id] = 0
+                self._failure_count[robot_id] = 0
+                self._backoff_until[robot_id] = 0.0
             return TransportAcquireResult(
                 client=client,
                 reused=False,
                 queue_ms=queue_ms,
                 connect_ms=connect_ms,
             )
-        except Exception:
+        except CircuitOpenError:
+            raise
+        except Exception as exc:
             with self._lock:
-                streak = int(self._failure_streaks.get(robot_id, 0)) + 1
-                self._failure_streaks[robot_id] = streak
-                if streak >= self._max_failures_before_reset:
-                    self._invalidate_locked(robot_id)
-                    self._failure_streaks[robot_id] = 0
+                count = int(self._failure_count.get(robot_id, 0)) + 1
+                self._failure_count[robot_id] = count
+                backoff_sec = self._backoff_sec_for_count(count)
+                self._backoff_until[robot_id] = self._time() + backoff_sec
+                self._invalidate_locked(robot_id)
+            LOGGER.warning(
+                "SSH transport failed (robot_id=%s, failure_count=%d, backoff_sec=%.0f): %s",
+                robot_id, count, backoff_sec, exc,
+            )
             raise
         finally:
             lock.release()
@@ -285,4 +343,5 @@ class SshTransportPool:
             for robot_id in robot_ids:
                 self._invalidate_locked(robot_id)
             self._entries.clear()
-            self._failure_streaks.clear()
+            self._failure_count.clear()
+            self._backoff_until.clear()

@@ -4,10 +4,9 @@ import json
 import time
 from typing import Any
 
-from fastapi import HTTPException
-
 from ..models import StepResult
 from ..normalization import normalize_status, normalize_text
+from .transport_pool import CircuitOpenError
 
 
 class TopicsParserMixin:
@@ -53,22 +52,21 @@ class TopicsParserMixin:
             return
 
         try:
-            self.run_command(
-                page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
-                robot_id=robot_id,
-                command=self.AUTO_MONITOR_TOPICS_SETUP_COMMAND,
-                timeout_sec=3.0,
-            )
             started_ms = int(time.time() * 1000)
-            output = self.run_command(
-                page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID,
+            outputs = self.run_monitor_probe(
                 robot_id=robot_id,
-                command=self.AUTO_MONITOR_TOPICS_COMMAND,
-                timeout_sec=self.AUTO_MONITOR_TOPICS_TIMEOUT_SEC,
+                commands=[
+                    (self.AUTO_MONITOR_TOPICS_SETUP_COMMAND, 3.0),
+                    (self.AUTO_MONITOR_TOPICS_COMMAND, self.AUTO_MONITOR_TOPICS_TIMEOUT_SEC),
+                ],
+                run_kind="monitor-topics",
             )
+            output = outputs[1] if len(outputs) >= 2 else ""
             elapsed_ms = max(0, int(time.time() * 1000 - started_ms))
-        except HTTPException as exc:
-            details = normalize_text(exc.detail, "Unable to run topic snapshot.")
+        except CircuitOpenError:
+            return
+        except Exception as exc:
+            details = normalize_text(str(exc), "Unable to run topic snapshot.")
             updates = {
                 normalize_text(entry.get("id"), ""): self._build_topics_runtime_error(details)
                 for entry in topic_tests

@@ -243,5 +243,9 @@ class ConnectionEventRunnerMixin:
                     self._connection_retry_inflight.pop(robot_id, None)
                 if owner is not None and int(owner) == int(token):
                     self._connection_retry_attempt_owner.pop(robot_id, None)
+                # Remove the session entry when it belongs to this token so
+                # stale entries don't accumulate over a long-running service.
+                if session_token == int(token):
+                    self._connection_retry_sessions.pop(robot_id, None)
             if clear_runtime_activity:
                 self._set_runtime_activity(robot_id, testing=False)

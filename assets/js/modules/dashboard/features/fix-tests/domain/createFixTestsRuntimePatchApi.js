@@ -33,6 +33,85 @@ export function createFixTestsRuntimePatchApi({
   setActionButtonLoading,
   updateFleetOnlineRefreshStatus,
 }) {
+  function countNonOkResults(results) {
+    return (Array.isArray(results) ? results : []).filter((result) => normalizeStatus(result?.status) !== 'ok').length;
+  }
+
+  function announceCompletedJobIfNeeded(robot) {
+    const normalizedRobotId = robotId(robot);
+    if (!normalizedRobotId) return;
+    const completedJob = robot?.activity?.lastCompletedJob;
+    if (!completedJob || typeof completedJob !== 'object') return;
+    if (normalizeText(completedJob.source, 'manual') !== 'manual') return;
+
+    if (!(state.announcedCompletedJobs instanceof Map)) {
+      state.announcedCompletedJobs = new Map();
+    }
+    const announcementKey = [
+      normalizeText(completedJob.id, ''),
+      normalizeText(completedJob.status, ''),
+      Number(completedJob.updatedAt || 0),
+    ].join(':');
+    if (!announcementKey.replaceAll(':', '')) return;
+    if (state.announcedCompletedJobs.get(normalizedRobotId) === announcementKey) return;
+    state.announcedCompletedJobs.set(normalizedRobotId, announcementKey);
+
+    const robotLabel = normalizeText(robot?.name, normalizedRobotId);
+    const jobLabel = normalizeText(completedJob.label, normalizeText(completedJob.kind, 'job'));
+    const jobKind = normalizeText(completedJob.kind, 'job');
+    const terminalStatus = normalizeText(completedJob.status, '');
+    const metadata = completedJob.metadata && typeof completedJob.metadata === 'object' ? completedJob.metadata : {};
+    const testResults = jobKind === 'fix'
+      ? (metadata.testRun?.results || [])
+      : (metadata.results || []);
+    const failingResultCount = countNonOkResults(testResults);
+    const totalResultCount = Array.isArray(testResults) ? testResults.length : 0;
+    const errorMessage = normalizeText(metadata.error, '');
+
+    if (terminalStatus === 'interrupted') {
+      appendTerminalLine(`${jobLabel} was interrupted on ${robotLabel}.`, 'warn');
+      return;
+    }
+    if (terminalStatus === 'failed') {
+      appendTerminalLine(
+        `${jobLabel} failed on ${robotLabel}${errorMessage ? `: ${errorMessage}` : '.'}`,
+        'err',
+      );
+      return;
+    }
+
+    if (jobKind === 'fix') {
+      if (failingResultCount > 0) {
+        appendTerminalLine(
+          `${jobLabel} finished on ${robotLabel}, but ${failingResultCount}/${totalResultCount} post-test(s) failed.`,
+          'warn',
+        );
+        return;
+      }
+      appendTerminalLine(
+        totalResultCount > 0
+          ? `${jobLabel} succeeded on ${robotLabel} after ${totalResultCount} post-test(s).`
+          : `${jobLabel} succeeded on ${robotLabel}.`,
+        'ok',
+      );
+      return;
+    }
+
+    if (failingResultCount > 0) {
+      appendTerminalLine(
+        `${jobLabel} completed on ${robotLabel} with ${failingResultCount}/${totalResultCount} failing result(s).`,
+        'warn',
+      );
+      return;
+    }
+    appendTerminalLine(
+      totalResultCount > 0
+        ? `${jobLabel} completed on ${robotLabel} with ${totalResultCount} passing result(s).`
+        : `${jobLabel} completed on ${robotLabel}.`,
+      'ok',
+    );
+  }
+
   function setModelContainerFaultClasses(modelContainer, robot, isOffline, includeDetailClass = false) {
     if (!modelContainer) return;
     const failureClasses = nonBatteryTestEntries(robot)
@@ -293,6 +372,10 @@ export function createFixTestsRuntimePatchApi({
   function applyRuntimeRobotPatches(changedRobotIds) {
     const changedIds = Array.from(changedRobotIds || []).map((id) => robotId(id)).filter(Boolean);
     if (!changedIds.length) return;
+    changedIds.forEach((id) => {
+      const robot = getRobotById(id);
+      if (robot) announceCompletedJobIfNeeded(robot);
+    });
 
     const patched = Boolean(patchDashboardForChangedRobots(changedIds));
     if (!patched) {

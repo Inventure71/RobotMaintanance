@@ -5,6 +5,8 @@ from typing import Any
 
 from .models import CompletedJobRecord, JobStateError, TerminalJobStatus, UserJob
 
+_MAX_HISTORY = 50
+
 
 class RobotJobState:
     def __init__(self) -> None:
@@ -90,6 +92,8 @@ class RobotJobState:
                 metadata=dict(metadata or {}),
             )
         )
+        if len(self._history) > _MAX_HISTORY:
+            self._history = self._history[-_MAX_HISTORY:]
         self._active = None
         self._next_queue_version()
         return active
@@ -124,9 +128,16 @@ class RobotJobState:
     def has_pending_user_work(self) -> bool:
         return self.active_job is not None or bool(self._queue)
 
+    @property
+    def last_completed_job(self) -> dict[str, Any] | None:
+        if not self._history:
+            return None
+        return self._history[-1].summary()
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "activeJob": self.active_job.summary() if self.active_job is not None else None,
             "queuedJobs": [job.summary() for job in self.queued_jobs],
+            "lastCompletedJob": self.last_completed_job,
             "jobQueueVersion": int(self._queue_version),
         }

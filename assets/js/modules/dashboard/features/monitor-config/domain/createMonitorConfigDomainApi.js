@@ -401,6 +401,9 @@ function normalizeAutoFixDefinition(raw) {
         id,
         label: normalizeText(raw.label, id),
         description: normalizeText(raw.description, ''),
+        postTestIds: Array.isArray(raw.postTestIds)
+          ? raw.postTestIds.map((testId) => normalizeText(testId, '')).filter(Boolean)
+          : [],
         ownerTags: normalizeOwnerTags(raw.ownerTags),
         platformTags: normalizePlatformTags(raw.platformTags),
       };
@@ -422,6 +425,7 @@ function normalizeRobotActivity(raw) {
           jobQueueVersion: 0,
           activeJob: null,
           queuedJobs: [],
+          lastCompletedJob: null,
         };
       }
       const phase = normalizeText(raw.phase, '');
@@ -439,6 +443,7 @@ function normalizeRobotActivity(raw) {
         jobQueueVersion: queueSnapshot.jobQueueVersion,
         activeJob: queueSnapshot.activeJob,
         queuedJobs: queueSnapshot.queuedJobs,
+        lastCompletedJob: queueSnapshot.lastCompletedJob,
       };
     }
 

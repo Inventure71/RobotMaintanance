@@ -99,6 +99,15 @@ function createJobQueueActivityHelpers() {
           .map((item) => normalizeJobSummary(item))
           .filter((item) => item && normalizeText(item.status, '') === 'queued')
       : [];
+  const normalizeCompletedJobSummary = (job) => {
+    const normalized = normalizeJobSummary(job);
+    if (!normalized) return null;
+    if (!['succeeded', 'failed', 'interrupted'].includes(normalized.status)) return null;
+    return {
+      ...normalized,
+      metadata: job?.metadata && typeof job.metadata === 'object' ? job.metadata : {},
+    };
+  };
   const normalizeJobQueueSnapshot = (raw) => {
     const payload = raw && typeof raw === 'object' ? raw : {};
     const activeJob = normalizeJobSummary(payload.activeJob);
@@ -109,11 +118,13 @@ function createJobQueueActivityHelpers() {
           ? activeJob
           : null,
       queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+      lastCompletedJob: normalizeCompletedJobSummary(payload.lastCompletedJob),
       jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
     };
   };
   return {
     normalizeJobSummary,
+    normalizeCompletedJobSummary,
     normalizeQueuedJobs,
     normalizeJobQueueSnapshot,
   };
@@ -1246,6 +1257,7 @@ test('normalizeRobotActivity keeps queue fields with safe defaults', async () =>
   assert.equal(empty.jobQueueVersion, 0);
   assert.equal(empty.activeJob, null);
   assert.deepEqual(Array.from(empty.queuedJobs), []);
+  assert.equal(empty.lastCompletedJob, null);
 
   const normalized = api.normalizeRobotActivity({
     jobQueueVersion: 3,
@@ -1271,11 +1283,24 @@ test('normalizeRobotActivity keeps queue fields with safe defaults', async () =>
         updatedAt: 12,
       },
     ],
+    lastCompletedJob: {
+      id: 'job-0',
+      kind: 'fix',
+      status: 'failed',
+      source: 'manual',
+      label: 'Run fix',
+      enqueuedAt: 8,
+      startedAt: 9,
+      updatedAt: 10,
+      metadata: { error: 'boom' },
+    },
   });
   assert.equal(normalized.jobQueueVersion, 3);
   assert.equal(normalized.activeJob.id, 'job-1');
   assert.equal(normalized.queuedJobs.length, 1);
   assert.equal(normalized.queuedJobs[0].status, 'queued');
+  assert.equal(normalized.lastCompletedJob.id, 'job-0');
+  assert.equal(normalized.lastCompletedJob.metadata.error, 'boom');
 });
 
 test('runRobotTestsForRobot enqueues through /jobs endpoint', async () => {

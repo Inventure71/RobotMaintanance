@@ -445,13 +445,14 @@ def create_robots_router(
         activity = raw_activity if isinstance(raw_activity, dict) else {}
         active_job = activity.get("activeJob") if isinstance(activity.get("activeJob"), dict) else None
         queued_jobs = activity.get("queuedJobs") if isinstance(activity.get("queuedJobs"), list) else []
+        last_completed_job = activity.get("lastCompletedJob") if isinstance(activity.get("lastCompletedJob"), dict) else None
 
         def _compact_job(raw_job: dict[str, Any] | None) -> dict[str, Any] | None:
             payload = raw_job if isinstance(raw_job, dict) else {}
             job_id = normalize_text(payload.get("id"), "")
             if not job_id:
                 return None
-            return {
+            compact_payload = {
                 "id": job_id,
                 "kind": normalize_text(payload.get("kind"), ""),
                 "status": normalize_text(payload.get("status"), ""),
@@ -461,6 +462,10 @@ def create_robots_router(
                 "startedAt": int(payload.get("startedAt") or 0),
                 "updatedAt": int(payload.get("updatedAt") or 0),
             }
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None
+            if metadata:
+                compact_payload["metadata"] = metadata
+            return compact_payload
 
         return {
             "searching": bool(activity.get("searching")),
@@ -472,6 +477,7 @@ def create_robots_router(
             "jobQueueVersion": int(activity.get("jobQueueVersion") or 0),
             "activeJob": _compact_job(active_job),
             "queuedJobs": [item for item in (_compact_job(job) for job in queued_jobs) if item is not None],
+            "lastCompletedJob": _compact_job(last_completed_job),
         }
 
     def _robot_override_model_file_name(robot_id: str, suffix: str) -> str:

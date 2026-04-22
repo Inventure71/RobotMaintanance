@@ -251,6 +251,9 @@ class DefinitionService:
                     "enabled": bool(test_definition.get("enabled", True)),
                     "ownerTags": normalize_owner_tags(test_definition.get("ownerTags")),
                     "platformTags": normalize_platform_tags(test_definition.get("platformTags")),
+                    "requires": self._normalize_string_list(test_definition.get("requires")),
+                    "sideEffects": normalize_text(test_definition.get("sideEffects"), "read_only"),
+                    "isolation": normalize_text(test_definition.get("isolation"), "definition_shell"),
                     "mode": normalize_text(test_definition.get("mode"), "orchestrate"),
                     "params": test_definition.get("params") if isinstance(test_definition.get("params"), dict) else {},
                     "execute": test_definition.get("execute") if isinstance(test_definition.get("execute"), list) else [],
@@ -274,11 +277,26 @@ class DefinitionService:
                     "enabled": bool(fix_definition.get("enabled", True)),
                     "ownerTags": normalize_owner_tags(fix_definition.get("ownerTags")),
                     "platformTags": normalize_platform_tags(fix_definition.get("platformTags")),
+                    "requires": self._normalize_string_list(fix_definition.get("requires")),
+                    "sideEffects": normalize_text(fix_definition.get("sideEffects"), "mutating"),
+                    "risk": normalize_text(fix_definition.get("risk"), "medium"),
+                    "requiresApproval": bool(fix_definition.get("requiresApproval", False)),
                     "runAtConnection": bool(fix_definition.get("runAtConnection", False)),
+                    "postTestIds": [
+                        normalize_text(test_id, "")
+                        for test_id in (
+                            fix_definition.get("postTestIds")
+                            if isinstance(fix_definition.get("postTestIds"), list)
+                            else []
+                        )
+                        if normalize_text(test_id, "")
+                    ],
                     "params": fix_definition.get("params") if isinstance(fix_definition.get("params"), dict) else {},
                     "execute": fix_definition.get("execute") if isinstance(fix_definition.get("execute"), list) else [],
                 }
             )
+            if fix_definition.get("expectedDowntimeSec") is not None:
+                fixes[-1]["expectedDowntimeSec"] = fix_definition.get("expectedDowntimeSec")
         fixes.sort(key=lambda item: item["id"])
 
         primitives: list[dict[str, Any]] = []
@@ -476,6 +494,9 @@ class DefinitionService:
             "enabled": bool(payload.get("enabled", True)),
             "ownerTags": normalize_owner_tags(payload.get("ownerTags")),
             "platformTags": normalize_platform_tags(payload.get("platformTags")),
+            "requires": self._normalize_string_list(payload.get("requires")),
+            "sideEffects": normalize_text(payload.get("sideEffects"), "read_only"),
+            "isolation": normalize_text(payload.get("isolation"), "definition_shell"),
             "mode": mode,
             "execute": execute,
             "checks": normalized_checks,
@@ -538,6 +559,10 @@ class DefinitionService:
         execute = payload.get("execute") if isinstance(payload.get("execute"), list) else []
         if not execute:
             raise HTTPException(status_code=400, detail="Fix definition requires non-empty execute steps.")
+        raw_post_test_ids = payload.get("postTestIds")
+        post_test_ids = None
+        if isinstance(raw_post_test_ids, list):
+            post_test_ids = self._normalize_string_list(raw_post_test_ids)
 
         document: dict[str, Any] = {
             "id": fix_id,
@@ -546,10 +571,18 @@ class DefinitionService:
             "description": normalize_text(payload.get("description"), ""),
             "ownerTags": normalize_owner_tags(payload.get("ownerTags")),
             "platformTags": normalize_platform_tags(payload.get("platformTags")),
+            "requires": self._normalize_string_list(payload.get("requires")),
+            "sideEffects": normalize_text(payload.get("sideEffects"), "mutating"),
+            "risk": normalize_text(payload.get("risk"), "medium"),
+            "requiresApproval": bool(payload.get("requiresApproval", False)),
             "runAtConnection": bool(payload.get("runAtConnection", False)),
             "execute": execute,
             "params": payload.get("params") if isinstance(payload.get("params"), dict) else {},
         }
+        if payload.get("expectedDowntimeSec") is not None:
+            document["expectedDowntimeSec"] = payload.get("expectedDowntimeSec")
+        if post_test_ids is not None:
+            document["postTestIds"] = post_test_ids
         root_payload, robot_type_entries = self._load_robot_types_document()
         if previous_fix_id:
             for entry in robot_type_entries:

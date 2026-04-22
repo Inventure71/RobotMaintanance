@@ -118,6 +118,7 @@ export function createDataInitRuntimeApi(deps) {
         normalizeText(normalized.lastFullTestSource, '') ||
         Number(normalized.updatedAt) > 0 ||
         Number(normalized.jobQueueVersion) > 0 ||
+        Boolean(normalized.lastCompletedJob) ||
         Boolean(normalized.activeJob) ||
         (Array.isArray(normalized.queuedJobs) && normalized.queuedJobs.length > 0),
     );
@@ -239,6 +240,8 @@ export function createDataInitRuntimeApi(deps) {
 
       const previousActiveJob = previousActivity?.activeJob || null;
       const nextActiveJob = nextActivity?.activeJob || null;
+      const previousLastCompletedJob = previousActivity?.lastCompletedJob || null;
+      const nextLastCompletedJob = nextActivity?.lastCompletedJob || null;
       const previousQueuedJobs = Array.isArray(previousActivity?.queuedJobs) ? previousActivity.queuedJobs : [];
       const nextQueuedJobs = Array.isArray(nextActivity?.queuedJobs) ? nextActivity.queuedJobs : [];
       const jobSummaryChanged = (prior, nextValue) =>
@@ -249,7 +252,8 @@ export function createDataInitRuntimeApi(deps) {
         || normalizeText(prior?.label, '') !== normalizeText(nextValue?.label, '')
         || Number(prior?.enqueuedAt || 0) !== Number(nextValue?.enqueuedAt || 0)
         || Number(prior?.startedAt || 0) !== Number(nextValue?.startedAt || 0)
-        || Number(prior?.updatedAt || 0) !== Number(nextValue?.updatedAt || 0);
+        || Number(prior?.updatedAt || 0) !== Number(nextValue?.updatedAt || 0)
+        || JSON.stringify(prior?.metadata || {}) !== JSON.stringify(nextValue?.metadata || {});
       const queuedJobsChanged = previousQueuedJobs.length !== nextQueuedJobs.length
         || nextQueuedJobs.some((job, index) => jobSummaryChanged(previousQueuedJobs[index], job));
 
@@ -262,6 +266,7 @@ export function createDataInitRuntimeApi(deps) {
         Number(previousActivity.updatedAt) !== Number(nextActivity.updatedAt) ||
         Number(previousActivity.jobQueueVersion || 0) !== Number(nextActivity.jobQueueVersion || 0) ||
         jobSummaryChanged(previousActiveJob, nextActiveJob) ||
+        jobSummaryChanged(previousLastCompletedJob, nextLastCompletedJob) ||
         queuedJobsChanged;
       const testsChanged = haveRuntimeTestsChanged(currentRobot?.tests || {}, nextTests);
       const batteryChanged =

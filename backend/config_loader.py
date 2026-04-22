@@ -293,6 +293,13 @@ def _resolve_test_entry(
         "possibleResults": possible_results,
         "ownerTags": normalize_owner_tags(owner_tags_source),
         "platformTags": normalize_platform_tags(platform_tags_source),
+        "requires": [
+            normalize_text(item, "")
+            for item in (test_definition.get("requires") if isinstance(test_definition.get("requires"), list) else [])
+            if normalize_text(item, "")
+        ],
+        "sideEffects": normalize_text(test_definition.get("sideEffects"), "read_only"),
+        "isolation": normalize_text(test_definition.get("isolation"), "definition_shell"),
         "params": params,
     }
 
@@ -332,8 +339,19 @@ def _resolve_fix_entry(
         raise ValueError(f"Fix '{fix_id}' must define boolean runAtConnection")
     owner_tags_source = override.get("ownerTags") if "ownerTags" in override else source.get("ownerTags")
     platform_tags_source = override.get("platformTags") if "platformTags" in override else source.get("platformTags")
+    post_test_ids_source = override.get("postTestIds") if "postTestIds" in override else source.get("postTestIds")
+    post_test_ids = None
+    if isinstance(post_test_ids_source, list):
+        post_test_ids = []
+        seen_post_test_ids: set[str] = set()
+        for raw_test_id in post_test_ids_source:
+            test_id = normalize_text(raw_test_id, "")
+            if not test_id or test_id in seen_post_test_ids:
+                continue
+            seen_post_test_ids.add(test_id)
+            post_test_ids.append(test_id)
 
-    return {
+    payload = {
         "id": fix_id,
         "definitionId": fix_id,
         "label": normalize_text(override.get("label"), normalize_text(source.get("label"), fix_id)),
@@ -342,9 +360,27 @@ def _resolve_fix_entry(
         "runAtConnection": run_at_connection,
         "ownerTags": normalize_owner_tags(owner_tags_source),
         "platformTags": normalize_platform_tags(platform_tags_source),
+        "requires": [
+            normalize_text(item, "")
+            for item in (source.get("requires") if isinstance(source.get("requires"), list) else [])
+            if normalize_text(item, "")
+        ],
+        "sideEffects": normalize_text(override.get("sideEffects"), normalize_text(source.get("sideEffects"), "mutating")),
+        "risk": normalize_text(override.get("risk"), normalize_text(source.get("risk"), "medium")),
+        "requiresApproval": bool(override.get("requiresApproval", source.get("requiresApproval", False))),
         "params": params,
         "execute": execute_steps,
     }
+    if source.get("expectedDowntimeSec") is not None or override.get("expectedDowntimeSec") is not None:
+        try:
+            payload["expectedDowntimeSec"] = float(
+                override.get("expectedDowntimeSec", source.get("expectedDowntimeSec"))
+            )
+        except Exception:
+            payload["expectedDowntimeSec"] = 0.0
+    if post_test_ids is not None:
+        payload["postTestIds"] = post_test_ids
+    return payload
 
 
 def normalize_robot_types(

@@ -81,6 +81,15 @@ function createJobQueueActivityHelpers() {
           .map((item) => normalizeJobSummary(item))
           .filter((item) => item && normalizeText(item.status, '') === 'queued')
       : [];
+  const normalizeCompletedJobSummary = (job) => {
+    const normalized = normalizeJobSummary(job);
+    if (!normalized) return null;
+    if (!['succeeded', 'failed', 'interrupted'].includes(normalized.status)) return null;
+    return {
+      ...normalized,
+      metadata: job?.metadata && typeof job.metadata === 'object' ? job.metadata : {},
+    };
+  };
   const normalizeJobQueueSnapshot = (raw) => {
     const payload = raw && typeof raw === 'object' ? raw : {};
     const activeJob = normalizeJobSummary(payload.activeJob);
@@ -91,11 +100,13 @@ function createJobQueueActivityHelpers() {
           ? activeJob
           : null,
       queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+      lastCompletedJob: normalizeCompletedJobSummary(payload.lastCompletedJob),
       jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
     };
   };
   return {
     normalizeJobSummary,
+    normalizeCompletedJobSummary,
     normalizeQueuedJobs,
     normalizeJobQueueSnapshot,
   };
@@ -291,6 +302,10 @@ function makeRuntime(state) {
     renderDashboard: () => {
       state.renderDashboardCalls = (state.renderDashboardCalls || 0) + 1;
     },
+    appendTerminalLine: (message, tone) => {
+      state.terminalLines = state.terminalLines || [];
+      state.terminalLines.push({ message, tone });
+    },
     robotId: (robot) => normalizeText(robot?.id ?? robot, ''),
   };
   return new Proxy(runtime, {
@@ -334,6 +349,44 @@ test('applyRuntimeRobotPatches ignores empty runtime updates', async () => {
   api.applyRuntimeRobotPatches(new Set());
 
   assert.equal(state.renderDashboardCalls, 0);
+});
+
+test('applyRuntimeRobotPatches reports terminal completion from lastCompletedJob', async () => {
+  const createFixTestsFeature = await loadApi();
+  const state = {
+    detailRobotId: '',
+    renderDashboardCalls: 0,
+    robots: [
+      {
+        id: 'carrier-1',
+        name: 'Carrier 1',
+        activity: {
+          lastCompletedJob: {
+            id: 'job-9',
+            kind: 'fix',
+            status: 'failed',
+            source: 'manual',
+            label: 'Run fix Flash',
+            enqueuedAt: 1,
+            startedAt: 2,
+            updatedAt: 3,
+            metadata: { error: 'step failed' },
+          },
+        },
+      },
+    ],
+  };
+  const env = makeEnv(state);
+  const runtime = makeRuntime(state);
+  const api = createFixTestsFeature(runtime, env);
+
+  api.applyRuntimeRobotPatches(new Set(['carrier-1']));
+
+  assert.equal(state.renderDashboardCalls, 1);
+  assert.equal(state.terminalLines.length, 1);
+  assert.match(state.terminalLines[0].message, /failed on Carrier 1: step failed/);
+  api.applyRuntimeRobotPatches(new Set(['carrier-1']));
+  assert.equal(state.terminalLines.length, 1);
 });
 
 test('getDashboardFixCandidates filters fixes by owner and platform tags', async () => {

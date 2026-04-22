@@ -2,7 +2,7 @@
 
 This folder contains fleet and behavior configuration for the connector-first execution model.
 
-## File: `/Users/inventure71/VSProjects/RobotMaintanance/config/robots.config.json`
+## File: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/robots.config.json`
 
 Fleet inventory config.
 
@@ -14,14 +14,14 @@ Accepted shapes:
 Each robot entry:
 - `id` (required, unique)
 - `name` (required)
-- `type` (required): references `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json` `robotTypes[].id`
+- `type` (required): references `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/robot-types.config.json` `robotTypes[].id`
 - `ip` (required)
 - `ssh` (optional): `username`, `password`, `port`, optional startup directory (`cwd` or `initialDirectory`)
 - `model` (optional robot-level override object):
   - `file_name` (optional override)
   - `path_to_quality_folders` (optional override, default `assets/models`)
 
-## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/command-primitives/`
+## Directory: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/command-primitives/`
 
 Reusable command primitives (`*.command.json`).
 
@@ -39,7 +39,7 @@ Runtime rule:
 - command string of the form `$name$` in test/fix steps resolves through this directory.
 - unknown `$name$` tokens fail startup.
 
-## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/terminal-context/`
+## Directory: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/terminal-context/`
 
 Recorder/operator terminal bundles (`*.commands.json`).
 
@@ -61,7 +61,7 @@ Behavior:
 - frontend recorder terminal presets can load these files and expand them into one bounded shell bundle.
 - entries are intended for read-only diagnostics and operator/LLM context capture, not mutating actions.
 
-## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/tests/`
+## Directory: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/tests/`
 
 Self-contained test definitions (`*.test.json`).
 
@@ -69,6 +69,10 @@ Contract:
 - `id`
 - `mode`: `orchestrate` (default) or `online_probe`
 - `execute[]`: command steps (`id`, `command`, optional `timeoutSec`, `retries`, `saveAs`, `reuseKey`)
+- optional production metadata:
+  - `requires`: required remote tools or runtime capabilities
+  - `sideEffects`: `read_only` or `mutating`
+  - `isolation`: currently `definition_shell`
 - `checks[]`: each check has:
   - `id` (global check id used by dashboard/API)
   - `read` (`contains_string`, `contains_lines_unordered`, `contains_any_string`)
@@ -83,7 +87,7 @@ Behavior:
 - the UI labels this as `Expected timeout (sec)` but still saves it as `timeoutSec`.
 - only set `timeoutSec` when a command truly needs more than 20 seconds; never set it below 20.
 
-## Directory: `/Users/inventure71/VSProjects/RobotMaintanance/config/fixes/`
+## Directory: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/fixes/`
 
 Self-contained fix definitions (`*.fix.json`).
 
@@ -91,6 +95,12 @@ Contract:
 - `id`, `label`, `description`, `enabled`
 - `execute[]` (same step shape as tests)
 - optional `params`
+- optional production metadata:
+  - `requires`: required remote tools or runtime capabilities
+  - `sideEffects`: `read_only` or `mutating`
+  - `risk`: `low`, `medium`, `high`, or `destructive`
+  - `requiresApproval`: boolean
+  - `expectedDowntimeSec`: expected disruption duration
 - fixes do not declare post-test ids; after a fix finishes the robot reruns its assigned test suite
 
 Behavior:
@@ -100,7 +110,7 @@ Behavior:
 - the UI labels this as `Expected timeout (sec)` but still saves it as `timeoutSec`.
 - only set `timeoutSec` when a command truly needs more than 20 seconds; never set it below 20.
 
-## File: `/Users/inventure71/VSProjects/RobotMaintanance/config/robot-types.config.json`
+## File: `/Users/inventure71/VSProjects/RoboticsLabProjects/VIGIL/config/robot-types.config.json`
 
 Robot types reference check/fix IDs only.
 

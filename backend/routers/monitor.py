@@ -37,4 +37,8 @@ def create_monitor_router(terminal_manager: TerminalManager) -> APIRouter:
             parallelism=int(config["parallelism"]),
         )
 
+    @router.get("/api/monitor/metrics")
+    def get_monitor_metrics() -> dict:
+        return terminal_manager.get_runtime_metrics()
+
     return router

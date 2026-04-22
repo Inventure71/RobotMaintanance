@@ -14,6 +14,8 @@ The system is designed for operational reliability and fast maintenance cycles:
 - Definition-driven diagnostics and fixes (JSON-based, versionable, and reloadable)
 - Robot-type mapping so capabilities can be rolled out consistently by platform
 
+VIGIL's core runtime is platform agnostic: it opens SSH sessions, runs ordered command definitions, evaluates outputs, and reports fleet state. Platform specialization belongs in versioned definitions for each robot family, such as ROS 1 Rosbot, ROS 2 Rosbot, or TIAGO. See `docs/execution_contract.md` for the execution and isolation contract.
+
 ## Key Capabilities
 
 ### SSH Session Management
@@ -171,6 +173,7 @@ Recommended workflow (file-based, version-controlled):
    - `execute[]` steps
    - `checks[]` definitions
    - each `checks[].metadata` must include boolean `runAtConnection`
+   - optional production metadata: `requires`, `sideEffects`, `isolation`, `ownerTags`, `platformTags`
 2. Add any referenced primitives under `config/command-primitives/`.
 3. Add new check IDs to `testRefs` in `config/robot-types.config.json`.
 4. Reload definitions: `POST /api/definitions/reload`.
@@ -197,7 +200,7 @@ Manual/API queue flow:
 
 ## Adding New Fixes
 
-1. Create `config/fixes/<name>.fix.json` (`id`, `label`, `description`, `enabled`, `execute[]`, optional `postTestIds`).
+1. Create `config/fixes/<name>.fix.json` (`id`, `label`, `description`, `enabled`, `execute[]`, optional `postTestIds`, optional `requires`, `sideEffects`, `risk`, `requiresApproval`, `expectedDowntimeSec`).
 2. Add fix IDs to `fixRefs` in `config/robot-types.config.json`.
 3. Reload definitions: `POST /api/definitions/reload`.
 4. Enqueue a fix job:

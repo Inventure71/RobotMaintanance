@@ -102,6 +102,7 @@ class TerminalManager(
     AUTOMATION_EXECUTE_TIMEOUT_MAX_SEC = 3600.0
     TRANSPORT_POOL_IDLE_TTL_SEC = 300.0
     TRANSPORT_POOL_MAX_FAILURES_BEFORE_RESET = 2
+    TRANSPORT_IDLE_SWEEP_INTERVAL_SEC = 60.0
     ACTIVITY_PHASE_ONLINE_PROBE = "online_probe"
     ACTIVITY_PHASE_CONNECTION_RETRY = "connection_retry"
     ACTIVITY_PHASE_FULL_TEST_AFTER_RECOVERY = "full_test_after_recovery"
@@ -167,8 +168,11 @@ class TerminalManager(
         self._connection_retry_inflight: dict[str, int] = {}
         self._connection_retry_attempt_owner: dict[str, int] = {}
         self._next_idle_sweep_at = 0.0
+        self._last_transport_sweep_at = 0.0
         self._auto_monitor_executor = None
         self._auto_monitor_executor_workers = 0
+        self._active_automation_contexts: dict[str, Any] = {}
+        self._active_automation_lock = threading.Lock()
         self._command_primitives_by_id = command_primitives_by_id or {}
         self._test_definitions_by_id = test_definitions_by_id or {}
         self._check_definitions_by_id = check_definitions_by_id or {}
@@ -204,7 +208,8 @@ class TerminalManager(
             executor=self._job_executor,
             on_snapshot=self._on_robot_job_snapshot,
             close_session=self.close_session,
-            hard_reset_transport=lambda robot_id: self._transport_pool.hard_reset_robot(robot_id),
+            hard_reset_transport=self._full_hard_reset_robot,
+            soft_interrupt_automation=self._soft_interrupt_active_automation,
         )
         if self._auto_monitor_enabled:
             self._start_auto_monitor()
@@ -224,6 +229,42 @@ class TerminalManager(
 
         return robot_type
 
+    def _full_hard_reset_robot(self, robot_id: str) -> None:
+        """Hard-reset the SSH transport AND close all associated SSH sessions.
+
+        This is a full reset: it invalidates the transport pool entry and closes
+        both the auto-monitor and test-session shells so no zombie connections
+        remain after a job stop or error.
+        """
+        self._transport_pool.hard_reset_robot(robot_id)
+        try:
+            self.close_session(page_session_id=self.AUTO_MONITOR_PAGE_SESSION_ID, robot_id=robot_id)
+        except Exception:
+            pass
+        try:
+            self.close_session(page_session_id=self.AUTO_MONITOR_TEST_PAGE_SESSION_ID, robot_id=robot_id)
+        except Exception:
+            pass
+
+    def _soft_interrupt_active_automation(self, robot_id: str) -> None:
+        """Send Ctrl-C to any active automation shell for this robot.
+
+        Called before the hard transport reset so the running process has a
+        chance to exit cleanly (saves file locks, ROS node deregistration, etc.).
+        Uses the automation-context registry which is populated for both test
+        and fix paths via ``AutomationRunContext`` open/close callbacks.
+        """
+        try:
+            with self._active_automation_lock:
+                active_context = self._active_automation_contexts.get(robot_id)
+            if active_context is None:
+                return
+            soft_interrupt = getattr(active_context, "soft_interrupt", None)
+            if callable(soft_interrupt):
+                soft_interrupt()
+        except Exception:
+            pass
+
     def _on_robot_job_snapshot(self, robot_id: str, snapshot: dict[str, Any]) -> None:
         if not isinstance(snapshot, dict):
             return
@@ -231,6 +272,7 @@ class TerminalManager(
             robot_id,
             active_job=snapshot.get("activeJob"),
             queued_jobs=snapshot.get("queuedJobs"),
+            last_completed_job=snapshot.get("lastCompletedJob"),
             queue_version=int(snapshot.get("jobQueueVersion") or 0),
         )
 
@@ -297,7 +339,26 @@ class TerminalManager(
             if exc.status_code in {400, 404}:
                 raise HTTPException(status_code=404, detail=normalize_text(exc.detail, "Unknown fix id"))
             raise
+        raw_post_test_ids = body.get("postTestIds") if isinstance(body.get("postTestIds"), list) else None
+        normalized_post_test_ids = None
+        if raw_post_test_ids is not None:
+            normalized_post_test_ids = []
+            seen_post_test_ids: set[str] = set()
+            configured = set(self._configured_test_ids(normalized_robot_id))
+            unknown: list[str] = []
+            for raw_test_id in raw_post_test_ids:
+                test_id = normalize_text(raw_test_id, "")
+                if not test_id or test_id in seen_post_test_ids:
+                    continue
+                seen_post_test_ids.add(test_id)
+                if test_id not in configured:
+                    unknown.append(test_id)
+                    continue
+                normalized_post_test_ids.append(test_id)
+            if unknown:
+                raise HTTPException(status_code=404, detail=f"Unknown post-fix test id(s): {', '.join(unknown)}")
         body["fixId"] = fix_id
+        body["postTestIds"] = normalized_post_test_ids
         return body
 
     def enqueue_robot_job(
@@ -327,6 +388,7 @@ class TerminalManager(
             "testIds": validated.get("testIds"),
             "fixId": validated.get("fixId"),
             "params": validated.get("params") if isinstance(validated.get("params"), dict) else {},
+            "postTestIds": validated.get("postTestIds") if isinstance(validated.get("postTestIds"), list) else None,
             "timeoutSec": validated.get("timeoutSec"),
             "queueTimeoutSec": validated.get("queueTimeoutSec"),
             "connectTimeoutSec": validated.get("connectTimeoutSec"),
@@ -344,6 +406,7 @@ class TerminalManager(
             "jobId": job_id,
             "activeJob": snapshot.get("activeJob"),
             "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+            "lastCompletedJob": snapshot.get("lastCompletedJob") if isinstance(snapshot.get("lastCompletedJob"), dict) else None,
             "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
         }
 
@@ -355,6 +418,7 @@ class TerminalManager(
         return {
             "activeJob": snapshot.get("activeJob"),
             "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+            "lastCompletedJob": snapshot.get("lastCompletedJob") if isinstance(snapshot.get("lastCompletedJob"), dict) else None,
             "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
         }
 
@@ -371,6 +435,7 @@ class TerminalManager(
             {
                 "activeJob": snapshot.get("activeJob"),
                 "queuedJobs": snapshot.get("queuedJobs") if isinstance(snapshot.get("queuedJobs"), list) else [],
+                "lastCompletedJob": snapshot.get("lastCompletedJob") if isinstance(snapshot.get("lastCompletedJob"), dict) else None,
                 "jobQueueVersion": int(snapshot.get("jobQueueVersion") or 0),
             },
             bool(stop_result.already_interrupting),

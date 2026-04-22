@@ -32,6 +32,13 @@ def test_monitor_config_get_and_patch():
                 self._config["parallelism"] = int(parallelism)
             return dict(self._config)
 
+        def get_runtime_metrics(self):
+            return {
+                "robots": {"total": 1, "online": 1, "offline": 0, "warning": 0, "unknown": 0},
+                "jobs": {"queueDepth": 0, "statusCounts": {}},
+                "metrics": {"vigil_robot_online_status": [{"robotId": "r1", "value": 1}]},
+            }
+
     app = FastAPI()
     app.include_router(create_monitor_router(FakeManager()))
     client = TestClient(app)
@@ -52,6 +59,10 @@ def test_monitor_config_get_and_patch():
     assert payload["topicsIntervalSec"] == 45.0
     assert payload["parallelism"] == 12
 
+    metrics_response = client.get("/api/monitor/metrics")
+    assert metrics_response.status_code == 200
+    assert metrics_response.json()["metrics"]["vigil_robot_online_status"][0]["robotId"] == "r1"
+
 
 def test_monitor_config_patch_validates_payload():
     class FakeManager:
@@ -66,6 +77,9 @@ def test_monitor_config_patch_validates_payload():
 
         def update_monitor_config(self, **_kwargs):
             return self.get_monitor_config()
+
+        def get_runtime_metrics(self):
+            return {"metrics": {}}
 
     app = FastAPI()
     app.include_router(create_monitor_router(FakeManager()))

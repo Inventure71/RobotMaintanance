@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -7,6 +8,8 @@ from typing import Callable
 
 from ..ssh_client import AutomationCommandResult, InteractiveShell
 from .transport_pool import SshTransportPool
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,6 +41,8 @@ class AutomationRunContext:
         height: int = 48,
         initial_directory: str | None = None,
         time_fn: Callable[[], float] = time.time,
+        on_opened: Callable[["AutomationRunContext"], None] | None = None,
+        on_closed: Callable[["AutomationRunContext"], None] | None = None,
     ):
         self._pool = pool
         self._robot_id = robot_id
@@ -63,10 +68,21 @@ class AutomationRunContext:
         self._started_at = self._time()
         self._closed = False
         self._shell: InteractiveShell | None = None
+        self._on_opened = on_opened
+        self._on_closed = on_closed
+        self._opened_notified = False
 
     @property
     def run_id(self) -> str:
         return self._run_id
+
+    @property
+    def robot_id(self) -> str:
+        return self._robot_id
+
+    @property
+    def run_kind(self) -> str:
+        return self._run_kind
 
     def _ensure_open(self) -> None:
         if self._shell is not None:
@@ -99,14 +115,26 @@ class AutomationRunContext:
             initial_directory=self._initial_directory,
             connected_client=acquire_result.client,
             owns_client=False,
+            start_reader_thread=False,
         )
         try:
             shell.connect()
         except Exception:
             self._pool.hard_reset_robot(self._robot_id)
             raise
-        self._timing.connect_ms += max(0, int((self._time() - shell_connect_started) * 1000))
+        connect_shell_ms = max(0, int((self._time() - shell_connect_started) * 1000))
+        self._timing.connect_ms += connect_shell_ms
         self._shell = shell
+        LOGGER.debug(
+            "AutomationRunContext opened (run_id=%s, robot_id=%s, reused_transport=%s, connect_ms=%d)",
+            self._run_id, self._robot_id, acquire_result.reused, self._timing.connect_ms,
+        )
+        if not self._opened_notified and callable(self._on_opened):
+            self._opened_notified = True
+            try:
+                self._on_opened(self)
+            except Exception:
+                LOGGER.exception("on_opened callback failed (run_id=%s)", self._run_id)
 
     def run_command(
         self,
@@ -120,11 +148,12 @@ class AutomationRunContext:
         execute_timeout = self._execute_timeout_sec if timeout_sec is None else max(0.1, float(timeout_sec))
         started = self._time()
         try:
-            return self._shell.run_automation_command(
+            result = self._shell.run_automation_command(
                 command,
                 timeout=execute_timeout,
                 sudo_password=sudo_password,
             )
+            return result
         finally:
             self._timing.execute_ms += max(0, int((self._time() - started) * 1000))
 
@@ -142,6 +171,25 @@ class AutomationRunContext:
                 pass
 
         self._timing.total_ms = max(0, int((self._time() - self._started_at) * 1000))
+
+        if self._opened_notified and callable(self._on_closed):
+            try:
+                self._on_closed(self)
+            except Exception:
+                LOGGER.exception("on_closed callback failed (run_id=%s)", self._run_id)
+
+    def soft_interrupt(self) -> None:
+        """Send Ctrl-C to the active process without closing the connection.
+
+        Call this before interrupt() to give the running process a chance to
+        terminate gracefully before the SSH transport is forcibly closed.
+        """
+        shell = self._shell
+        if shell is not None:
+            try:
+                shell.send_interrupt()
+            except Exception:
+                pass
 
     def interrupt(self) -> None:
         shell = self._shell

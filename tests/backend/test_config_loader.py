@@ -49,6 +49,9 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
                 "id": "topics_snapshot",
                 "ownerTags": ["GLOBAL", "Alice", "alice"],
                 "platformTags": ["ROS2", "ros2", "Interbotix"],
+                "requires": ["bash", "rostopic", "bash"],
+                "sideEffects": "read_only",
+                "isolation": "definition_shell",
                 "execute": [{"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"}],
                 "checks": [
                     {
@@ -74,6 +77,11 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
                 "id": "flash_fix",
                 "ownerTags": ["GLOBAL", "bob"],
                 "platformTags": ["ROS2", "interbotix"],
+                "requires": ["bash", "docker"],
+                "sideEffects": "mutating",
+                "risk": "high",
+                "requiresApproval": True,
+                "expectedDowntimeSec": 30,
                 "execute": [{"id": "down", "command": "echo down"}],
             }
         ),
@@ -91,12 +99,102 @@ def test_load_definition_catalog_supports_directory_shape(tmp_path):
     assert "flash_fix" in catalog.fix_definitions_by_id
     assert catalog.test_definitions_by_id["topics_snapshot"]["ownerTags"] == ["global", "alice"]
     assert catalog.test_definitions_by_id["topics_snapshot"]["platformTags"] == ["ros2", "interbotix"]
+    assert catalog.test_definitions_by_id["topics_snapshot"]["requires"] == ["bash", "rostopic"]
+    assert catalog.test_definitions_by_id["topics_snapshot"]["sideEffects"] == "read_only"
+    assert catalog.test_definitions_by_id["topics_snapshot"]["isolation"] == "definition_shell"
     assert catalog.check_definitions_by_id["battery"]["ownerTags"] == ["global", "alice"]
     assert catalog.check_definitions_by_id["battery"]["platformTags"] == ["ros2", "interbotix"]
     assert catalog.fix_definitions_by_id["flash_fix"]["ownerTags"] == ["global", "bob"]
     assert catalog.fix_definitions_by_id["flash_fix"]["platformTags"] == ["ros2", "interbotix"]
+    assert catalog.fix_definitions_by_id["flash_fix"]["requires"] == ["bash", "docker"]
+    assert catalog.fix_definitions_by_id["flash_fix"]["sideEffects"] == "mutating"
+    assert catalog.fix_definitions_by_id["flash_fix"]["risk"] == "high"
+    assert catalog.fix_definitions_by_id["flash_fix"]["requiresApproval"] is True
+    assert catalog.fix_definitions_by_id["flash_fix"]["expectedDowntimeSec"] == 30
     assert catalog.fix_definitions_by_id["flash_fix"]["runAtConnection"] is False
     assert "postTestIds" not in catalog.fix_definitions_by_id["flash_fix"]
+
+
+def test_load_definition_catalog_preserves_fix_post_test_ids(tmp_path):
+    commands_dir = tmp_path / "command-primitives"
+    tests_dir = tmp_path / "tests"
+    fixes_dir = tmp_path / "fixes"
+    commands_dir.mkdir()
+    tests_dir.mkdir()
+    fixes_dir.mkdir()
+
+    (tests_dir / "topics.test.json").write_text(
+        json.dumps(
+            {
+                "id": "topics_snapshot",
+                "execute": [{"id": "topics", "command": "echo ok", "saveAs": "topics_raw"}],
+                "checks": [
+                    {
+                        "id": "battery",
+                        "metadata": {"runAtConnection": True},
+                        "read": {"kind": "contains_string", "inputRef": "topics_raw", "needle": "ok"},
+                        "pass": {"status": "ok", "value": "all_present", "details": "ok"},
+                        "fail": {"status": "error", "value": "missing", "details": "missing"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (fixes_dir / "flash.fix.json").write_text(
+        json.dumps(
+            {
+                "id": "flash_fix",
+                "execute": [{"id": "down", "command": "echo down"}],
+                "postTestIds": ["battery", "battery", ""],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    catalog = load_definition_catalog(
+        command_primitives_dir=commands_dir,
+        tests_dir=tests_dir,
+        fixes_dir=fixes_dir,
+    )
+
+    assert catalog.fix_definitions_by_id["flash_fix"]["postTestIds"] == ["battery"]
+
+
+def test_load_definition_catalog_rejects_invalid_production_metadata(tmp_path):
+    commands_dir = tmp_path / "command-primitives"
+    tests_dir = tmp_path / "tests"
+    fixes_dir = tmp_path / "fixes"
+    commands_dir.mkdir()
+    tests_dir.mkdir()
+    fixes_dir.mkdir()
+
+    (tests_dir / "topics.test.json").write_text(
+        json.dumps(
+            {
+                "id": "topics_snapshot",
+                "sideEffects": "unknown",
+                "execute": [{"id": "topics", "command": "echo ok", "saveAs": "topics_raw"}],
+                "checks": [
+                    {
+                        "id": "battery",
+                        "metadata": {"runAtConnection": True},
+                        "read": {"kind": "contains_string", "inputRef": "topics_raw", "needle": "ok"},
+                        "pass": {"status": "ok", "value": "all_present", "details": "ok"},
+                        "fail": {"status": "error", "value": "missing", "details": "missing"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid sideEffects"):
+        load_definition_catalog(
+            command_primitives_dir=commands_dir,
+            tests_dir=tests_dir,
+            fixes_dir=fixes_dir,
+        )
 
 
 def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
@@ -168,6 +266,50 @@ def test_normalize_robot_types_uses_lower_type_key_and_resolves_refs():
     assert normalized["rosbot-2-pro"]["autoFixes"][0]["platformTags"] == ["interbotix"]
     assert normalized["rosbot-2-pro"]["autoFixes"][0]["runAtConnection"] is True
     assert "postTestIds" not in normalized["rosbot-2-pro"]["autoFixes"][0]
+
+
+def test_normalize_robot_types_preserves_fix_post_test_ids():
+    raw_types = [
+        {
+            "id": "rosbot-2-pro",
+            "name": "Rosbot 2 Pro",
+            "testRefs": ["online"],
+            "fixRefs": ["flash_fix"],
+        }
+    ]
+    test_definitions = {
+        "online_probe": {"id": "online_probe", "mode": "online_probe", "checks": [{"id": "online"}]}
+    }
+    check_definitions = {
+        "online": {
+            "id": "online",
+            "definitionId": "online_probe",
+            "label": "Online",
+            "defaultStatus": "warning",
+            "defaultValue": "unknown",
+            "defaultDetails": "Not checked yet",
+            "manualOnly": True,
+            "runAtConnection": True,
+            "enabled": True,
+        }
+    }
+    fix_definitions = {
+        "flash_fix": {
+            "id": "flash_fix",
+            "label": "Flash fix",
+            "description": "desc",
+            "enabled": True,
+            "runAtConnection": True,
+            "ownerTags": [],
+            "platformTags": ["ROS2"],
+            "execute": [{"id": "down", "command": "echo down"}],
+            "postTestIds": ["online"],
+            "params": {},
+        }
+    }
+
+    normalized = normalize_robot_types(raw_types, test_definitions, check_definitions, fix_definitions)
+    assert normalized["rosbot-2-pro"]["autoFixes"][0]["postTestIds"] == ["online"]
 
 
 def test_normalize_robot_types_keeps_auto_monitor_battery_command():

@@ -67,6 +67,7 @@ class TestRunRequest(BaseModel):
 class FixRunRequest(BaseModel):
     pageSessionId: str | None = None
     params: dict[str, Any] | None = None
+    postTestIds: list[str] | None = None
     timeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
     queueTimeoutSec: float | None = Field(default=None, ge=0.0, le=3600.0)
     connectTimeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
@@ -81,6 +82,7 @@ class JobEnqueueRequest(BaseModel):
     testIds: list[str] | None = None
     fixId: str | None = None
     params: dict[str, Any] | None = None
+    postTestIds: list[str] | None = None
     timeoutSec: float | None = Field(default=None, ge=0.5, le=3600.0)
     queueTimeoutSec: float | None = Field(default=None, ge=0.0, le=3600.0)
     connectTimeoutSec: float | None = Field(default=None, ge=0.1, le=3600.0)
@@ -98,9 +100,14 @@ class JobSummaryResponse(BaseModel):
     updatedAt: float
 
 
+class CompletedJobResponse(JobSummaryResponse):
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class JobSnapshotResponse(BaseModel):
     activeJob: JobSummaryResponse | None = None
     queuedJobs: list[JobSummaryResponse] = Field(default_factory=list)
+    lastCompletedJob: CompletedJobResponse | None = None
     jobQueueVersion: int = 0
 
 
@@ -201,6 +208,9 @@ class TestDefinitionUpsertRequest(BaseModel):
     params: dict[str, Any] | None = None
     ownerTags: list[str] | None = None
     platformTags: list[str] | None = None
+    requires: list[str] | None = None
+    sideEffects: Literal["read_only", "mutating"] | None = None
+    isolation: Literal["definition_shell"] | None = None
 
 
 class FixDefinitionUpsertRequest(BaseModel):
@@ -211,9 +221,15 @@ class FixDefinitionUpsertRequest(BaseModel):
     enabled: bool = True
     runAtConnection: bool = False
     execute: list[DefinitionExecuteStep] = Field(min_length=1)
+    postTestIds: list[str] | None = None
     params: dict[str, Any] | None = None
     ownerTags: list[str] | None = None
     platformTags: list[str] | None = None
+    requires: list[str] | None = None
+    sideEffects: Literal["read_only", "mutating"] | None = None
+    risk: Literal["low", "medium", "high", "destructive"] | None = None
+    requiresApproval: bool | None = None
+    expectedDowntimeSec: float | None = Field(default=None, ge=0.0, le=86400.0)
 
 
 class PrimitiveUpsertRequest(BaseModel):

@@ -172,6 +172,9 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
             "description": "Capture camera topics for operator review.",
             "enabled": True,
             "mode": "orchestrate",
+            "requires": ["bash", "rostopic"],
+            "sideEffects": "read_only",
+            "isolation": "definition_shell",
             "execute": [
                 {"id": "topics", "command": "$rostopic_list$", "saveAs": "topics_raw"},
             ],
@@ -205,6 +208,9 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
     assert (tmp_path / "tests" / "camera_snapshot.test.json").exists()
     saved = json.loads((tmp_path / "tests" / "camera_snapshot.test.json").read_text(encoding="utf-8"))
     assert saved["description"] == "Capture camera topics for operator review."
+    assert saved["requires"] == ["bash", "rostopic"]
+    assert saved["sideEffects"] == "read_only"
+    assert saved["isolation"] == "definition_shell"
 
     summary = client.get("/api/definitions/summary")
     assert summary.status_code == 200
@@ -213,6 +219,9 @@ def test_create_test_definition_writes_file_and_reloads(tmp_path: Path):
     tests = summary.json().get("tests", [])
     saved_test = next(item for item in tests if item.get("id") == "camera_snapshot")
     assert saved_test["description"] == "Capture camera topics for operator review."
+    assert saved_test["requires"] == ["bash", "rostopic"]
+    assert saved_test["sideEffects"] == "read_only"
+    assert saved_test["isolation"] == "definition_shell"
 
 
 def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
@@ -225,6 +234,11 @@ def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
             "description": "Quick repair",
             "enabled": True,
             "runAtConnection": True,
+            "requires": ["bash"],
+            "sideEffects": "mutating",
+            "risk": "high",
+            "requiresApproval": True,
+            "expectedDowntimeSec": 12,
             "execute": [{"id": "repair", "command": "echo repair"}],
         },
     )
@@ -235,12 +249,22 @@ def test_create_fix_definition_persists_run_at_connection(tmp_path: Path):
 
     saved = json.loads((tmp_path / "fixes" / "quick_fix.fix.json").read_text(encoding="utf-8"))
     assert saved["runAtConnection"] is True
+    assert saved["requires"] == ["bash"]
+    assert saved["sideEffects"] == "mutating"
+    assert saved["risk"] == "high"
+    assert saved["requiresApproval"] is True
+    assert saved["expectedDowntimeSec"] == 12
 
     summary = client.get("/api/definitions/summary")
     assert summary.status_code == 200
     fixes = summary.json().get("fixes", [])
     saved_fix = next(item for item in fixes if item.get("id") == "quick_fix")
     assert saved_fix["runAtConnection"] is True
+    assert saved_fix["requires"] == ["bash"]
+    assert saved_fix["sideEffects"] == "mutating"
+    assert saved_fix["risk"] == "high"
+    assert saved_fix["requiresApproval"] is True
+    assert saved_fix["expectedDowntimeSec"] == 12
 
 
 def test_definition_routes_normalize_owner_and_platform_tags(tmp_path: Path):

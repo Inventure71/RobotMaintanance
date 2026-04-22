@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import socket
 import threading
@@ -12,6 +13,8 @@ from typing import Any, Callable, Optional, Protocol
 import paramiko
 
 from .normalization import strip_terminal_control_sequences
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ShellChannel(Protocol):
@@ -55,10 +58,14 @@ class AutomationCommandResult:
 class InteractiveShell:
     """
     Persistent SSH shell session using paramiko.invoke_shell().
-    - send() sends raw text (keystrokes)
-    - sendline() sends a line + newline
-    - read() returns accumulated output (non-blocking)
-    - run_command() sends a command and waits for prompt (best-effort)
+
+    Two operation modes:
+    - Interactive (start_reader_thread=True): a background reader drains the
+      channel into a bounded queue; callers read via self.read(). Used for the
+      live terminal UI.
+    - Automation (start_reader_thread=False): the calling thread owns the
+      channel directly via _read_direct_channel(). No queue, no drops, no
+      contention. Used by AutomationRunContext for test/fix execution.
     """
 
     READ_BLOCK_TIMEOUT_SEC = 0.2
@@ -95,7 +102,7 @@ class InteractiveShell:
         term: str = "xterm-256color",
         width: int = 160,
         height: int = 48,
-        prompt_regex: str = r"[$#] ",  # typical bash/zsh prompt end
+        prompt_regex: str = r"[$#] ",
         client_factory: Callable[[], ShellClient] = paramiko.SSHClient,
         sleep_fn: Callable[[float], None] = time.sleep,
         time_fn: Callable[[], float] = time.time,
@@ -103,6 +110,7 @@ class InteractiveShell:
         initial_directory: str | None = None,
         connected_client: ShellClient | None = None,
         owns_client: bool = True,
+        start_reader_thread: bool = True,
     ):
         self.host = host
         self.username = username
@@ -120,6 +128,12 @@ class InteractiveShell:
         self._initial_directory = str(initial_directory or "").strip() or None
         self._connected_client = connected_client
         self._owns_client = bool(owns_client)
+        self._start_reader_thread = bool(start_reader_thread)
+
+        # Session-level sudo authentication state. Once a sudo command has been
+        # authenticated in this shell, we reuse the timestamp for subsequent
+        # sudo commands rather than re-prompting the user on every step.
+        self._sudo_authenticated: bool = False
 
         self.client: Optional[ShellClient] = None
         self.chan: Optional[ShellChannel] = None
@@ -171,8 +185,19 @@ class InteractiveShell:
 
         self._stop.clear()
         self._session_closed.clear()
-        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
-        self._reader_thread.start()
+        self._sudo_authenticated = False
+
+        if self._start_reader_thread:
+            self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self._reader_thread.start()
+
+        LOGGER.debug(
+            "Shell connected (host=%s, mode=%s, reused_client=%s)",
+            self.host,
+            "interactive" if self._start_reader_thread else "automation",
+            self._connected_client is not None,
+        )
+
         try:
             self._apply_initial_directory()
         except Exception:
@@ -201,6 +226,13 @@ class InteractiveShell:
         self.width, self.height = width, height
         if self.chan:
             self.chan.resize_pty(width=width, height=height)
+
+    def send_interrupt(self) -> None:
+        """Send Ctrl-C to interrupt the currently running process."""
+        try:
+            self.send("\x03")
+        except Exception:
+            pass
 
     def _reader_loop(self) -> None:
         assert self.chan is not None
@@ -233,6 +265,56 @@ class InteractiveShell:
                     self._out_queue.get_nowait()
                 except Empty:
                     continue
+
+    def _drain_channel(self) -> None:
+        """Discard any pending output before sending a new automation command."""
+        if self._reader_thread is not None:
+            self.read()
+            return
+        if self.chan is None or getattr(self.chan, "closed", False):
+            return
+        self.chan.settimeout(0.0)
+        try:
+            while True:
+                try:
+                    data = self.chan.recv(65536)
+                    if not data:
+                        break
+                except socket.timeout:
+                    break
+                except Exception:
+                    break
+        except Exception:
+            pass
+        finally:
+            try:
+                self.chan.settimeout(self.READ_BLOCK_TIMEOUT_SEC)
+            except Exception:
+                pass
+
+    def _read_direct_channel(self, timeout_sec: float) -> str:
+        """Read directly from the SSH channel (automation mode: no reader thread)."""
+        assert self.chan is not None
+        if getattr(self.chan, "closed", False):
+            raise RuntimeError("SSH channel closed while reading automation output")
+        self.chan.settimeout(max(0.0, float(timeout_sec)))
+        try:
+            data = self.chan.recv(65536)
+            if not data:
+                raise RuntimeError("SSH channel reached EOF while reading automation output")
+            return data.decode(errors="replace")
+        except socket.timeout:
+            return ""
+
+    def _read_chunk(self, timeout_sec: float = 0.05) -> str:
+        """
+        Read one batch of output.
+        - Interactive mode: drain from the output queue.
+        - Automation mode: read directly from the SSH channel.
+        """
+        if self._reader_thread is not None:
+            return self.read(wait_timeout=timeout_sec)
+        return self._read_direct_channel(timeout_sec)
 
     def _is_prompt(self, buf: str) -> bool:
         if self._prompt_detector:
@@ -353,7 +435,7 @@ class InteractiveShell:
         match = InteractiveShell.PROMPT_PREFIX_RE.match(str(raw_line or ""))
         if not match:
             return str(raw_line or "")
-        return str(raw_line or "")[match.end() :]
+        return str(raw_line or "")[match.end():]
 
     @classmethod
     def _is_scaffold_line(cls, raw_line: str, scaffold_lines: list[str]) -> bool:
@@ -393,10 +475,11 @@ class InteractiveShell:
         return "\n".join(lines).strip("\n")
 
     def _reset_sudo_timestamp(self) -> None:
+        """Invalidate the sudo timestamp so the next auth starts fresh."""
         if not self.chan:
             return
         try:
-            _ = self.read()
+            self._drain_channel()
             self.sendline("sudo -k")
 
             buf = ""
@@ -404,7 +487,7 @@ class InteractiveShell:
                 0.1, float(getattr(self, "SUDO_RESET_TIMEOUT_SEC", 2.0))
             )
             while self._time() < deadline:
-                chunk = self.read(wait_timeout=0.05)
+                chunk = self._read_chunk(0.05)
                 if chunk:
                     buf += strip_terminal_control_sequences(chunk).replace("\r", "")
                     if self._is_prompt(buf):
@@ -416,7 +499,7 @@ class InteractiveShell:
                 0.0, float(getattr(self, "SUDO_RESET_QUIET_SEC", 0.0))
             )
             while self._time() < quiet_deadline:
-                if not self.read(wait_timeout=min(0.05, quiet_deadline - self._time())):
+                if not self._read_chunk(min(0.05, quiet_deadline - self._time())):
                     break
         except Exception:
             pass
@@ -473,7 +556,7 @@ class InteractiveShell:
         if not self.chan:
             raise RuntimeError("Not connected")
 
-        _ = self.read()
+        self._drain_channel()
         prompt_marker = self._build_marker(self.SUDO_PROMPT_PREFIX)
         self.sendline(f"sudo -S -p '{prompt_marker}' -v")
 
@@ -481,8 +564,9 @@ class InteractiveShell:
         start = self._time()
         password_sent = False
         while True:
-            self._raise_if_session_inactive("waiting for sudo authentication")
-            chunk = self.read(wait_timeout=0.05)
+            if self._reader_thread is not None:
+                self._raise_if_session_inactive("waiting for sudo authentication")
+            chunk = self._read_chunk(0.05)
             if chunk:
                 buf += chunk
                 cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
@@ -496,7 +580,7 @@ class InteractiveShell:
                         max(0.0, timeout - (self._time() - start)),
                     )
                     if settle_timeout > 0:
-                        settled_chunk = self.read(wait_timeout=settle_timeout)
+                        settled_chunk = self._read_chunk(settle_timeout)
                         if settled_chunk:
                             buf += settled_chunk
                             cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
@@ -530,19 +614,26 @@ class InteractiveShell:
 
         timeout_value = max(0.1, float(timeout))
         used_sudo = self._contains_sudo_prefix(command)
-        if used_sudo and not sudo_password:
-            raise RuntimeError("sudo command requires a sudo password")
         sudo_authenticated = False
         command_to_run = command
-        if used_sudo:
-            self._reset_sudo_timestamp()
-            sudo_authenticated = self._authenticate_sudo_in_pty(
-                sudo_password=str(sudo_password or ""),
-                timeout=min(timeout_value, 10.0),
-            )
-            command_to_run = self._inject_noninteractive_sudo(command)
 
-        _ = self.read()
+        if used_sudo:
+            if not self._sudo_authenticated:
+                # First sudo command in this shell session: authenticate once.
+                if not sudo_password:
+                    raise RuntimeError("sudo command requires a sudo password")
+                self._reset_sudo_timestamp()
+                self._authenticate_sudo_in_pty(
+                    sudo_password=str(sudo_password or ""),
+                    timeout=min(timeout_value, 10.0),
+                )
+                self._sudo_authenticated = True
+                LOGGER.debug("sudo authenticated (host=%s)", self.host)
+            # Subsequent sudo commands reuse the session timestamp via sudo -n.
+            command_to_run = self._inject_noninteractive_sudo(command)
+            sudo_authenticated = True
+
+        self._drain_channel()
         exit_marker = self._build_marker(self.AUTOMATION_EXIT_PREFIX)
         done_marker = self._build_marker(self.AUTOMATION_DONE_PREFIX)
         done_pattern = self._marker_pattern(done_marker)
@@ -557,9 +648,14 @@ class InteractiveShell:
         buf = ""
         start = self._time()
         timed_out = False
+
+        LOGGER.debug(
+            "run_automation_command executing (host=%s, timeout_sec=%.1f, command=%.80r)",
+            self.host, timeout_value, command,
+        )
+
         while True:
-            self._raise_if_session_inactive("waiting for automation command output")
-            chunk = self.read(wait_timeout=0.05)
+            chunk = self._read_chunk(0.05)
             if chunk:
                 buf += chunk
                 cleaned = strip_terminal_control_sequences(buf).replace("\r", "")
@@ -572,7 +668,11 @@ class InteractiveShell:
                     buf = cleaned
                     break
             else:
-                self._sleep(0.01)
+                if self._reader_thread is not None:
+                    self._raise_if_session_inactive("waiting for automation command output")
+                    self._sleep(0.01)
+                # In direct-read mode, _read_direct_channel raises on channel close.
+
             if (self._time() - start) > timeout_value:
                 timed_out = True
                 break
@@ -594,8 +694,11 @@ class InteractiveShell:
         output = self._strip_trailing_scaffold_lines(output, scaffold_lines)
         output = self._strip_trailing_prompt_lines(output)
 
-        if used_sudo:
-            self._reset_sudo_timestamp()
+        duration_ms = max(0, int((self._time() - start) * 1000))
+        LOGGER.debug(
+            "run_automation_command done (host=%s, exit_code=%s, timed_out=%s, duration_ms=%d)",
+            self.host, exit_code, timed_out, duration_ms,
+        )
 
         return AutomationCommandResult(
             output=output,
@@ -647,7 +750,6 @@ class InteractiveShell:
         if not self.chan:
             raise RuntimeError("Not connected")
 
-        # Drain any old output so we only return output from this command onward.
         _ = self.read()
         marker, marker_command = self._build_completion_marker()
         marker_pattern = self._marker_pattern(marker)
@@ -665,4 +767,4 @@ class InteractiveShell:
             else:
                 self._sleep(0.01)
             if (self._time() - start) > timeout:
-                return buf  # return what we got so far (don't hang forever)
+                return buf

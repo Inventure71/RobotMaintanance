@@ -1,11 +1,31 @@
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any, Callable
 
 from ..ssh_client import AutomationCommandResult
 from ..terminal_manager.job_scheduler.cancel import JobInterrupted
+
+LOGGER = logging.getLogger(__name__)
+
+# Commands that produce continuous or rewriting output and will block until
+# explicitly stopped unless a timeout is specified.
+_UNBOUNDED_COMMAND_PATTERNS = [
+    re.compile(r"rostopic\s+echo\b(?!.*\s-n\s+\d)"),
+    re.compile(r"\btail\s+-f\b"),
+    re.compile(r"\bwatch\b"),
+    re.compile(r"\brosrun\b"),
+    re.compile(r"\broslaunch\b"),
+]
+
+
+def _looks_like_unbounded(command: str) -> bool:
+    for pattern in _UNBOUNDED_COMMAND_PATTERNS:
+        if pattern.search(command):
+            return True
+    return False
 
 
 class CommandExecutionError(RuntimeError):
@@ -107,6 +127,13 @@ class WriteConnector:
             retries_raw = self._resolve_value(primitive.get("retries"), vars_payload, default=0)
         retries = max(0, int(retries_raw or 0))
 
+        if timeout_sec is None and _looks_like_unbounded(resolved_command):
+            LOGGER.warning(
+                "Step '%s' runs a potentially unbounded command without a timeout "
+                "(command=%.100r). Add a 'timeoutSec' to prevent indefinite blocking.",
+                step_id, resolved_command,
+            )
+
         reuse_key = str(step.get("reuseKey") or "").strip()
         cache_key = f"{run_scope}:{reuse_key}" if reuse_key else ""
 
@@ -206,6 +233,11 @@ class WriteConnector:
             )
 
         output = execution.output
+        LOGGER.debug(
+            "Step executed (step_id=%s, exit_code=%s, timed_out=%s, duration_ms=%d)",
+            step_id, execution.exit_code, execution.timed_out,
+            max(0, int(time.time() * 1000 - started_at)),
+        )
 
         if save_as := str(step.get("saveAs") or "").strip():
             vars_payload[save_as] = output

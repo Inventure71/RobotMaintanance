@@ -9,6 +9,12 @@
   "platformTags": [
     "ros1"
   ],
+  "requires": [
+    "bash",
+    "rostopic"
+  ],
+  "sideEffects": "read_only",
+  "isolation": "definition_shell",
   "mode": "orchestrate",
   "execute": [
     {

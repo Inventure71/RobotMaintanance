@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from ..normalization import normalize_status, normalize_text
+from .transport_pool import CircuitOpenError
 
 
 class OnlineCheckerMixin:
@@ -57,6 +58,25 @@ class OnlineCheckerMixin:
                     "connectMs": connect_ms,
                     "probeMs": probe_ms,
                     "totalMs": max(0, int(time.time() * 1000 - start_ms)),
+                },
+            }
+        except CircuitOpenError as exc:
+            # Circuit is open: return an offline result immediately without
+            # attempting any network I/O.
+            result = {
+                "status": "error",
+                "value": "unreachable",
+                "details": f"SSH backoff active for {robot_id} ({host}:{port}): {exc}",
+                "ms": 0,
+                "checkedAt": time.time(),
+                "source": "live",
+                "transportReused": False,
+                "probeLevel": "circuit_open",
+                "timing": {
+                    "queueMs": 0,
+                    "connectMs": 0,
+                    "probeMs": 0,
+                    "totalMs": 0,
                 },
             }
         except Exception as exc:

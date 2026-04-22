@@ -4,6 +4,11 @@
   "description": "Verify the robot is reachable over SSH before deeper diagnostics run.",
   "mode": "online_probe",
   "enabled": true,
+  "requires": [
+    "ssh"
+  ],
+  "sideEffects": "read_only",
+  "isolation": "definition_shell",
   "checks": [
     {
       "id": "online",

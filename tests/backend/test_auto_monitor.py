@@ -348,24 +348,7 @@ def test_reload_definitions_prunes_runtime_tests_not_in_robot_type_catalog():
 
 
 def test_auto_monitor_tick_recovers_offline_and_reads_battery(monkeypatch):
-    observed = {"connect_calls": 0, "commands": []}
-
-    class FakeShell:
-        def __init__(self, **_kwargs):
-            pass
-
-        def connect(self):
-            observed["connect_calls"] += 1
-
-        def close(self):
-            return None
-
-        def run_command(self, command, timeout):
-            _ = timeout
-            observed["commands"].append(command)
-            return "percentage: 0.75\nvoltage: 12.40\n"
-
-    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+    observed = {"probe_calls": 0, "commands": []}
 
     manager = TerminalManager(
         robots_by_id={
@@ -392,34 +375,28 @@ def test_auto_monitor_tick_recovers_offline_and_reads_battery(monkeypatch):
         "probe_transport",
         lambda **_kwargs: type("_Probe", (), {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1})(),
     )
+
+    def fake_probe(*, robot_id, commands, **_kwargs):
+        _ = robot_id
+        observed["probe_calls"] += 1
+        outputs = []
+        for command, _timeout in commands:
+            observed["commands"].append(command)
+            outputs.append("percentage: 0.75\nvoltage: 12.40\n")
+        return outputs
+
+    manager.run_monitor_probe = fake_probe
     manager._run_auto_monitor_tick()
     runtime = manager.get_runtime_tests("r1")
 
     assert runtime["online"]["status"] == "ok"
     assert runtime["battery"]["value"] == "75%"
     assert "custom battery probe" in observed["commands"]
-    assert observed["connect_calls"] >= 1
+    assert observed["probe_calls"] >= 1
 
 
 def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
     observed = {"commands": []}
-
-    class FakeShell:
-        def __init__(self, **_kwargs):
-            pass
-
-        def connect(self):
-            return None
-
-        def close(self):
-            return None
-
-        def run_command(self, command, timeout):
-            _ = timeout
-            observed["commands"].append(command)
-            return "voltage: 12.33\npercentage: 0.0\n"
-
-    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
 
     manager = TerminalManager(
         robots_by_id={
@@ -448,6 +425,16 @@ def test_auto_monitor_tick_uses_robot_type_battery_command(monkeypatch):
     )
     manager._run_auto_recovery_tests = lambda _robot_id: None
 
+    def fake_probe(*, robot_id, commands, **_kwargs):
+        _ = robot_id
+        outputs = []
+        for command, _timeout in commands:
+            observed["commands"].append(command)
+            outputs.append("voltage: 12.33\npercentage: 0.0\n")
+        return outputs
+
+    manager.run_monitor_probe = fake_probe
+
     manager._run_auto_monitor_tick()
     assert "custom battery probe" in observed["commands"]
 
@@ -463,11 +450,15 @@ def test_auto_monitor_keeps_online_state_when_battery_command_fails(monkeypatch)
         def close(self):
             return None
 
-        def run_command(self, _command, timeout):
-            _ = timeout
+        def run_automation_command(self, command, timeout, sudo_password=None):
+            _ = command, timeout, sudo_password
             raise RuntimeError("boom")
 
     monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
+
+    def fake_probe(*, robot_id, commands, **_kwargs):
+        _ = robot_id, commands
+        raise RuntimeError("boom")
 
     manager = TerminalManager(
         robots_by_id={
@@ -516,6 +507,7 @@ def test_auto_monitor_keeps_online_state_when_battery_command_fails(monkeypatch)
             }
 
     manager._executor._create_automation_run_context = lambda **_kwargs: FakeRunContext()
+    manager.run_monitor_probe = fake_probe
     manager._record_runtime_tests(
         "r1",
         {
@@ -538,22 +530,6 @@ def test_auto_monitor_keeps_online_state_when_battery_command_fails(monkeypatch)
 
 
 def test_refresh_battery_state_does_not_override_online_status(monkeypatch):
-    class FakeShell:
-        def __init__(self, **_kwargs):
-            pass
-
-        def connect(self):
-            return None
-
-        def close(self):
-            return None
-
-        def run_command(self, _command, timeout):
-            _ = timeout
-            return "percentage: 0.66\nvoltage: 12.10\n"
-
-    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
-
     manager = TerminalManager(
         robots_by_id={
             "r1": {
@@ -572,6 +548,9 @@ def test_refresh_battery_state_does_not_override_online_status(monkeypatch):
         },
         auto_monitor=False,
     )
+    manager.run_monitor_probe = lambda *, robot_id, commands, **_k: [
+        "percentage: 0.66\nvoltage: 12.10\n" for _ in commands
+    ]
     manager._record_runtime_tests(
         "r1",
         {
@@ -1099,25 +1078,6 @@ def test_runtime_snapshot_since_tracks_versioned_updates_and_clears():
 def test_auto_monitor_topics_mode_runs_topic_snapshot_on_interval(monkeypatch):
     observed = {"commands": []}
 
-    class FakeShell:
-        def __init__(self, **_kwargs):
-            pass
-
-        def connect(self):
-            return None
-
-        def close(self):
-            return None
-
-        def run_command(self, command, timeout):
-            _ = timeout
-            observed["commands"].append(command)
-            if "rostopic list" in command:
-                return "/buttons\n/diagnostics\n/imu\n/joint_states\n/pose\n/rosout\n/rosout_agg\n/tf\n/tf_static\n/cmd_ser\n/cmd_vel\n/odom\n/odom/wheel\n/set_pose\n/velocity\n/scan\n/range/fl\n/range/fr\n/range/rl\n/range/rr\n/camera/color/camera_info\n/camera/color/image_raw\n/camera/depth/camera_info\n/camera/depth/image_raw\n/camera/depth/points\n/camera/depth_registered/points\n/camera/extrinsic/depth_to_color\n/camera/ir/camera_info\n/camera/ir/image_raw\n/camera/reset_device\n"
-            return "percentage: 0.82\nvoltage: 12.61\n"
-
-    monkeypatch.setattr(tm_module, "InteractiveShell", FakeShell)
-
     manager = TerminalManager(
         robots_by_id={
             "r1": {
@@ -1147,6 +1107,29 @@ def test_auto_monitor_topics_mode_runs_topic_snapshot_on_interval(monkeypatch):
         "probe_transport",
         lambda **_kwargs: type("_Probe", (), {"reused": False, "queue_ms": 0, "connect_ms": 1, "probe_ms": 1})(),
     )
+
+    def fake_probe(*, robot_id, commands, **_kwargs):
+        _ = robot_id
+        topics_listing = (
+            "/buttons\n/diagnostics\n/imu\n/joint_states\n/pose\n/rosout\n"
+            "/rosout_agg\n/tf\n/tf_static\n/cmd_ser\n/cmd_vel\n/odom\n"
+            "/odom/wheel\n/set_pose\n/velocity\n/scan\n/range/fl\n/range/fr\n"
+            "/range/rl\n/range/rr\n/camera/color/camera_info\n"
+            "/camera/color/image_raw\n/camera/depth/camera_info\n"
+            "/camera/depth/image_raw\n/camera/depth/points\n"
+            "/camera/depth_registered/points\n/camera/extrinsic/depth_to_color\n"
+            "/camera/ir/camera_info\n/camera/ir/image_raw\n/camera/reset_device\n"
+        )
+        outputs = []
+        for command, _timeout in commands:
+            observed["commands"].append(command)
+            if "rostopic list" in command:
+                outputs.append(topics_listing)
+            else:
+                outputs.append("percentage: 0.82\nvoltage: 12.61\n")
+        return outputs
+
+    manager.run_monitor_probe = fake_probe
     manager.update_monitor_config(mode="online_battery_topics", topics_interval_sec=30.0)
 
     manager._run_auto_monitor_tick()
@@ -1786,12 +1769,15 @@ def test_refresh_battery_state_sanitizes_carriage_returns_in_configured_command(
 
     captured_commands: list[str] = []
 
-    def fake_run_command(*, page_session_id: str, robot_id: str, command: str, timeout_sec: float | None = None, source: str | None = None):
-        _ = page_session_id, robot_id, timeout_sec, source
-        captured_commands.append(command)
-        return "percentage: 0.66\nvoltage: 12.10\n"
+    def fake_probe(*, robot_id, commands, **_kwargs):
+        _ = robot_id
+        outputs = []
+        for command, _timeout in commands:
+            captured_commands.append(command)
+            outputs.append("percentage: 0.66\nvoltage: 12.10\n")
+        return outputs
 
-    manager.run_command = fake_run_command
+    manager.run_monitor_probe = fake_probe
 
     manager._refresh_battery_state("r1")
 

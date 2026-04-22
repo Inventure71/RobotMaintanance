@@ -6,7 +6,16 @@
   "ownerTags": [
     "mgiorgetti"
   ],
-  "platformTags": [],
+  "platformTags": [
+    "ros2",
+    "jazzy"
+  ],
+  "requires": [
+    "bash",
+    "ros2"
+  ],
+  "sideEffects": "read_only",
+  "isolation": "definition_shell",
   "mode": "orchestrate",
   "execute": [
     {

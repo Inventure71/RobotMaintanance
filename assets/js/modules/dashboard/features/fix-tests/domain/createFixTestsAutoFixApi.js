@@ -163,11 +163,11 @@ export function createFixTestsAutoFixApi(deps) {
       }
 
       if (failureCount === 0) {
-        setFixModeStatus(context, `Auto-fix "${candidate.label}" completed (${successCount}/${robotIds.length}).`, 'ok');
+        setFixModeStatus(context, `Submitted auto-fix "${candidate.label}" to ${successCount}/${robotIds.length} robot(s).`, 'ok');
       } else {
         setFixModeStatus(
           context,
-          `Auto-fix "${candidate.label}" completed (${successCount} succeeded, ${failureCount} failed).`,
+          `Submitted auto-fix "${candidate.label}" to ${successCount} robot(s); ${failureCount} submission(s) failed.`,
           'warn',
         );
       }

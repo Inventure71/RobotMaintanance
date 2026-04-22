@@ -114,6 +114,16 @@ function loadPersistedActiveOwnerProfile() {
         };
       };
 
+      const normalizeCompletedJobSummary = (job) => {
+        const normalized = normalizeJobSummary(job);
+        if (!normalized) return null;
+        if (!['succeeded', 'failed', 'interrupted'].includes(normalized.status)) return null;
+        return {
+          ...normalized,
+          metadata: job?.metadata && typeof job.metadata === 'object' ? job.metadata : {},
+        };
+      };
+
       const normalizeQueuedJobs = (jobs) =>
         Array.isArray(jobs)
           ? jobs
@@ -125,18 +135,21 @@ function loadPersistedActiveOwnerProfile() {
         const payload = raw && typeof raw === 'object' ? raw : {};
         const version = Number(payload.jobQueueVersion);
         const activeJob = normalizeJobSummary(payload.activeJob);
+        const lastCompletedJob = normalizeCompletedJobSummary(payload.lastCompletedJob);
         return {
           activeJob:
             activeJob && (activeJob.status === 'running' || activeJob.status === 'interrupting')
               ? activeJob
               : null,
           queuedJobs: normalizeQueuedJobs(payload.queuedJobs),
+          lastCompletedJob,
           jobQueueVersion: Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0,
         };
       };
 
       return {
         normalizeJobSummary,
+        normalizeCompletedJobSummary,
         normalizeQueuedJobs,
         normalizeJobQueueSnapshot,
       };
@@ -235,6 +248,7 @@ function loadPersistedActiveOwnerProfile() {
       onlineCheckEstimateMs: ONLINE_CHECK_TIMEOUT_MS,
       fleetParallelism: FLEET_PARALLELISM_DEFAULT,
       testingCountdowns: new Map(),
+      announcedCompletedJobs: new Map(),
       testingCountdownTimer: null,
       runtimeSyncTimer: null,
       isRuntimeSyncInFlight: false,
