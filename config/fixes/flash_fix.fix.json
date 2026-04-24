@@ -3,15 +3,15 @@
   "label": "Flash Fix Rosbot 2 Pro",
   "enabled": true,
   "description": "Flash firmware and restart docker stack, then rerun diagnostics.",
-  "runAtConnection": false,
-  "requires": [
-    "bash",
-    "docker"
+  "ownerTags": [
+    "global"
   ],
+  "platformTags": [],
+  "requires": [],
   "sideEffects": "mutating",
-  "risk": "high",
-  "requiresApproval": true,
-  "expectedDowntimeSec": 90,
+  "risk": "medium",
+  "requiresApproval": false,
+  "runAtConnection": false,
   "execute": [
     {
       "id": "docker_down",
@@ -20,7 +20,7 @@
     {
       "id": "flash",
       "command": "$flash_firmware$",
-      "timeoutSec": 60,
+      "timeoutSec": 120,
       "saveAs": ""
     },
     {
@@ -29,8 +29,11 @@
     },
     {
       "id": "wait",
-      "command": "$sleep_20s$"
+      "command": "$sleep_20s$",
+      "timeoutSec": 36,
+      "saveAs": ""
     }
   ],
-  "params": {}
+  "params": {},
+  "postTestIds": []
 }

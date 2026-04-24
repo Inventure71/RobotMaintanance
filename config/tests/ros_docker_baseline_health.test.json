@@ -1,0 +1,139 @@
+{
+  "id": "ros_docker_baseline_health",
+  "label": "ROS & Docker Baseline Health",
+  "description": "Read-only ROS1 and Docker baseline health check for ROSbot 2 Pro.",
+  "enabled": true,
+  "ownerTags": [
+    "global",
+    "mgiorgetti"
+  ],
+  "platformTags": [
+    "ros1",
+    "noetic",
+    "docker",
+    "rosbot"
+  ],
+  "requires": [],
+  "sideEffects": "read_only",
+  "isolation": "definition_shell",
+  "mode": "orchestrate",
+  "execute": [
+    {
+      "id": "step_1",
+      "command": "docker ps --format '{{.Names}}'",
+      "saveAs": "docker_names"
+    },
+    {
+      "id": "step_2",
+      "command": "rostopic list",
+      "saveAs": "topics_raw"
+    },
+    {
+      "id": "step_3",
+      "command": "rosnode list",
+      "saveAs": "nodes_raw"
+    }
+  ],
+  "checks": [
+    {
+      "id": "ros_docker_baseline_health__containers",
+      "metadata": {
+        "label": "Required containers running",
+        "icon": "C",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "docker_names",
+        "lines": [
+          "ros-master",
+          "rosbot",
+          "rplidar",
+          "astra-compressed",
+          "robot-description"
+        ]
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "All required Docker containers are running."
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "One or more required Docker containers are not running."
+      }
+    },
+    {
+      "id": "ros_docker_baseline_health__topics",
+      "metadata": {
+        "label": "Core ROS topics present",
+        "icon": "T",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_lines_unordered",
+        "inputRef": "topics_raw",
+        "lines": [
+          "/cmd_vel",
+          "/odom",
+          "/scan",
+          "/rosout"
+        ]
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "Core ROS topics are available."
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "Missing one or more core ROS topics."
+      }
+    },
+    {
+      "id": "ros_docker_baseline_health__nodes",
+      "metadata": {
+        "label": "Core ROS nodes present",
+        "icon": "N",
+        "manualOnly": true,
+        "enabled": true,
+        "runAtConnection": true,
+        "defaultStatus": "warning",
+        "defaultValue": "unknown",
+        "defaultDetails": "Not checked yet"
+      },
+      "read": {
+        "kind": "contains_any_string",
+        "inputRef": "nodes_raw",
+        "needles": [
+          "/rosout",
+          "/move_base",
+          "/robot_state_publisher"
+        ]
+      },
+      "pass": {
+        "status": "ok",
+        "value": "all_present",
+        "details": "At least one core ROS node is active, indicating ROS master is reachable."
+      },
+      "fail": {
+        "status": "error",
+        "value": "missing",
+        "details": "Core ROS nodes not detected. ROS master may be unreachable."
+      }
+    }
+  ],
+  "params": {}
+}

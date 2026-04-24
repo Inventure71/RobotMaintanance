@@ -17,9 +17,11 @@ from .config_loader import (
     RobotCatalog,
 )
 from .definition_service import DefinitionService
+from .execution_log_store import ExecutionLogStore
 from .routers import (
     create_bug_reports_router,
     create_definitions_router,
+    create_execution_logs_router,
     create_fixes_router,
     create_health_router,
     create_jobs_router,
@@ -46,6 +48,9 @@ def create_app(*, auto_monitor_on_startup: bool = True) -> FastAPI:
         os.getenv("FIX_DEFINITIONS_DIR", str(DEFAULT_FIX_DEFINITIONS_DIR))
     ).resolve()
     logs_path = Path(os.getenv("BUG_REPORTS_DIR", str(PROJECT_ROOT / "logs"))).resolve()
+    execution_logs_path = Path(
+        os.getenv("EXECUTION_LOGS_DIR", str(PROJECT_ROOT / "logs" / "execution"))
+    ).resolve()
     model_assets_root = Path(os.getenv("MODEL_ASSETS_ROOT", str(PROJECT_ROOT / "assets" / "models"))).resolve()
 
     catalog = RobotCatalog.load_from_paths(
@@ -62,6 +67,7 @@ def create_app(*, auto_monitor_on_startup: bool = True) -> FastAPI:
         test_definitions_by_id=catalog.test_definitions_by_id,
         check_definitions_by_id=catalog.check_definitions_by_id,
         fix_definitions_by_id=catalog.fix_definitions_by_id,
+        execution_log_store=ExecutionLogStore(execution_logs_path, max_logs=5),
         auto_monitor=False,
     )
     definition_service = DefinitionService(
@@ -102,6 +108,7 @@ def create_app(*, auto_monitor_on_startup: bool = True) -> FastAPI:
     app.include_router(create_fixes_router(terminal_manager))
     app.include_router(create_jobs_router(terminal_manager))
     app.include_router(create_definitions_router(definition_service))
+    app.include_router(create_execution_logs_router(terminal_manager.execution_log_store))
     app.include_router(create_bug_reports_router(logs_path))
 
     @app.on_event("startup")

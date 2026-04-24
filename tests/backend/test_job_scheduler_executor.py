@@ -147,3 +147,108 @@ def test_fix_executor_uses_default_post_tests_when_fix_has_none():
     assert calls["test_ids"] == ["online"]
     assert outcome.metadata["postTestIds"] == ["online"]
     assert outcome.metadata["usedDefaultPostTests"] is True
+
+
+def test_test_executor_writes_execution_log_for_test_jobs():
+    logs = []
+
+    class FakeTerminalManager:
+        def _set_runtime_activity(self, robot_id, **kwargs):
+            _ = robot_id, kwargs
+
+        def run_tests(self, **kwargs):
+            _ = kwargs
+            return [
+                {
+                    "id": "battery",
+                    "status": "error",
+                    "value": "execution_error",
+                    "details": "Unable to communicate with master",
+                    "steps": [{"id": "step_2", "output": "ERROR: Unable to communicate with master!"}],
+                }
+            ]
+
+        def get_last_test_run_metadata(self, **kwargs):
+            _ = kwargs
+            return {"runId": "test-r1-1", "session": {"runKind": "test"}}
+
+        def _record_execution_log(self, payload):
+            logs.append(payload)
+            return {"file": "latest.json"}
+
+    job = UserJob(
+        id="job-test-1",
+        kind="test",
+        source="manual",
+        label="Run tests",
+        page_session_id="page-1",
+        payload={"testIds": ["battery"]},
+        status="running",
+    )
+
+    outcome = RobotJobExecutor(FakeTerminalManager()).execute_job(
+        robot_id="r1",
+        job=job,
+        token=CancellationToken(),
+    )
+
+    assert outcome.status == "succeeded"
+    assert outcome.metadata["executionLog"]["file"] == "latest.json"
+    assert logs[0]["job"]["kind"] == "test"
+    assert logs[0]["metadata"]["results"][0]["steps"][0]["output"] == "ERROR: Unable to communicate with master!"
+
+
+def test_fix_executor_writes_execution_log_for_failed_fix_steps():
+    logs = []
+
+    class FakeTerminalManager:
+        def _resolve_fix_spec(self, robot_id, fix_id):
+            _ = robot_id, fix_id
+            return {
+                "definitionId": "flash_fix",
+                "execute": [{"id": "step-1", "command": "flash"}],
+            }
+
+        def start_fix_run(self, robot_id):
+            _ = robot_id
+
+        def finish_fix_run(self, robot_id):
+            _ = robot_id
+
+        def _set_runtime_activity(self, robot_id, **kwargs):
+            _ = robot_id, kwargs
+
+        def _resolve_credentials(self, robot_id):
+            _ = robot_id
+            return ("host", "user", "sudo", 22)
+
+        def create_automation_run_context(self, **kwargs):
+            _ = kwargs
+            return _FakeRunContext()
+
+        class _orchestrate_connector:
+            @staticmethod
+            def run_definition(*args, **kwargs):
+                _ = args, kwargs
+                from backend.connectors.orchestrate import OrchestrationExecutionError
+
+                raise OrchestrationExecutionError(
+                    "Step 'step-1' failed",
+                    steps=[{"id": "step-1", "status": "error", "output": "flash failed"}],
+                    commands_executed=[{"id": "step-1", "command": "flash", "ok": False}],
+                )
+
+        def _record_execution_log(self, payload):
+            logs.append(payload)
+            return {"file": "failed-fix.json"}
+
+    outcome = RobotJobExecutor(FakeTerminalManager()).execute_job(
+        robot_id="r1",
+        job=_job(payload={"fixId": "flash_fix"}),
+        token=CancellationToken(),
+    )
+
+    assert outcome.status == "failed"
+    assert outcome.metadata["executionLog"]["file"] == "failed-fix.json"
+    assert logs[0]["status"] == "failed"
+    assert logs[0]["metadata"]["steps"][0]["output"] == "flash failed"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any
 
@@ -13,12 +14,62 @@ class RobotJobExecutor:
         self._tm = terminal_manager
 
     def execute_job(self, *, robot_id: str, job: UserJob, token: CancellationToken) -> JobExecutionOutcome:
-        token.throw_if_interrupted()
-        if job.kind == "test":
-            return self._execute_test_job(robot_id=robot_id, job=job, token=token)
-        if job.kind == "fix":
-            return self._execute_fix_job(robot_id=robot_id, job=job, token=token)
-        return JobExecutionOutcome(status="failed", error=f"Unsupported job kind: {job.kind}")
+        started_at = time.time()
+        outcome = JobExecutionOutcome(status="failed", error=f"Unsupported job kind: {job.kind}")
+        try:
+            token.throw_if_interrupted()
+            if job.kind == "test":
+                outcome = self._execute_test_job(robot_id=robot_id, job=job, token=token)
+            elif job.kind == "fix":
+                outcome = self._execute_fix_job(robot_id=robot_id, job=job, token=token)
+            return outcome
+        except JobInterrupted:
+            outcome = JobExecutionOutcome(status="interrupted")
+            raise
+        finally:
+            self._write_execution_log(
+                robot_id=robot_id,
+                job=job,
+                outcome=outcome,
+                started_at=started_at,
+                finished_at=time.time(),
+            )
+
+    def _write_execution_log(
+        self,
+        *,
+        robot_id: str,
+        job: UserJob,
+        outcome: JobExecutionOutcome,
+        started_at: float,
+        finished_at: float,
+    ) -> None:
+        record = getattr(self._tm, "_record_execution_log", None)
+        if not callable(record):
+            return
+        payload = {
+            "robotId": robot_id,
+            "status": normalize_text(outcome.status, "failed"),
+            "error": normalize_text(outcome.error, ""),
+            "startedAt": float(started_at),
+            "finishedAt": float(finished_at),
+            "durationMs": max(0, int((finished_at - started_at) * 1000)),
+            "job": {
+                "id": job.id,
+                "kind": job.kind,
+                "source": job.source,
+                "label": job.label,
+                "pageSessionId": job.page_session_id,
+                "payload": dict(job.payload or {}),
+            },
+            "metadata": dict(outcome.metadata or {}),
+        }
+        try:
+            log_ref = record(payload)
+        except Exception:
+            return
+        if isinstance(log_ref, dict):
+            outcome.metadata.setdefault("executionLog", log_ref)
 
     def _execute_test_job(self, *, robot_id: str, job: UserJob, token: CancellationToken) -> JobExecutionOutcome:
         payload = job.payload if isinstance(job.payload, dict) else {}
@@ -72,6 +123,8 @@ class RobotJobExecutor:
         try:
             token.throw_if_interrupted()
             _, _, sudo_password, _ = self._tm._resolve_credentials(robot_id)
+            execution: dict[str, Any] = {}
+            run_metadata: dict[str, Any] = {}
             run_context = self._tm.create_automation_run_context(
                 robot_id=robot_id,
                 page_session_id=page_session_id,
@@ -106,8 +159,10 @@ class RobotJobExecutor:
                     should_cancel=token.is_interrupted,
                 )
             finally:
-                run_context.close()
-            run_metadata = run_context.metadata_payload()
+                try:
+                    run_context.close()
+                finally:
+                    run_metadata = run_context.metadata_payload()
 
             token.throw_if_interrupted()
             raw_payload_post_test_ids = payload.get("postTestIds") if isinstance(payload.get("postTestIds"), list) else None
@@ -156,7 +211,22 @@ class RobotJobExecutor:
         except JobInterrupted:
             raise
         except Exception as exc:
-            return JobExecutionOutcome(status="failed", error=normalize_text(str(exc), "Fix execution failed"))
+            exc_steps = getattr(exc, "steps", None)
+            exc_commands = getattr(exc, "commands_executed", None)
+            if not isinstance(exc_steps, list) and not isinstance(exc_commands, list):
+                return JobExecutionOutcome(status="failed", error=normalize_text(str(exc), "Fix execution failed"))
+            metadata = {
+                "fixId": fix_id,
+                "steps": list(exc_steps or []),
+                "commandsExecuted": list(exc_commands or []),
+                "session": run_metadata.get("session") if isinstance(run_metadata, dict) else {},
+                "timing": run_metadata.get("timing") if isinstance(run_metadata, dict) else {},
+            }
+            return JobExecutionOutcome(
+                status="failed",
+                metadata=metadata,
+                error=normalize_text(str(exc), "Fix execution failed"),
+            )
         finally:
             self._tm.finish_fix_run(robot_id)
             self._tm._set_runtime_activity(robot_id, testing=False, phase=None)

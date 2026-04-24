@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from ..connectors import OrchestrateConnector, ReadConnector, WriteConnector
+from ..execution_log_store import ExecutionLogStore
 from ..normalization import normalize_text, normalize_type_key
 from ..test_executor import TestExecutor
 from .job_scheduler import NoActiveUserJobError, RobotJobCoordinator, RobotJobExecutor
@@ -131,6 +132,7 @@ class TerminalManager(
         test_definitions_by_id: dict[str, dict[str, Any]] | None = None,
         check_definitions_by_id: dict[str, dict[str, Any]] | None = None,
         fix_definitions_by_id: dict[str, dict[str, Any]] | None = None,
+        execution_log_store: ExecutionLogStore | None = None,
         idle_timeout_sec: int = 15 * 60,
         auto_monitor: bool = False,
         auto_monitor_interval_sec: float = AUTO_MONITOR_INTERVAL_SEC,
@@ -177,6 +179,7 @@ class TerminalManager(
         self._test_definitions_by_id = test_definitions_by_id or {}
         self._check_definitions_by_id = check_definitions_by_id or {}
         self._fix_definitions_by_id = fix_definitions_by_id or {}
+        self.execution_log_store = execution_log_store or ExecutionLogStore("logs/execution", max_logs=5)
         self._read_connector = ReadConnector()
         self._write_connector = WriteConnector(self._command_primitives_by_id)
         self._orchestrate_connector = OrchestrateConnector(
@@ -213,6 +216,9 @@ class TerminalManager(
         )
         if self._auto_monitor_enabled:
             self._start_auto_monitor()
+
+    def _record_execution_log(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.execution_log_store.write(payload)
 
     def _resolve_robot_type(self, robot_id: str) -> dict[str, Any]:
         robot = self.robots_by_id.get(robot_id)
