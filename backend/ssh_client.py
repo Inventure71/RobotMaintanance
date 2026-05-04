@@ -74,6 +74,17 @@ class InteractiveShell:
     SUDO_RESET_TIMEOUT_SEC = 2.0
     SUDO_RESET_QUIET_SEC = 0.1
     INITIAL_DIRECTORY_TIMEOUT_SEC = 5.0
+    SESSION_HISTORY_GUARD_COMMAND = (
+        "unset HISTFILE; "
+        "HISTSIZE=0; "
+        "SAVEHIST=0; "
+        "export HISTSIZE SAVEHIST; "
+        "set +o history 2>/dev/null || true; "
+        "set +H 2>/dev/null || true; "
+        "unsetopt BANG_HIST INC_APPEND_HISTORY SHARE_HISTORY APPEND_HISTORY EXTENDED_HISTORY "
+        "2>/dev/null || true; "
+        "fc -p /dev/null 0 0 2>/dev/null || true"
+    )
     COMMAND_DONE_PREFIX = "__VIGIL_CMD_DONE__"
     AUTOMATION_DONE_PREFIX = "__VIGIL_AUTO_DONE__"
     AUTOMATION_EXIT_PREFIX = "__VIGIL_AUTO_EXIT__"
@@ -186,6 +197,12 @@ class InteractiveShell:
         self._stop.clear()
         self._session_closed.clear()
         self._sudo_authenticated = False
+
+        try:
+            self._disable_persistent_shell_history()
+        except Exception:
+            self.close()
+            raise
 
         if self._start_reader_thread:
             self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
@@ -370,6 +387,12 @@ class InteractiveShell:
     def _quote_shell_value(value: str) -> str:
         text = str(value or "")
         return "'" + text.replace("'", "'\"'\"'") + "'"
+
+    def _disable_persistent_shell_history(self) -> None:
+        """Keep VIGIL commands out of the robot user's persistent shell history."""
+        # Avoid HISTFILESIZE=0 and history -c here: both can delete or truncate
+        # an existing history file. This guard only changes the VIGIL shell.
+        self.sendline(self.SESSION_HISTORY_GUARD_COMMAND)
 
     def _apply_initial_directory(self) -> None:
         directory = str(self._initial_directory or "").strip()

@@ -204,6 +204,48 @@ def test_connect_sets_configured_initial_directory():
         shell.close()
 
 
+def test_connect_disables_persistent_shell_history_before_initial_directory():
+    fake_client = FakeClient()
+    shell = InteractiveShell(
+        host="10.0.0.5",
+        username="robot",
+        password="pw",
+        port=2222,
+        initial_directory="/home/robot/workspace",
+        client_factory=lambda: fake_client,
+    )
+    observed = {"command": None}
+
+    def fake_run_automation_command(command: str, timeout: float = 10.0, sudo_password=None):
+        _ = (timeout, sudo_password)
+        observed["command"] = command
+        assert fake_client.shell.sent, "history guard must be sent before any real command"
+        return AutomationCommandResult(
+            output="",
+            exit_code=0,
+            timed_out=False,
+            used_sudo=False,
+            sudo_authenticated=False,
+        )
+
+    shell.run_automation_command = fake_run_automation_command  # type: ignore[method-assign]
+    try:
+        shell.connect()
+        history_guard = fake_client.shell.sent[0]
+        assert history_guard.startswith("unset HISTFILE;")
+        assert "HISTSIZE=0" in history_guard
+        assert "SAVEHIST=0" in history_guard
+        assert "set +o history" in history_guard
+        assert "set +H" in history_guard
+        assert "BANG_HIST" in history_guard
+        assert "fc -p /dev/null 0 0" in history_guard
+        assert "HISTFILESIZE" not in history_guard
+        assert "history -c" not in history_guard
+        assert "__VIGIL_START_DIR='/home/robot/workspace'" in str(observed["command"])
+    finally:
+        shell.close()
+
+
 def test_connect_raises_when_initial_directory_cannot_be_set():
     fake_client = FakeClient()
     shell = InteractiveShell(
